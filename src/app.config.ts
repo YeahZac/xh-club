@@ -1,20 +1,20 @@
 export default defineAppConfig({
   pages: [
     'pages/index/index',
-    'pages/category/index',
-    'pages/cart/index',
-    'pages/profile/index',
-    'pages/product-detail/index'
+    'pages/business/index',
+    'pages/discover/index',
+    'pages/message/index',
+    'pages/profile/index'
   ],
   window: {
     backgroundTextStyle: 'light',
-    navigationBarBackgroundColor: '#FF2442',
-    navigationBarTitleText: '上星河俱乐部',
+    navigationBarBackgroundColor: '#1B2A4A',
+    navigationBarTitleText: '粤商汇',
     navigationBarTextStyle: 'white'
   },
   tabBar: {
     color: '#999999',
-    selectedColor: '#FF2442',
+    selectedColor: '#C9A96E',
     backgroundColor: '#ffffff',
     borderStyle: 'black',
     list: [
@@ -25,16 +25,22 @@ export default defineAppConfig({
         selectedIconPath: './assets/tabbar/house-active.png',
       },
       {
-        pagePath: 'pages/category/index',
-        text: '分类',
-        iconPath: './assets/tabbar/layout-grid.png',
-        selectedIconPath: './assets/tabbar/layout-grid-active.png',
+        pagePath: 'pages/business/index',
+        text: '商机',
+        iconPath: './assets/tabbar/briefcase.png',
+        selectedIconPath: './assets/tabbar/briefcase-active.png',
       },
       {
-        pagePath: 'pages/cart/index',
-        text: '购物车',
-        iconPath: './assets/tabbar/shopping-cart.png',
-        selectedIconPath: './assets/tabbar/shopping-cart-active.png',
+        pagePath: 'pages/discover/index',
+        text: '发现',
+        iconPath: './assets/tabbar/compass.png',
+        selectedIconPath: './assets/tabbar/compass-active.png',
+      },
+      {
+        pagePath: 'pages/message/index',
+        text: '消息',
+        iconPath: './assets/tabbar/message-square.png',
+        selectedIconPath: './assets/tabbar/message-square-active.png',
       },
       {
         pagePath: 'pages/profile/index',
