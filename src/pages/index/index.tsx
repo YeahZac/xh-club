@@ -38,14 +38,14 @@ const BANNERS = [
 ]
 
 const QUICK_ENTRIES = [
-  { label: "项目路演", icon: Presentation, tint: "#EDF0F4", color: "#1B2A4A" },
-  { label: "融资招募", icon: TrendingUp, tint: "#EEF1F6", color: "#2D4A7A" },
-  { label: "会员推荐", icon: UserPlus, tint: "#FAF6F1", color: "#C9A96E" },
-  { label: "活动报名", icon: CalendarDays, tint: "#ECFDF5", color: "#10B981" },
-  { label: "人才查询", icon: UserSearch, tint: "#F0F0FE", color: "#6366F1" },
-  { label: "项目查询", icon: Search, tint: "#FDF2F8", color: "#EC4899" },
-  { label: "发布动态", icon: SquarePen, tint: "#FFFBEB", color: "#F59E0B" },
-  { label: "我的收益", icon: Wallet, tint: "#FEF2F2", color: "#EF4444" },
+  { label: "项目路演", icon: Presentation, tint: "#EDF0F4", color: "#1B2A4A", path: "" },
+  { label: "融资招募", icon: TrendingUp, tint: "#EEF1F6", color: "#2D4A7A", path: "" },
+  { label: "会员推荐", icon: UserPlus, tint: "#FAF6F1", color: "#C9A96E", path: "" },
+  { label: "活动报名", icon: CalendarDays, tint: "#ECFDF5", color: "#10B981", path: "/pages/event-register/index" },
+  { label: "人才查询", icon: UserSearch, tint: "#F0F0FE", color: "#6366F1", path: "" },
+  { label: "项目查询", icon: Search, tint: "#FDF2F8", color: "#EC4899", path: "" },
+  { label: "发布动态", icon: SquarePen, tint: "#FFFBEB", color: "#F59E0B", path: "" },
+  { label: "我的收益", icon: Wallet, tint: "#FEF2F2", color: "#EF4444", path: "" },
 ]
 
 const ROADSHOWS = [
@@ -196,7 +196,7 @@ const IndexPage = () => {
         <View className="bg-white rounded-2xl p-4 shadow-sm">
           <View className="grid grid-cols-4 gap-y-4">
             {QUICK_ENTRIES.map((entry) => (
-              <View key={entry.label} className="flex flex-col items-center gap-1">
+              <View key={entry.label} className="flex flex-col items-center gap-1" onClick={() => { if (entry.path) Taro.navigateTo({ url: entry.path }) }}>
                 <View className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ backgroundColor: entry.tint }}>
                   <entry.icon size={22} color={entry.color} />
                 </View>
