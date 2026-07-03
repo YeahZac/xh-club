@@ -80,11 +80,92 @@ export class AdminController {
   }
 
   /** ====== 活动管理 ====== */
+  @Get('events')
+  async getEvents(@Query() query: any) {
+    console.log('[AdminController] GET /api/admin/events')
+    const result = await this.adminService.getAllEvents(query)
+    return { code: 200, msg: 'success', data: result }
+  }
+
   @Post('events')
   async createEvent(@Body() dto: any) {
     console.log('[AdminController] POST /api/admin/events')
     const result = await this.adminService.createEvent(dto)
     return { code: 200, msg: '创建成功', data: result }
+  }
+
+  @Delete('events/:id')
+  async deleteEvent(@Param('id') id: string) {
+    console.log('[AdminController] DELETE /api/admin/events/:id')
+    const result = await this.adminService.deleteEvent(id)
+    return { code: 200, msg: '删除成功', data: result }
+  }
+
+  /** ====== 项目管理 ====== */
+  @Get('projects')
+  async getProjects(@Query() query: any) {
+    console.log('[AdminController] GET /api/admin/projects')
+    const result = await this.adminService.getAllProjects(query)
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post('projects')
+  async createProject(@Body() dto: any) {
+    console.log('[AdminController] POST /api/admin/projects')
+    const result = await this.adminService.createProject(dto)
+    return { code: 200, msg: '创建成功', data: result }
+  }
+
+  @Delete('projects/:id')
+  async deleteProject(@Param('id') id: string) {
+    console.log('[AdminController] DELETE /api/admin/projects/:id')
+    const result = await this.adminService.deleteProject(id)
+    return { code: 200, msg: '删除成功', data: result }
+  }
+
+  /** ====== 商城管理 ====== */
+  @Get('mall-products')
+  async getMallProducts() {
+    console.log('[AdminController] GET /api/admin/mall-products')
+    const result = await this.adminService.getMallProducts()
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post('mall-products')
+  async createMallProduct(@Body() dto: any) {
+    console.log('[AdminController] POST /api/admin/mall-products')
+    const result = await this.adminService.createMallProduct(dto)
+    return { code: 200, msg: '创建成功', data: result }
+  }
+
+  @Put('mall-products/:id')
+  async updateMallProduct(@Param('id') id: string, @Body() dto: any) {
+    console.log('[AdminController] PUT /api/admin/mall-products/:id')
+    const result = await this.adminService.updateMallProduct(id, dto)
+    return { code: 200, msg: '更新成功', data: result }
+  }
+
+  @Delete('mall-products/:id')
+  async deleteMallProduct(@Param('id') id: string) {
+    console.log('[AdminController] DELETE /api/admin/mall-products/:id')
+    const result = await this.adminService.deleteMallProduct(id)
+    return { code: 200, msg: '删除成功', data: result }
+  }
+
+  /** ====== 成交管理 ====== */
+  @Get('transactions')
+  async getTransactions(@Query() query: any) {
+    console.log('[AdminController] GET /api/admin/transactions')
+    const result = await this.adminService.getAllTransactions(query)
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  /** ====== 通知推送 ====== */
+  @Post('notifications/broadcast')
+  async broadcastNotification(@Body() dto: { title: string; content: string }) {
+    console.log('[AdminController] POST /api/admin/notifications/broadcast')
+    const result = await this.adminService.broadcastNotification(dto)
+    return { code: 200, msg: '推送成功', data: result }
   }
 
   /** ====== 组织架构 ====== */
@@ -117,25 +198,4 @@ export class AdminController {
     return { code: 200, msg: '更新成功', data: result }
   }
 
-  /** ====== 商城商品管理 ====== */
-  @Get('mall-products')
-  async getMallProducts(@Query() query: any) {
-    console.log('[AdminController] GET /api/admin/mall-products')
-    const result = await this.adminService.getMallProducts(query)
-    return { code: 200, msg: 'success', data: result }
-  }
-
-  @Post('mall-products')
-  async createMallProduct(@Body() dto: any) {
-    console.log('[AdminController] POST /api/admin/mall-products')
-    const result = await this.adminService.createMallProduct(dto)
-    return { code: 200, msg: '创建成功', data: result }
-  }
-
-  @Put('mall-products/:id')
-  async updateMallProduct(@Param('id') id: string, @Body() dto: any) {
-    console.log('[AdminController] PUT /api/admin/mall-products/:id')
-    const result = await this.adminService.updateMallProduct(id, dto)
-    return { code: 200, msg: '更新成功', data: result }
-  }
 }

@@ -22,7 +22,10 @@ export class AdminService {
       throw new HttpException('用户名或密码错误', HttpStatus.UNAUTHORIZED)
     }
 
-    return { id: data.id, username: data.username, name: data.name, role: data.role }
+    // 简单token生成（生产环境应使用JWT）
+    const token = Buffer.from(`${data.id}:${Date.now()}`).toString('base64')
+
+    return { id: data.id, username: data.username, name: data.name, role: data.role, token }
   }
 
   /** ====== Banner 管理 ====== */
@@ -97,23 +100,6 @@ export class AdminService {
     return { list: data || [], total: count || 0, page, pageSize }
   }
 
-  async approveMember(id: string, approvedBy: string) {
-    console.log('[AdminService] approveMember - id:', id)
-    const { data, error } = await this.client()
-      .from('members')
-      .update({
-        status: 'active',
-        approved_at: new Date().toISOString(),
-        approved_by: approvedBy,
-      })
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) throw new HttpException(`审批失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
-    return data
-  }
-
   async rejectMember(id: string, reason: string) {
     const { data, error } = await this.client()
       .from('members')
@@ -123,33 +109,6 @@ export class AdminService {
       .single()
 
     if (error) throw new HttpException(`操作失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
-    return data
-  }
-
-  /** ====== 活动管理 ====== */
-  async createEvent(dto: any) {
-    console.log('[AdminService] createEvent - title:', dto.title)
-    const { data, error } = await this.client()
-      .from('events')
-      .insert({
-        title: dto.title,
-        description: dto.description || null,
-        cover_image: dto.cover_image || null,
-        event_type: dto.event_type,
-        start_time: dto.start_time,
-        end_time: dto.end_time,
-        location: dto.location || null,
-        max_participants: dto.max_participants || 100,
-        current_participants: 0,
-        fee: dto.fee || 0,
-        organizer_id: dto.organizer_id || null,
-        org_id: dto.org_id || null,
-        status: 'open',
-      })
-      .select()
-      .single()
-
-    if (error) throw new HttpException(`创建失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
     return data
   }
 
@@ -209,13 +168,13 @@ export class AdminService {
   }
 
   /** ====== 商城商品管理 ====== */
-  async getMallProducts(params: { category?: string }) {
+  async getMallProducts(params?: { category?: string }) {
     let query = this.client()
       .from('mall_products')
       .select('*')
       .order('sort_order', { ascending: true })
 
-    if (params.category) query = query.eq('category', params.category)
+    if (params?.category) query = query.eq('category', params.category)
     const { data, error } = await query
     if (error) throw new HttpException(`查询失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
     return data || []
@@ -318,5 +277,180 @@ export class AdminService {
     if (error) throw new HttpException(`查询失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
 
     return { list: data || [], total: count || 0, page, pageSize }
+  }
+
+  /** ====== 会员审批 ====== */
+  async approveMember(id: string, approvedBy?: string) {
+    const { data, error } = await this.client()
+      .from('members')
+      .update({ status: 'active', approved_at: new Date().toISOString(), approved_by: approvedBy || null })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw new HttpException(`审批失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return data
+  }
+
+  /** ====== 活动管理 ====== */
+  async getAllEvents(params: { status?: string; keyword?: string; page?: number; pageSize?: number }) {
+    const page = params.page || 1
+    const pageSize = params.pageSize || 20
+    const from = (page - 1) * pageSize
+    const to = from + pageSize - 1
+
+    let query = this.client()
+      .from('events')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (params.status) query = query.eq('status', params.status)
+    if (params.keyword) query = query.ilike('title', `%${params.keyword}%`)
+
+    const { data, error, count } = await query
+    if (error) throw new HttpException(`查询失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+
+    return { list: data || [], total: count || 0, page, pageSize }
+  }
+
+  async createEvent(dto: any) {
+    const { data, error } = await this.client()
+      .from('events')
+      .insert({
+        title: dto.title,
+        description: dto.description || null,
+        cover_image: dto.cover_image || null,
+        event_type: dto.event_type || 'salon',
+        start_time: dto.start_time,
+        end_time: dto.end_time || null,
+        location: dto.location || null,
+        max_participants: dto.max_participants || 50,
+        fee: dto.fee || 0,
+        status: dto.status || 'open',
+        is_featured: dto.is_featured || false,
+      })
+      .select()
+      .single()
+
+    if (error) throw new HttpException(`创建失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return data
+  }
+
+  async updateEvent(id: string, dto: any) {
+    const { data, error } = await this.client()
+      .from('events')
+      .update(dto)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw new HttpException(`更新失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return data
+  }
+
+  async deleteEvent(id: string) {
+    const { error } = await this.client()
+      .from('events')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw new HttpException(`删除失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return { success: true }
+  }
+
+  /** ====== 动态管理 ====== */
+  async getAdminPosts(params: { status?: string; page?: number; pageSize?: number }) {
+    const page = params.page || 1
+    const pageSize = params.pageSize || 20
+    const from = (page - 1) * pageSize
+    const to = from + pageSize - 1
+
+    let query = this.client()
+      .from('posts')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (params.status) query = query.eq('status', params.status)
+
+    const { data, error, count } = await query
+    if (error) throw new HttpException(`查询失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+
+    return { list: data || [], total: count || 0, page, pageSize }
+  }
+
+  async togglePostFeatured(id: string, featured: boolean) {
+    const { data, error } = await this.client()
+      .from('posts')
+      .update({ is_featured: featured })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw new HttpException(`操作失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return data
+  }
+
+  // 项目管理
+  async getAllProjects(params: { status?: string; keyword?: string; page?: number; pageSize?: number }) {
+    const page = params.page || 1
+    const pageSize = params.pageSize || 20
+    const from = (page - 1) * pageSize
+    let query = this.client().from('projects').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, from + pageSize - 1)
+    if (params.status) query = query.eq('status', params.status)
+    if (params.keyword) query = query.or(`title.ilike.%${params.keyword}%,description.ilike.%${params.keyword}%`)
+    const { data, error, count } = await query
+    if (error) throw new HttpException(`获取项目列表失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return { list: data, total: count, page, pageSize }
+  }
+
+  async createProject(dto: any) {
+    const { data, error } = await this.client().from('projects').insert(dto).select().single()
+    if (error) throw new HttpException(`创建项目失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return data
+  }
+
+  async deleteProject(id: string) {
+    const { error } = await this.client().from('projects').delete().eq('id', id)
+    if (error) throw new HttpException(`删除项目失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return { success: true }
+  }
+
+  // 交易管理
+  async getAllTransactions(params: { status?: string; page?: number; pageSize?: number }) {
+    const page = params.page || 1
+    const pageSize = params.pageSize || 20
+    const from = (page - 1) * pageSize
+    let query = this.client().from('transactions').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, from + pageSize - 1)
+    if (params.status) query = query.eq('status', params.status)
+    const { data, error, count } = await query
+    if (error) throw new HttpException(`获取交易列表失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return { list: data, total: count, page, pageSize }
+  }
+
+  // 删除商城商品
+  async deleteMallProduct(id: string) {
+    const { error } = await this.client().from('mall_products').delete().eq('id', id)
+    if (error) throw new HttpException(`删除商品失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return { success: true }
+  }
+
+  // 群发通知
+  async broadcastNotification(dto: { title: string; content: string; type?: string }) {
+    // 获取所有活跃会员
+    const { data: members, error: memberError } = await this.client().from('members').select('id').eq('status', 'active')
+    if (memberError) throw new HttpException(`获取会员列表失败: ${memberError.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+
+    const notifications = members.map(m => ({
+      member_id: m.id,
+      type: dto.type || 'system',
+      title: dto.title,
+      content: dto.content,
+    }))
+
+    const { data, error } = await this.client().from('notifications').insert(notifications).select()
+    if (error) throw new HttpException(`群发通知失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return { success: true, count: data.length }
   }
 }

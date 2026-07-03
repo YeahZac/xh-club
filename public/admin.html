@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>星河百谷 · 管理后台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50:'#f7f3eb', 100:'#ede3cc', 200:'#dbc599', 300:'#c9a966', 400:'#c9a96e', 500:'#b08d4f', 600:'#8d6f3d', 700:'#6a522d', 800:'#47371d', 900:'#241c0e' },
+            navy: { 50:'#f0f2f5', 100:'#d9dde5', 200:'#b3bbc9', 300:'#8d99ad', 400:'#677791', 500:'#415575', 600:'#34445e', 700:'#273347', 800:'#1b2a4a', 900:'#0e1525' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    [data-page] { display: none; }
+    [data-page].active { display: block; }
+    .sidebar-item.active { background: rgba(201,169,110,0.15); color: #c9a96e; border-right: 3px solid #c9a96e; }
+    .sidebar-item:hover { background: rgba(201,169,110,0.08); }
+    .fade-in { animation: fadeIn .3s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    .modal-overlay { background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+    .toast { animation: slideIn .3s ease, fadeOut .3s ease 2.7s; }
+    @keyframes slideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+    @keyframes fadeOut { from { opacity:1; } to { opacity:0; } }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: #c9a96e33; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+<!-- ========== 登录页 ========== -->
+<div id="loginPage" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-navy-800 via-navy-700 to-navy-900">
+  <div class="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-md fade-in">
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 mb-4">
+        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+      </div>
+      <h1 class="text-2xl font-bold text-navy-800">星河百谷</h1>
+      <p class="text-gray-500 mt-1">商会管理后台</p>
+    </div>
+    <div class="space-y-5">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+        <input id="loginUsername" type="text" value="admin" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-400 focus:border-transparent outline-none transition" placeholder="请输入用户名">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+        <input id="loginPassword" type="password" value="admin123" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-400 focus:border-transparent outline-none transition" placeholder="请输入密码">
+      </div>
+      <button onclick="doLogin()" class="w-full py-3 bg-gradient-to-r from-brand-400 to-brand-600 text-white font-semibold rounded-xl hover:from-brand-500 hover:to-brand-700 transition shadow-lg shadow-brand-400/30">
+        登 录
+      </button>
+      <p id="loginError" class="text-red-500 text-sm text-center hidden"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 主框架 ========== -->
+<div id="mainApp" class="hidden min-h-screen flex">
+  <!-- 侧边栏 -->
+  <aside class="w-60 bg-navy-800 text-white flex flex-col fixed h-full z-30">
+    <div class="p-5 border-b border-navy-600">
+      <h2 class="text-lg font-bold flex items-center gap-2">
+        <span class="w-8 h-8 rounded-lg bg-brand-400 flex items-center justify-center text-navy-900 text-sm font-bold">星</span>
+        星河百谷
+      </h2>
+      <p class="text-navy-300 text-xs mt-1">管理后台 v1.0</p>
+    </div>
+    <nav class="flex-1 py-4 space-y-1 overflow-y-auto">
+      <a onclick="switchPage('dashboard')" class="sidebar-item active flex items-center gap-3 px-5 py-3 cursor-pointer text-sm transition" data-nav="dashboard">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+        数据看板
+      </a>
+      <a onclick="switchPage('members')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="members">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        会员管理
+        <span id="pendingBadge" class="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full hidden">0</span>
+      </a>
+      <a onclick="switchPage('events')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="events">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        活动管理
+      </a>
+      <a onclick="switchPage('projects')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="projects">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        项目管理
+      </a>
+      <a onclick="switchPage('banners')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="banners">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        Banner管理
+      </a>
+      <a onclick="switchPage('mall')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="mall">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+        积分商城
+      </a>
+      <a onclick="switchPage('org')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="org">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+        组织架构
+      </a>
+      <a onclick="switchPage('config')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="config">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        系统配置
+      </a>
+    </nav>
+    <div class="p-4 border-t border-navy-600">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-brand-400 flex items-center justify-center text-navy-900 font-bold text-sm">管</div>
+        <div class="flex-1">
+          <p class="text-sm font-medium" id="adminName">管理员</p>
+          <p class="text-xs text-navy-400" id="adminRole">超级管理员</p>
+        </div>
+        <button onclick="doLogout()" class="text-navy-400 hover:text-white transition" title="退出登录">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <main class="flex-1 ml-60">
+    <!-- 顶栏 -->
+    <header class="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between sticky top-0 z-20">
+      <h1 id="pageTitle" class="text-xl font-bold text-navy-800">数据看板</h1>
+      <div class="flex items-center gap-4">
+        <span class="text-sm text-gray-500" id="currentTime"></span>
+      </div>
+    </header>
+
+    <!-- ====== 数据看板 ====== -->
+    <div data-page="dashboard" class="active p-8 fade-in">
+      <div class="grid grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition">
+          <div class="flex items-center justify-between mb-4">
+            <span class="text-gray-500 text-sm">会员总数</span>
+            <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+              <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </div>
+          </div>
+          <p class="text-3xl font-bold text-navy-800" id="statMembers">0</p>
+          <p class="text-xs text-green-500 mt-1" id="statMembersSub">正式会员 0 · 待审批 0</p>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition">
+          <div class="flex items-center justify-between mb-4">
+            <span class="text-gray-500 text-sm">活动数量</span>
+            <div class="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center">
+              <svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            </div>
+          </div>
+          <p class="text-3xl font-bold text-navy-800" id="statEvents">0</p>
+          <p class="text-xs text-gray-400 mt-1">进行中 0 · 已结束 0</p>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition">
+          <div class="flex items-center justify-between mb-4">
+            <span class="text-gray-500 text-sm">项目数量</span>
+            <div class="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
+              <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+            </div>
+          </div>
+          <p class="text-3xl font-bold text-navy-800" id="statProjects">0</p>
+          <p class="text-xs text-gray-400 mt-1">融资中 0 · 已完成 0</p>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition">
+          <div class="flex items-center justify-between mb-4">
+            <span class="text-gray-500 text-sm">成交总额</span>
+            <div class="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center">
+              <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+          </div>
+          <p class="text-3xl font-bold text-navy-800" id="statAmount">¥0</p>
+          <p class="text-xs text-gray-400 mt-1">成交笔数 0</p>
+        </div>
+      </div>
+      <!-- 最近活动 & 待审批 -->
+      <div class="grid grid-cols-2 gap-6">
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <h3 class="font-bold text-navy-800 mb-4">最近活动</h3>
+          <div id="recentEvents" class="space-y-3"><p class="text-gray-400 text-sm">加载中...</p></div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <h3 class="font-bold text-navy-800 mb-4">待审批会员</h3>
+          <div id="pendingMembers" class="space-y-3"><p class="text-gray-400 text-sm">加载中...</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 会员管理 ====== -->
+    <div data-page="members" class="p-8 fade-in">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+          <select id="memberFilter" onchange="loadMembers()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+            <option value="">全部会员</option>
+            <option value="active">已激活</option>
+            <option value="pending">待审批</option>
+            <option value="frozen">已冻结</option>
+          </select>
+          <input id="memberSearch" oninput="loadMembers()" type="text" placeholder="搜索姓名/公司/手机号..." class="px-4 py-2 border border-gray-200 rounded-xl text-sm w-64 focus:ring-2 focus:ring-brand-400 outline-none">
+        </div>
+        <span class="text-sm text-gray-500" id="memberCount">共 0 位会员</span>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table class="w-full">
+          <thead class="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">会员</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">公司/职位</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">行业</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">等级</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">信用分</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">状态</th>
+              <th class="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">操作</th>
+            </tr>
+          </thead>
+          <tbody id="memberTableBody" class="divide-y divide-gray-50">
+            <tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ====== 活动管理 ====== -->
+    <div data-page="events" class="p-8 fade-in">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+          <select id="eventFilter" onchange="loadEvents()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+            <option value="">全部状态</option>
+            <option value="open">报名中</option>
+            <option value="full">已满员</option>
+            <option value="ended">已结束</option>
+          </select>
+        </div>
+        <button onclick="showEventModal()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          创建活动
+        </button>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table class="w-full">
+          <thead class="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">活动名称</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">类型</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">时间</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">地点</th>
+              <th class="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">报名人数</th>
+              <th class="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">状态</th>
+            </tr>
+          </thead>
+          <tbody id="eventTableBody" class="divide-y divide-gray-50">
+            <tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ====== 项目管理 ====== -->
+    <div data-page="projects" class="p-8 fade-in">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+          <select id="projectFilter" onchange="loadProjects()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+            <option value="">全部状态</option>
+            <option value="active">进行中</option>
+            <option value="funded">已融资</option>
+            <option value="closed">已关闭</option>
+          </select>
+        </div>
+        <button onclick="showProjectModal()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          创建项目
+        </button>
+      </div>
+      <div id="projectCards" class="grid grid-cols-3 gap-6">
+        <p class="text-gray-400 col-span-3 text-center py-12">加载中...</p>
+      </div>
+    </div>
+
+    <!-- ====== Banner管理 ====== -->
+    <div data-page="banners" class="p-8 fade-in">
+      <div class="flex items-center justify-between mb-6">
+        <p class="text-sm text-gray-500">管理小程序首页轮播图</p>
+        <button onclick="showBannerModal()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          添加Banner
+        </button>
+      </div>
+      <div id="bannerCards" class="grid grid-cols-2 gap-6">
+        <p class="text-gray-400 col-span-2 text-center py-12">加载中...</p>
+      </div>
+    </div>
+
+    <!-- ====== 积分商城 ====== -->
+    <div data-page="mall" class="p-8 fade-in">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+          <select id="mallFilter" onchange="loadMallProducts()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+            <option value="">全部分类</option>
+            <option value="rights">会员权益</option>
+            <option value="service">商务服务</option>
+            <option value="gift">商务礼品</option>
+            <option value="activity">活动权益</option>
+            <option value="learning">学习成长</option>
+          </select>
+        </div>
+        <button onclick="showMallModal()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          添加商品
+        </button>
+      </div>
+      <div id="mallCards" class="grid grid-cols-3 gap-6">
+        <p class="text-gray-400 col-span-3 text-center py-12">加载中...</p>
+      </div>
+    </div>
+
+    <!-- ====== 组织架构 ====== -->
+    <div data-page="org" class="p-8 fade-in">
+      <div class="flex items-center justify-between mb-6">
+        <p class="text-sm text-gray-500">管理商会分会与部门架构</p>
+        <button onclick="showOrgModal()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          新增组织
+        </button>
+      </div>
+      <div id="orgTree" class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <p class="text-gray-400 text-center py-12">加载中...</p>
+      </div>
+    </div>
+
+    <!-- ====== 系统配置 ====== -->
+    <div data-page="config" class="p-8 fade-in">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <h3 class="font-bold text-navy-800 mb-6">系统参数配置</h3>
+        <div id="configForm" class="space-y-5">
+          <p class="text-gray-400">加载中...</p>
+        </div>
+        <div class="mt-8 pt-6 border-t border-gray-100 flex justify-end">
+          <button onclick="saveConfigs()" class="px-8 py-3 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl font-medium hover:shadow-lg transition">保存配置</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ========== 通用弹窗 ========== -->
+<div id="modalOverlay" class="fixed inset-0 modal-overlay z-50 hidden flex items-center justify-center p-4">
+  <div id="modalContent" class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto fade-in"></div>
+</div>
+
+<!-- Toast -->
+<div id="toastContainer" class="fixed top-6 right-6 z-[100] space-y-3"></div>
+
+<script>
+// ===== 全局状态 =====
+const API = '/api'
+let token = localStorage.getItem('admin_token') || ''
+
+// ===== 工具函数 =====
+async function api(path, options = {}) {
+  const opts = { headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...options }
+  if (opts.body && typeof opts.body === 'object') opts.body = JSON.stringify(opts.body)
+  const res = await fetch(`${API}${path}`, opts)
+  const data = await res.json()
+  console.log(`[API] ${options.method || 'GET'} ${path}`, data)
+  return data
+}
+
+function toast(msg, type = 'success') {
+  const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' }
+  const div = document.createElement('div')
+  div.className = `toast ${colors[type]} text-white px-5 py-3 rounded-xl shadow-lg text-sm font-medium`
+  div.textContent = msg
+  document.getElementById('toastContainer').appendChild(div)
+  setTimeout(() => div.remove(), 3000)
+}
+
+function showModal(html) {
+  document.getElementById('modalContent').innerHTML = html
+  document.getElementById('modalOverlay').classList.remove('hidden')
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.add('hidden')
+}
+
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal()
+})
+
+const LEVEL_MAP = { normal: '普通', silver: '银卡', gold: '金卡', diamond: '钻石' }
+const STATUS_MAP = { active: '已激活', pending: '待审批', frozen: '已冻结', exited: '已退出' }
+const STATUS_COLORS = { active: 'bg-green-100 text-green-700', pending: 'bg-yellow-100 text-yellow-700', frozen: 'bg-red-100 text-red-700', exited: 'bg-gray-100 text-gray-500' }
+const EVENT_TYPE_MAP = { salon: '专题沙龙', roadshow: '路演日', annual: '年度大会', training: '培训', meeting: '定期例会' }
+const CATEGORY_MAP = { rights: '会员权益', service: '商务服务', gift: '商务礼品', activity: '活动权益', learning: '学习成长' }
+const STAGE_MAP = { seed: '种子期', angel: '天使轮', a: 'A轮', b: 'B轮', c: 'C轮', ip: 'IPO', bootstrapped: '自有资金' }
+const INDUSTRY_MAP = { tech: '科技互联网', finance: '金融资本', manufacture: '先进制造', realestate: '房地产建筑', health: '大健康', education: '教育培训', media: '文化传媒', law: '法律服务', agriculture: '现代农业', trade: '跨境贸易', food: '餐饮消费', energy: '环保能源', service: '综合服务' }
+
+// ===== 登录/登出 =====
+async function doLogin() {
+  const username = document.getElementById('loginUsername').value
+  const password = document.getElementById('loginPassword').value
+  try {
+    const res = await api('/admin/login', { method: 'POST', body: { username, password } })
+    if (res.code === 200) {
+      token = 'admin_session'
+      localStorage.setItem('admin_token', token)
+      document.getElementById('adminName').textContent = res.data.name
+      document.getElementById('adminRole').textContent = res.data.role === 'super_admin' ? '超级管理员' : '管理员'
+      document.getElementById('loginPage').classList.add('hidden')
+      document.getElementById('mainApp').classList.remove('hidden')
+      loadDashboard()
+    } else {
+      document.getElementById('loginError').textContent = res.msg || '登录失败'
+      document.getElementById('loginError').classList.remove('hidden')
+    }
+  } catch (e) {
+    document.getElementById('loginError').textContent = '网络错误'
+    document.getElementById('loginError').classList.remove('hidden')
+  }
+}
+
+function doLogout() {
+  token = ''
+  localStorage.removeItem('admin_token')
+  document.getElementById('mainApp').classList.add('hidden')
+  document.getElementById('loginPage').classList.remove('hidden')
+}
+
+// 自动登录
+if (token) {
+  document.getElementById('loginPage').classList.add('hidden')
+  document.getElementById('mainApp').classList.remove('hidden')
+  loadDashboard()
+}
+
+// ===== 页面切换 =====
+function switchPage(page) {
+  document.querySelectorAll('[data-page]').forEach(el => el.classList.remove('active'))
+  document.querySelector(`[data-page="${page}"]`).classList.add('active')
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'))
+  document.querySelector(`[data-nav="${page}"]`).classList.add('active')
+  const titles = { dashboard: '数据看板', members: '会员管理', events: '活动管理', projects: '项目管理', banners: 'Banner管理', mall: '积分商城', org: '组织架构', config: '系统配置' }
+  document.getElementById('pageTitle').textContent = titles[page] || page
+  // 加载数据
+  const loaders = { dashboard: loadDashboard, members: loadMembers, events: loadEvents, projects: loadProjects, banners: loadBanners, mall: loadMallProducts, org: loadOrg, config: loadConfig }
+  if (loaders[page]) loaders[page]()
+}
+
+// ===== 数据看板 =====
+async function loadDashboard() {
+  const res = await api('/admin/dashboard')
+  if (res.code !== 200) return
+  const d = res.data
+  document.getElementById('statMembers').textContent = d.totalMembers || 0
+  document.getElementById('statMembersSub').textContent = `正式会员 ${d.activeMembers || 0} · 待审批 ${d.pendingMembers || 0}`
+  document.getElementById('statEvents').textContent = d.totalEvents || 0
+  document.getElementById('statProjects').textContent = d.totalProjects || 0
+  document.getElementById('statAmount').textContent = '¥' + ((d.totalAmount || 0) / 10000).toFixed(1) + '万'
+  // 待审批badge
+  if (d.pendingMembers > 0) {
+    document.getElementById('pendingBadge').textContent = d.pendingMembers
+    document.getElementById('pendingBadge').classList.remove('hidden')
+  }
+  // 最近活动
+  const eventsRes = await api('/events?limit=5')
+  if (eventsRes.code === 200 && eventsRes.data?.length) {
+    document.getElementById('recentEvents').innerHTML = eventsRes.data.map(e => `
+      <div class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition">
+        <div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-navy-800 truncate">${e.title}</p>
+          <p class="text-xs text-gray-400">${e.start_time ? new Date(e.start_time).toLocaleDateString('zh-CN') : ''} · ${e.location || ''}</p>
+        </div>
+        <span class="text-xs px-2 py-1 rounded-full ${e.status === 'open' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">${e.status === 'open' ? '报名中' : '已结束'}</span>
+      </div>
+    `).join('')
+  } else {
+    document.getElementById('recentEvents').innerHTML = '<p class="text-gray-400 text-sm">暂无活动</p>'
+  }
+  // 待审批
+  const pendingRes = await api('/admin/members/pending')
+  if (pendingRes.code === 200 && pendingRes.data?.length) {
+    document.getElementById('pendingMembers').innerHTML = pendingRes.data.map(m => `
+      <div class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition">
+        <div class="w-10 h-10 rounded-full bg-navy-100 flex items-center justify-center text-navy-700 font-bold text-sm">${(m.name || '?')[0]}</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-navy-800">${m.name}</p>
+          <p class="text-xs text-gray-400">${m.company_name || ''} · ${m.company_position || ''}</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="approveMember('${m.id}')" class="px-3 py-1 bg-green-500 text-white text-xs rounded-lg hover:bg-green-600">通过</button>
+          <button onclick="rejectMember('${m.id}')" class="px-3 py-1 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600">拒绝</button>
+        </div>
+      </div>
+    `).join('')
+  } else {
+    document.getElementById('pendingMembers').innerHTML = '<p class="text-gray-400 text-sm">暂无待审批会员</p>'
+  }
+}
+
+// ===== 会员管理 =====
+async function loadMembers() {
+  const status = document.getElementById('memberFilter').value
+  const search = document.getElementById('memberSearch').value
+  let url = '/admin/members?limit=100'
+  if (status) url += `&status=${status}`
+  const res = await api(url)
+  if (res.code !== 200) return
+  let members = res.data || []
+  if (search) {
+    const s = search.toLowerCase()
+    members = members.filter(m => (m.name || '').toLowerCase().includes(s) || (m.company_name || '').toLowerCase().includes(s) || (m.phone || '').includes(s))
+  }
+  document.getElementById('memberCount').textContent = `共 ${members.length} 位会员`
+  if (!members.length) {
+    document.getElementById('memberTableBody').innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">暂无数据</td></tr>'
+    return
+  }
+  document.getElementById('memberTableBody').innerHTML = members.map(m => `
+    <tr class="hover:bg-gray-50 transition">
+      <td class="px-6 py-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-navy-600 to-navy-800 flex items-center justify-center text-white font-bold text-sm">${(m.name || '?')[0]}</div>
+          <div>
+            <p class="font-medium text-navy-800">${m.name}</p>
+            <p class="text-xs text-gray-400">${m.phone || ''}</p>
+          </div>
+        </div>
+      </td>
+      <td class="px-6 py-4"><p class="text-sm">${m.company_name || '-'}</p><p class="text-xs text-gray-400">${m.company_position || ''}</p></td>
+      <td class="px-6 py-4 text-sm">${INDUSTRY_MAP[m.industry_primary] || m.industry_primary || '-'}</td>
+      <td class="px-6 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${m.membership_level === 'diamond' ? 'bg-blue-100 text-blue-700' : m.membership_level === 'gold' ? 'bg-yellow-100 text-yellow-700' : m.membership_level === 'silver' ? 'bg-gray-200 text-gray-700' : 'bg-gray-100 text-gray-500'}">${LEVEL_MAP[m.membership_level] || '普通'}</span></td>
+      <td class="px-6 py-4"><span class="font-medium ${m.credit_score >= 80 ? 'text-green-600' : m.credit_score >= 60 ? 'text-yellow-600' : 'text-red-600'}">${m.credit_score || 60}</span></td>
+      <td class="px-6 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${STATUS_COLORS[m.status] || 'bg-gray-100 text-gray-500'}">${STATUS_MAP[m.status] || m.status}</span></td>
+      <td class="px-6 py-4 text-center">
+        ${m.status === 'pending' ? `
+          <button onclick="approveMember('${m.id}')" class="text-green-600 hover:text-green-800 text-xs font-medium mr-3">通过</button>
+          <button onclick="rejectMember('${m.id}')" class="text-red-600 hover:text-red-800 text-xs font-medium">拒绝</button>
+        ` : `
+          <button onclick="viewMember('${m.id}')" class="text-brand-600 hover:text-brand-800 text-xs font-medium">查看</button>
+        `}
+      </td>
+    </tr>
+  `).join('')
+}
+
+async function approveMember(id) {
+  const res = await api(`/admin/members/${id}/approve`, { method: 'POST', body: { approved_by: 'admin' } })
+  if (res.code === 200) { toast('审批通过'); loadDashboard(); loadMembers(); }
+  else toast(res.msg || '操作失败', 'error')
+}
+
+async function rejectMember(id) {
+  const res = await api(`/admin/members/${id}/reject`, { method: 'POST', body: { reason: '不符合条件' } })
+  if (res.code === 200) { toast('已拒绝'); loadDashboard(); loadMembers(); }
+  else toast(res.msg || '操作失败', 'error')
+}
+
+async function viewMember(id) {
+  const res = await api(`/members/profile/${id}`)
+  if (res.code !== 200) { toast('加载失败', 'error'); return }
+  const m = res.data
+  showModal(`
+    <div class="p-6">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold text-navy-800">会员详情</h3>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+      </div>
+      <div class="flex items-center gap-4 mb-6">
+        <div class="w-16 h-16 rounded-full bg-gradient-to-br from-navy-600 to-navy-800 flex items-center justify-center text-white font-bold text-xl">${(m.name || '?')[0]}</div>
+        <div>
+          <p class="text-xl font-bold text-navy-800">${m.name}</p>
+          <p class="text-gray-500">${m.company_position || ''} @ ${m.company_name || ''}</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="bg-gray-50 rounded-xl p-4 text-center"><p class="text-2xl font-bold text-navy-800">${m.active_score || 0}</p><p class="text-xs text-gray-500">活跃值</p></div>
+        <div class="bg-gray-50 rounded-xl p-4 text-center"><p class="text-2xl font-bold text-navy-800">${m.contribution_score || 0}</p><p class="text-xs text-gray-500">贡献值</p></div>
+        <div class="bg-gray-50 rounded-xl p-4 text-center"><p class="text-2xl font-bold ${m.credit_score >= 80 ? 'text-green-600' : 'text-yellow-600'}">${m.credit_score || 60}</p><p class="text-xs text-gray-500">信用分</p></div>
+      </div>
+      <div class="space-y-3 text-sm">
+        <div class="flex"><span class="text-gray-500 w-24">手机号</span><span>${m.phone || '-'}</span></div>
+        <div class="flex"><span class="text-gray-500 w-24">城市</span><span>${m.city || '-'}</span></div>
+        <div class="flex"><span class="text-gray-500 w-24">行业</span><span>${INDUSTRY_MAP[m.industry_primary] || '-'} / ${m.industry_secondary || '-'}</span></div>
+        <div class="flex"><span class="text-gray-500 w-24">等级</span><span>${LEVEL_MAP[m.membership_level] || '普通'}</span></div>
+        <div class="flex"><span class="text-gray-500 w-24">积分</span><span>${m.available_points || 0}</span></div>
+        <div class="flex"><span class="text-gray-500 w-24">可提供</span><span>${m.resources_supply || '-'}</span></div>
+        <div class="flex"><span class="text-gray-500 w-24">需求</span><span>${m.resources_demand || '-'}</span></div>
+        <div class="flex"><span class="text-gray-500 w-24">简介</span><span>${m.bio || '-'}</span></div>
+      </div>
+    </div>
+  `)
+}
+
+// ===== 活动管理 =====
+async function loadEvents() {
+  const status = document.getElementById('eventFilter').value
+  let url = '/events?limit=100'
+  const res = await api(url)
+  if (res.code !== 200) return
+  let events = res.data || []
+  if (status) events = events.filter(e => e.status === status)
+  if (!events.length) {
+    document.getElementById('eventTableBody').innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">暂无活动</td></tr>'
+    return
+  }
+  document.getElementById('eventTableBody').innerHTML = events.map(e => `
+    <tr class="hover:bg-gray-50 transition">
+      <td class="px-6 py-4"><p class="font-medium text-navy-800">${e.title}</p></td>
+      <td class="px-6 py-4 text-sm">${EVENT_TYPE_MAP[e.event_type] || e.event_type || '-'}</td>
+      <td class="px-6 py-4 text-sm text-gray-500">${e.start_time ? new Date(e.start_time).toLocaleDateString('zh-CN') : '-'}</td>
+      <td class="px-6 py-4 text-sm text-gray-500">${e.location || '-'}</td>
+      <td class="px-6 py-4 text-center text-sm">${e.current_participants || 0}/${e.max_participants || '∞'}</td>
+      <td class="px-6 py-4 text-center"><span class="text-xs px-2.5 py-1 rounded-full ${e.status === 'open' ? 'bg-green-100 text-green-700' : e.status === 'full' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}">${e.status === 'open' ? '报名中' : e.status === 'full' ? '已满' : '已结束'}</span></td>
+    </tr>
+  `).join('')
+}
+
+function showEventModal() {
+  showModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-6">创建活动</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">活动名称</label><input id="evTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动名称"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">活动类型</label><select id="evType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="salon">专题沙龙</option><option value="roadshow">路演日</option><option value="annual">年度大会</option><option value="training">培训</option><option value="meeting">定期例会</option></select></div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">开始时间</label><input id="evStart" type="datetime-local" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">结束时间</label><input id="evEnd" type="datetime-local" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">地点</label><input id="evLocation" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动地点"></div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">人数上限</label><input id="evMax" type="number" value="100" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">费用(元)</label><input id="evFee" type="number" value="0" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">活动描述</label><textarea id="evDesc" rows="3" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动描述..."></textarea></div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="createEvent()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function createEvent() {
+  const body = {
+    title: document.getElementById('evTitle').value,
+    event_type: document.getElementById('evType').value,
+    start_time: document.getElementById('evStart').value,
+    end_time: document.getElementById('evEnd').value,
+    location: document.getElementById('evLocation').value,
+    max_participants: parseInt(document.getElementById('evMax').value) || 100,
+    fee: parseInt(document.getElementById('evFee').value) || 0,
+    description: document.getElementById('evDesc').value,
+    status: 'open',
+    current_participants: 0
+  }
+  const res = await api('/admin/events', { method: 'POST', body })
+  if (res.code === 200) { toast('活动创建成功'); closeModal(); loadEvents(); }
+  else toast(res.msg || '创建失败', 'error')
+}
+
+// ===== 项目管理 =====
+async function loadProjects() {
+  const status = document.getElementById('projectFilter').value
+  const res = await api('/projects?limit=100')
+  if (res.code !== 200) return
+  let projects = res.data || []
+  if (status) projects = projects.filter(p => p.status === status)
+  if (!projects.length) {
+    document.getElementById('projectCards').innerHTML = '<p class="text-gray-400 col-span-3 text-center py-12">暂无项目</p>'
+    return
+  }
+  document.getElementById('projectCards').innerHTML = projects.map(p => `
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">
+      <div class="h-32 bg-gradient-to-br from-navy-700 to-navy-900 flex items-center justify-center relative">
+        <p class="text-white text-lg font-bold px-4 text-center">${p.title}</p>
+        <span class="absolute top-3 right-3 text-xs px-2 py-1 rounded-full bg-white/20 text-white">${STAGE_MAP[p.stage] || p.stage || '-'}</span>
+      </div>
+      <div class="p-4">
+        <p class="text-sm text-gray-600 line-clamp-2 mb-3">${p.description || '暂无描述'}</p>
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-gray-400">${INDUSTRY_MAP[p.industry] || p.industry || '-'}</span>
+          <span class="text-xs px-2 py-1 rounded-full ${p.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">${p.status === 'active' ? '进行中' : '已关闭'}</span>
+        </div>
+      </div>
+    </div>
+  `).join('')
+}
+
+function showProjectModal() {
+  showModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-6">创建项目</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">项目名称</label><input id="pjTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">行业</label><select id="pjIndustry" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${Object.entries(INDUSTRY_MAP).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">融资阶段</label><select id="pjStage" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${Object.entries(STAGE_MAP).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">融资金额(万)</label><input id="pjAmount" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">联系方式</label><input id="pjContact" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">项目描述</label><textarea id="pjDesc" rows="3" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></textarea></div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="createProject()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function createProject() {
+  const body = {
+    title: document.getElementById('pjTitle').value,
+    industry: document.getElementById('pjIndustry').value,
+    stage: document.getElementById('pjStage').value,
+    amount_max: parseInt(document.getElementById('pjAmount').value) * 10000,
+    description: document.getElementById('pjDesc').value,
+    status: 'active'
+  }
+  const res = await api('/projects', { method: 'POST', body })
+  if (res.code === 200) { toast('项目创建成功'); closeModal(); loadProjects(); }
+  else toast(res.msg || '创建失败', 'error')
+}
+
+// ===== Banner管理 =====
+async function loadBanners() {
+  const res = await api('/admin/banners')
+  if (res.code !== 200) return
+  const banners = res.data || []
+  if (!banners.length) {
+    document.getElementById('bannerCards').innerHTML = '<p class="text-gray-400 col-span-2 text-center py-12">暂无Banner</p>'
+    return
+  }
+  document.getElementById('bannerCards').innerHTML = banners.map(b => `
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">
+      <div class="h-40 bg-gradient-to-br from-navy-600 to-brand-400 flex items-center justify-center relative">
+        ${b.image_url ? `<img src="${b.image_url}" class="w-full h-full object-cover" onerror="this.style.display='none'">` : ''}
+        <p class="absolute text-white text-lg font-bold">${b.title}</p>
+        <span class="absolute top-3 right-3 text-xs px-2 py-1 rounded-full ${b.is_active ? 'bg-green-500 text-white' : 'bg-gray-500 text-white'}">${b.is_active ? '已启用' : '已禁用'}</span>
+      </div>
+      <div class="p-4 flex items-center justify-between">
+        <div>
+          <p class="font-medium text-navy-800">${b.title}</p>
+          <p class="text-xs text-gray-400">排序: ${b.sort_order} · 类型: ${b.link_type}</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="toggleBanner('${b.id}', ${!b.is_active})" class="px-3 py-1.5 text-xs rounded-lg ${b.is_active ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}">${b.is_active ? '禁用' : '启用'}</button>
+          <button onclick="deleteBanner('${b.id}')" class="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200">删除</button>
+        </div>
+      </div>
+    </div>
+  `).join('')
+}
+
+function showBannerModal() {
+  showModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-6">添加Banner</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">标题</label><input id="bnTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">图片URL</label><input id="bnImage" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="https://..."></div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">链接类型</label><select id="bnLinkType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="event">活动</option><option value="project">项目</option><option value="web">网页</option><option value="profile">会员主页</option></select></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">排序</label><input id="bnSort" type="number" value="1" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        </div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="createBanner()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function createBanner() {
+  const body = {
+    title: document.getElementById('bnTitle').value,
+    image_url: document.getElementById('bnImage').value,
+    link_type: document.getElementById('bnLinkType').value,
+    sort_order: parseInt(document.getElementById('bnSort').value) || 1,
+    is_active: true
+  }
+  const res = await api('/admin/banners', { method: 'POST', body })
+  if (res.code === 200) { toast('Banner创建成功'); closeModal(); loadBanners(); }
+  else toast(res.msg || '创建失败', 'error')
+}
+
+async function toggleBanner(id, active) {
+  const res = await api(`/admin/banners/${id}`, { method: 'PUT', body: { is_active: active } })
+  if (res.code === 200) { toast(active ? '已启用' : '已禁用'); loadBanners(); }
+}
+
+async function deleteBanner(id) {
+  if (!confirm('确定删除此Banner？')) return
+  const res = await api(`/admin/banners/${id}`, { method: 'DELETE' })
+  if (res.code === 200) { toast('已删除'); loadBanners(); }
+}
+
+// ===== 积分商城 =====
+async function loadMallProducts() {
+  const cat = document.getElementById('mallFilter').value
+  const res = await api('/admin/mall-products')
+  if (res.code !== 200) return
+  let products = res.data || []
+  if (cat) products = products.filter(p => p.category === cat)
+  if (!products.length) {
+    document.getElementById('mallCards').innerHTML = '<p class="text-gray-400 col-span-3 text-center py-12">暂无商品</p>'
+    return
+  }
+  document.getElementById('mallCards').innerHTML = products.map(p => `
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">
+      <div class="h-28 bg-gradient-to-br from-brand-100 to-brand-50 flex items-center justify-center">
+        ${p.image_url ? `<img src="${p.image_url}" class="w-full h-full object-cover" onerror="this.style.display='none'">` : `<span class="text-4xl">${p.category === 'gift' ? '🎁' : p.category === 'service' ? '🤝' : p.category === 'activity' ? '🎫' : p.category === 'learning' ? '📚' : '⭐'}</span>`}
+      </div>
+      <div class="p-4">
+        <p class="font-medium text-navy-800 mb-1">${p.name}</p>
+        <p class="text-xs text-gray-400 mb-2">${p.description || ''}</p>
+        <div class="flex items-center justify-between">
+          <span class="text-brand-600 font-bold">${p.points_price} 积分</span>
+          <span class="text-xs text-gray-400">库存 ${p.stock}</span>
+        </div>
+      </div>
+    </div>
+  `).join('')
+}
+
+function showMallModal() {
+  showModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-6">添加商品</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">商品名称</label><input id="mlName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">描述</label><input id="mlDesc" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">分类</label><select id="mlCat" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${Object.entries(CATEGORY_MAP).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">积分价格</label><input id="mlPoints" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">库存</label><input id="mlStock" type="number" value="100" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="createMallProduct()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function createMallProduct() {
+  const body = {
+    name: document.getElementById('mlName').value,
+    description: document.getElementById('mlDesc').value,
+    category: document.getElementById('mlCat').value,
+    points_price: parseInt(document.getElementById('mlPoints').value) || 100,
+    stock: parseInt(document.getElementById('mlStock').value) || 100,
+    status: 'active',
+    sort_order: 99
+  }
+  const res = await api('/admin/mall-products', { method: 'POST', body })
+  if (res.code === 200) { toast('商品创建成功'); closeModal(); loadMallProducts(); }
+  else toast(res.msg || '创建失败', 'error')
+}
+
+// ===== 组织架构 =====
+async function loadOrg() {
+  const res = await api('/admin/organizations')
+  if (res.code !== 200) return
+  const orgs = res.data || []
+  const hq = orgs.find(o => o.org_type === 'headquarters')
+  const branches = orgs.filter(o => o.org_type === 'branch')
+  const depts = orgs.filter(o => o.org_type === 'department')
+
+  let html = `<div class="space-y-6">`
+  if (hq) {
+    html += `<div class="flex items-center gap-3 mb-4">
+      <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-navy-700 to-navy-900 flex items-center justify-center text-white font-bold text-lg">星</div>
+      <div><p class="font-bold text-navy-800 text-lg">${hq.name}</p><p class="text-xs text-gray-400">${hq.description || ''}</p></div>
+    </div>`
+  }
+  branches.forEach(br => {
+    const brDepts = depts.filter(d => d.parent_id === br.id)
+    html += `
+      <div class="ml-6 border-l-2 border-brand-300 pl-6">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center text-brand-600 font-bold">${(br.name || '?')[0]}</div>
+          <div><p class="font-bold text-navy-800">${br.name}</p><p class="text-xs text-gray-400">${br.description || ''}</p></div>
+        </div>
+        ${brDepts.length ? `<div class="ml-4 space-y-2">${brDepts.map(d => `
+          <div class="flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-lg">
+            <div class="w-2 h-2 rounded-full bg-brand-400"></div>
+            <span class="text-sm text-navy-700">${d.name}</span>
+            <span class="text-xs text-gray-400 ml-auto">${d.description || ''}</span>
+          </div>
+        `).join('')}</div>` : ''}
+      </div>
+    `
+  })
+  html += '</div>'
+  document.getElementById('orgTree').innerHTML = html
+}
+
+function showOrgModal() {
+  showModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-6">新增组织</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">名称</label><input id="orgName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">类型</label><select id="orgType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="branch">分会</option><option value="department">部门</option></select></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">上级组织</label><select id="orgParent" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">无(顶级)</option></select></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">描述</label><input id="orgDesc" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="createOrg()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
+        </div>
+      </div>
+    </div>
+  `)
+  // 动态加载上级组织选项
+  api('/admin/organizations').then(res => {
+    if (res.code !== 200) return
+    const sel = document.getElementById('orgParent')
+    ;(res.data || []).forEach(o => {
+      if (o.org_type !== 'department') sel.innerHTML += `<option value="${o.id}">${o.name}</option>`
+    })
+  })
+}
+
+async function createOrg() {
+  const body = {
+    name: document.getElementById('orgName').value,
+    org_type: document.getElementById('orgType').value,
+    parent_id: document.getElementById('orgParent').value || null,
+    description: document.getElementById('orgDesc').value,
+    level: document.getElementById('orgType').value === 'branch' ? 1 : 2,
+    sort_order: 99
+  }
+  const res = await api('/admin/organizations', { method: 'POST', body })
+  if (res.code === 200) { toast('组织创建成功'); closeModal(); loadOrg(); }
+  else toast(res.msg || '创建失败', 'error')
+}
+
+// ===== 系统配置 =====
+async function loadConfig() {
+  const res = await api('/admin/configs')
+  if (res.code !== 200) return
+  const configs = res.data || []
+  const CONFIG_LABELS = {
+    membership_fee: '年费金额(元)',
+    referral_rate: '推荐分成比例',
+    matcher_rate: '撮合分成比例',
+    points_transaction_rate: '成交积分转换率(每元)',
+    points_expire_months: '积分有效期(月)',
+    credit_init_score: '新会员初始信用分',
+    active_decay_days: '活跃值衰减起始天数',
+    active_decay_rate: '活跃值每日衰减比例'
+  }
+  document.getElementById('configForm').innerHTML = configs.map(c => `
+    <div class="flex items-center gap-6">
+      <label class="w-48 text-sm font-medium text-gray-700 shrink-0">${CONFIG_LABELS[c.config_key] || c.config_key}</label>
+      <input data-config-key="${c.config_key}" value="${c.config_value}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
+      <span class="text-xs text-gray-400 w-40">${c.description || ''}</span>
+    </div>
+  `).join('') || '<p class="text-gray-400">暂无配置</p>'
+}
+
+async function saveConfigs() {
+  const inputs = document.querySelectorAll('[data-config-key]')
+  let success = 0
+  for (const input of inputs) {
+    const res = await api('/admin/configs', { method: 'PUT', body: { key: input.dataset.configKey, value: input.value } })
+    if (res.code === 200) success++
+  }
+  toast(`已保存 ${success} 项配置`)
+}
+
+// ===== 时钟 =====
+setInterval(() => {
+  const now = new Date()
+  document.getElementById('currentTime').textContent = now.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric', weekday:'long' }) + ' ' + now.toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' })
+}, 1000)
+</script>
+</body>
+</html>

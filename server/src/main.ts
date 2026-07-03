@@ -2,6 +2,8 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '@/app.module';
 import * as express from 'express';
 import { HttpStatusInterceptor } from '@/interceptors/http-status.interceptor';
+import * as fs from 'fs';
+import * as path from 'path';
 
 function parsePort(): number {
   const args = process.argv.slice(2);
@@ -17,6 +19,16 @@ function parsePort(): number {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // 提供 Admin 管理后台静态页面（必须在 setGlobalPrefix 之前）
+  const adminHtmlPath = path.resolve(process.cwd(), 'src/admin-panel/index.html');
+  if (fs.existsSync(adminHtmlPath)) {
+    const adminHtml = fs.readFileSync(adminHtmlPath, 'utf-8');
+    app.use('/admin', (req: express.Request, res: express.Response) => {
+      res.type('text/html').send(adminHtml);
+    });
+    console.log('✅ Admin panel available at /admin');
+  }
 
   app.enableCors({
     origin: true,
