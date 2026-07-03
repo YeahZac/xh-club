@@ -1,91 +1,105 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { View, Text, ScrollView } from "@tarojs/components"
 import Taro from "@tarojs/taro"
 import {
-  Search, MapPin, CalendarDays, Users, Award,
-  ChevronRight, Clock, Star, Briefcase, Crown
+  Search, Clock, MapPin, Users,
+  ShoppingBag, Award, Star
 } from "lucide-react-taro"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import { Network } from "@/network"
 
-/* ── Mock Data ── */
-const ACTIVITIES = [
-  {
-    id: 1, title: "2025粤商年度峰会", date: "04/18 周五", time: "09:00-17:00",
-    location: "广州白云国际会议中心", type: "年度大会", attendees: 320,
-    maxAttendees: 500, fee: "会员免费", image: "summit",
-    gradient: "from-[#1B2A4A] to-[#C9A96E]",
-  },
-  {
-    id: 2, title: "智能制造专题沙龙", date: "04/03 周四", time: "14:00-17:00",
-    location: "佛山南海瀚天科技城", type: "行业沙龙", attendees: 45,
-    maxAttendees: 60, fee: "免费", image: "salon",
-    gradient: "from-[#2D4A7A] to-[#4A6FA5]",
-  },
-  {
-    id: 3, title: "创投路演日·第12期", date: "04/05 周六", time: "14:00-18:00",
-    location: "深圳南山软件产业基地", type: "路演日", attendees: 86,
-    maxAttendees: 100, fee: "¥99", image: "roadshow",
-    gradient: "from-[#3B5998] to-[#5B7DB1]",
-  },
-  {
-    id: 4, title: "私董会：企业传承与二代培养", date: "04/12 周六", time: "09:00-12:00",
-    location: "广州天河四季酒店", type: "私董会", attendees: 12,
-    maxAttendees: 15, fee: "¥299", image: "board",
-    gradient: "from-[#1B2A4A] to-[#2D4A7A]",
-  },
-]
+interface EventItem {
+  id: string
+  title: string
+  description: string
+  cover_image: string
+  event_type: string
+  start_time: string
+  end_time: string
+  location: string
+  max_participants: number
+  current_participants: number
+  fee: number
+  status: string
+  is_featured: boolean
+}
 
-const TALENTS = [
-  {
-    id: 1, name: "张伟明", title: "合伙人", company: "珠江投资",
-    industry: "金融资本", tags: ["股权投资", "并购重组", "大湾区"],
-    credit: 92, level: "diamond", deals: 18,
-  },
-  {
-    id: 2, name: "刘雅琳", title: "高级合伙人", company: "金诚律所",
-    industry: "法律服务", tags: ["公司法务", "跨境合规", "IPO"],
-    credit: 88, level: "gold", deals: 12,
-  },
-  {
-    id: 3, name: "陈国强", title: "创始人", company: "东莞精工制造",
-    industry: "先进制造", tags: ["精密加工", "OEM代工", "自动化"],
-    credit: 85, level: "gold", deals: 8,
-  },
-  {
-    id: 4, name: "黄晓琳", title: "CEO", company: "贝贝供应链",
-    industry: "跨境贸易", tags: ["母婴渠道", "供应链", "华南市场"],
-    credit: 79, level: "silver", deals: 6,
-  },
-  {
-    id: 5, name: "王建辉", title: "总经理", company: "跨境优选",
-    industry: "跨境贸易", tags: ["跨境电商", "海外仓", "东南亚"],
-    credit: 75, level: "silver", deals: 4,
-  },
-]
+interface MemberItem {
+  id: string
+  name: string
+  avatar: string
+  company_name: string
+  company_position: string
+  industry_primary: string
+  membership_level: string
+  credit_score: number
+  core_advantage: string
+}
 
-const MARKET = [
-  { id: 1, title: "1个月会费抵扣券", category: "会员权益", points: 500, stock: 50 },
-  { id: 2, title: "法律咨询1小时", category: "商务服务", points: 200, stock: 30 },
-  { id: 3, title: "品牌诊断服务", category: "商务服务", points: 500, stock: 10 },
-  { id: 4, title: "商会定制公文包", category: "商务礼品", points: 300, stock: 100 },
-  { id: 5, title: "年度大会VIP席位", category: "活动权益", points: 1000, stock: 5 },
-  { id: 6, title: "商业课程月卡", category: "学习成长", points: 200, stock: 20 },
-]
+interface ProductItem {
+  id: string
+  name: string
+  description: string
+  image_url: string
+  points_price: number
+  stock: number
+  category: string
+}
 
-const LEVEL_MAP: Record<string, { label: string; color: string; bg: string }> = {
-  diamond: { label: "钻石", color: "#C9A96E", bg: "#FAF6F1" },
-  gold: { label: "金卡", color: "#F59E0B", bg: "#FFFBEB" },
-  silver: { label: "银卡", color: "#6B7280", bg: "#F3F4F6" },
-  normal: { label: "普通", color: "#9CA3AF", bg: "#F9FAFB" },
+const eventTypeMap: Record<string, string> = {
+  salon: '专题沙龙', roadshow: '路演日', annual: '年度大会', training: '培训', meeting: '定期例会',
+}
+
+const levelMap: Record<string, { label: string; color: string }> = {
+  normal: { label: '普通', color: 'bg-gray-100 text-gray-600' },
+  silver: { label: '银卡', color: 'bg-gray-200 text-gray-700' },
+  gold: { label: '金卡', color: 'bg-amber-50 text-amber-600' },
+  diamond: { label: '钻石', color: 'bg-sky-50 text-sky-600' },
 }
 
 const DiscoverPage = () => {
-  const [activeTab, setActiveTab] = useState("activity")
+  const [activeTab, setActiveTab] = useState("events")
   const isMiniApp = ([Taro.ENV_TYPE.WEAPP, Taro.ENV_TYPE.TT] as string[]).includes(Taro.getEnv() as string)
   const statusBarHeight = isMiniApp ? 22 : 8
+
+  const [events, setEvents] = useState<EventItem[]>([])
+  const [members, setMembers] = useState<MemberItem[]>([])
+  const [products, setProducts] = useState<ProductItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { loadData() }, [])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const [eventsRes, membersRes, productsRes] = await Promise.all([
+        Network.request({ url: '/api/events' }),
+        Network.request({ url: '/api/members' }),
+        Network.request({ url: '/api/admin/mall-products' }),
+      ])
+      console.log('[发现页] events:', eventsRes?.data)
+      console.log('[发现页] members:', membersRes?.data)
+      console.log('[发现页] products:', productsRes?.data)
+
+      if (eventsRes?.data?.data) setEvents(eventsRes.data.data)
+      if (membersRes?.data?.data) setMembers(membersRes.data.data)
+      if (productsRes?.data?.data) setProducts(productsRes.data.data)
+    } catch (err) {
+      console.error('[发现页] 加载失败:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatTime = (dateStr: string) => {
+    if (!dateStr) return ''
+    const d = new Date(dateStr)
+    return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+  }
 
   return (
     <View className="flex flex-col h-full bg-[#F5F6FA]">
@@ -103,188 +117,148 @@ const DiscoverPage = () => {
       <View className="px-4 -mt-3">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-white rounded-xl shadow-sm w-full flex flex-row justify-around p-1 h-auto">
-            <TabsTrigger value="activity" className="flex-1 rounded-lg data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-2 text-sm">
-              活动
+            <TabsTrigger value="events" className="flex-1 rounded-lg data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-2 text-sm">
+              活动报名
             </TabsTrigger>
-            <TabsTrigger value="talent" className="flex-1 rounded-lg data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-2 text-sm">
-              人才
+            <TabsTrigger value="talents" className="flex-1 rounded-lg data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-2 text-sm">
+              人才查询
             </TabsTrigger>
-            <TabsTrigger value="market" className="flex-1 rounded-lg data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-2 text-sm">
-              商城
+            <TabsTrigger value="mall" className="flex-1 rounded-lg data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-2 text-sm">
+              会员商城
             </TabsTrigger>
           </TabsList>
 
-          {/* Activity Tab */}
-          <TabsContent value="activity">
+          {/* Events Tab */}
+          <TabsContent value="events">
             <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 220px)' }}>
               <View className="flex flex-col gap-4 pb-8">
-                {ACTIVITIES.map((item) => (
+                {events.map((item) => (
                   <Card key={item.id} className="shadow-sm border-0 overflow-hidden">
-                    <View className={`bg-gradient-to-br ${item.gradient} p-5 relative overflow-hidden`}>
-                      <View className="absolute -right-6 -top-6 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                      <View className="absolute right-8 bottom-2 w-16 h-16 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                      <View className="flex flex-row items-center justify-between mb-2">
-                        <Badge className="bg-[#C9A96E] text-white text-[10px] px-2 py-0">{item.type}</Badge>
-                        <Text className="block text-xs font-semibold text-[#C9A96E]">{item.fee}</Text>
+                    {item.cover_image ? (
+                      <View className="relative">
+                        <img src={item.cover_image} style={{ width: '100%', height: '140px', objectFit: 'cover' }} />
+                        <View className="absolute left-0 top-0 right-0 p-3" style={{ background: 'linear-gradient(rgba(0,0,0,0.5), transparent)' }}>
+                          <Badge className="bg-[#C9A96E] text-white text-[10px] px-2 py-0">{eventTypeMap[item.event_type] || item.event_type}</Badge>
+                        </View>
                       </View>
-                      <Text className="block text-white font-bold text-lg mb-1">{item.title}</Text>
-                      <View className="flex flex-row items-center gap-1 mb-1">
-                        <MapPin size={12} color="rgba(255,255,255,0.7)" />
-                        <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>{item.location}</Text>
+                    ) : (
+                      <View className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] p-5 relative overflow-hidden">
+                        <View className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
+                        <Badge className="bg-[#C9A96E] text-white text-[10px] px-2 py-0 mb-2">{eventTypeMap[item.event_type] || item.event_type}</Badge>
+                        <Text className="block text-white font-bold text-base">{item.title}</Text>
                       </View>
-                    </View>
+                    )}
                     <CardContent className="p-4">
+                      <Text className="block text-base font-semibold text-[#1A1D2E] mb-2">{item.title}</Text>
+                      <View className="flex flex-col gap-1 mb-3">
+                        <View className="flex flex-row items-center gap-2">
+                          <Clock size={14} color="#6B7280" />
+                          <Text className="block text-xs text-gray-500">{formatTime(item.start_time)}</Text>
+                        </View>
+                        <View className="flex flex-row items-center gap-2">
+                          <MapPin size={14} color="#6B7280" />
+                          <Text className="block text-xs text-gray-500">{item.location}</Text>
+                        </View>
+                        <View className="flex flex-row items-center gap-2">
+                          <Users size={14} color="#6B7280" />
+                          <Text className="block text-xs text-gray-500">{item.current_participants || 0}/{item.max_participants || '∞'}人</Text>
+                        </View>
+                      </View>
                       <View className="flex flex-row items-center justify-between">
-                        <View className="flex flex-row items-center gap-3">
-                          <View className="flex flex-row items-center gap-1">
-                            <CalendarDays size={14} color="#6B7280" />
-                            <Text className="block text-xs text-gray-600">{item.date}</Text>
-                          </View>
-                          <View className="flex flex-row items-center gap-1">
-                            <Clock size={14} color="#6B7280" />
-                            <Text className="block text-xs text-gray-600">{item.time}</Text>
-                          </View>
-                        </View>
-                        <View className="flex flex-row items-center gap-1">
-                          <Users size={14} color="#C9A96E" />
-                          <Text className="block text-xs font-semibold text-[#C9A96E]">{item.attendees}/{item.maxAttendees}</Text>
-                        </View>
-                      </View>
-                      <View className="mt-3 w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <View
-                          className={`h-full rounded-full ${item.attendees >= item.maxAttendees ? 'bg-red-400' : 'bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8]'}`}
-                          style={{ width: `${Math.min((item.attendees / item.maxAttendees) * 100, 100)}%` }}
-                        />
-                      </View>
-                      <View className="flex flex-row items-center justify-between mt-2">
-                        <Text className="block text-[10px] text-gray-400">
-                          {item.attendees >= item.maxAttendees ? '已满员' : `剩余${item.maxAttendees - item.attendees}个名额`}
-                        </Text>
-                        <View className="flex flex-row items-center gap-0">
-                          <Text className="block text-xs text-[#1B2A4A] font-semibold">立即报名</Text>
-                          <ChevronRight size={12} color="#1B2A4A" />
-                        </View>
+                        <Text className="block text-sm font-bold text-[#C9A96E]">{item.fee > 0 ? `¥${item.fee}` : '免费'}</Text>
+                        <Button size="sm" className="bg-[#1B2A4A] text-white text-xs h-8 rounded-lg">立即报名</Button>
                       </View>
                     </CardContent>
                   </Card>
                 ))}
+                {events.length === 0 && !loading && (
+                  <View className="flex items-center justify-center py-16">
+                    <Text className="block text-sm text-gray-400">暂无活动</Text>
+                  </View>
+                )}
               </View>
             </ScrollView>
           </TabsContent>
 
-          {/* Talent Tab */}
-          <TabsContent value="talent">
+          {/* Talents Tab */}
+          <TabsContent value="talents">
             <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 220px)' }}>
               <View className="flex flex-col gap-3 pb-8">
-                {TALENTS.map((item) => {
-                  const lv = LEVEL_MAP[item.level] || LEVEL_MAP.normal
+                {members.map((item) => {
+                  const level = levelMap[item.membership_level] || levelMap.normal
                   return (
                     <Card key={item.id} className="shadow-sm border-0">
                       <CardContent className="p-4">
                         <View className="flex flex-row items-start gap-3">
                           <Avatar className="w-12 h-12 flex-shrink-0">
-                            <AvatarFallback className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] text-white text-base">{item.name[0]}</AvatarFallback>
+                            <AvatarFallback className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] text-white text-base">{(item.name || '?')[0]}</AvatarFallback>
                           </Avatar>
                           <View className="flex-1 min-w-0">
-                            <View className="flex flex-row items-center gap-2 mb-0">
+                            <View className="flex flex-row items-center gap-2 mb-1">
                               <Text className="block text-sm font-semibold text-[#1A1D2E]">{item.name}</Text>
-                              <Badge className="text-[10px] px-1 py-0" style={{ backgroundColor: lv.bg, color: lv.color }}>
-                                {lv.label}
-                              </Badge>
+                              <Badge className={`${level.color} text-[10px] px-1 py-0`}>{level.label}</Badge>
                             </View>
-                            <Text className="block text-xs text-gray-500 mb-2">{item.title} · {item.company}</Text>
-                            <View className="flex flex-row items-center gap-2 mb-2">
-                              <Badge className="bg-[#EDF0F4] text-[#1B2A4A] text-[10px] px-1 py-0">{item.industry}</Badge>
-                              {item.tags.slice(0, 2).map((tag) => (
-                                <Badge key={tag} className="bg-gray-100 text-gray-500 text-[10px] px-1 py-0">{tag}</Badge>
-                              ))}
-                            </View>
-                            <View className="flex flex-row items-center gap-4">
+                            <Text className="block text-xs text-gray-500">{item.company_position || ''} · {item.company_name || ''}</Text>
+                            {item.core_advantage && <Text className="block text-xs text-gray-400 mt-1">{item.core_advantage}</Text>}
+                            <View className="flex flex-row items-center gap-3 mt-2">
                               <View className="flex flex-row items-center gap-1">
                                 <Star size={12} color="#C9A96E" />
-                                <Text className="block text-xs text-gray-500">信用 {item.credit}</Text>
-                              </View>
-                              <View className="flex flex-row items-center gap-1">
-                                <Briefcase size={12} color="#6B7280" />
-                                <Text className="block text-xs text-gray-500">成交 {item.deals}单</Text>
-                              </View>
-                              <View className="flex flex-row items-center gap-1">
-                                <Crown size={12} color="#C9A96E" />
-                                <Text className="block text-xs text-gray-500">{lv.label}会员</Text>
+                                <Text className="block text-xs text-[#C9A96E]">信用 {item.credit_score || 60}</Text>
                               </View>
                             </View>
                           </View>
-                          <View className="flex-shrink-0">
-                            <View className="flex flex-row items-center gap-0">
-                              <Text className="block text-xs text-[#C9A96E]">介绍</Text>
-                              <ChevronRight size={12} color="#C9A96E" />
-                            </View>
-                          </View>
+                          <Button size="sm" variant="outline" className="text-xs h-7 rounded-lg">介绍对接</Button>
                         </View>
                       </CardContent>
                     </Card>
                   )
                 })}
+                {members.length === 0 && !loading && (
+                  <View className="flex items-center justify-center py-16">
+                    <Text className="block text-sm text-gray-400">暂无会员</Text>
+                  </View>
+                )}
               </View>
             </ScrollView>
           </TabsContent>
 
-          {/* Market Tab */}
-          <TabsContent value="market">
+          {/* Mall Tab */}
+          <TabsContent value="mall">
             <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 220px)' }}>
-              {/* Points Balance */}
-              <Card className="shadow-sm border-0 mb-4">
-                <CardContent className="p-4">
-                  <View className="flex flex-row items-center justify-between">
-                    <View>
-                      <Text className="block text-xs text-gray-400 mb-1">可用积分</Text>
-                      <View className="flex flex-row items-baseline gap-1">
-                        <Text className="block text-2xl font-bold text-[#C9A96E]">3,850</Text>
-                        <Text className="block text-xs text-gray-400">分</Text>
-                      </View>
-                    </View>
-                    <View className="rounded-lg px-3 py-1 bg-[#1B2A4A]">
-                      <Text className="block text-xs text-white font-medium">积分明细</Text>
-                    </View>
-                  </View>
-                </CardContent>
-              </Card>
-
-              {/* Category filters */}
-              <View className="flex flex-row gap-2 mb-4">
-                {["全部", "会员权益", "商务服务", "商务礼品", "活动权益", "学习成长"].map((cat, i) => (
-                  <View key={cat} className={`px-3 py-1 rounded-full ${i === 0 ? 'bg-[#1B2A4A]' : 'bg-white'}`}>
-                    <Text className={`block text-xs ${i === 0 ? 'text-white' : 'text-gray-600'}`}>{cat}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Product Grid */}
               <View className="grid grid-cols-2 gap-3 pb-8">
-                {MARKET.map((item) => (
+                {products.map((item) => (
                   <Card key={item.id} className="shadow-sm border-0">
-                    <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] h-24 flex items-center justify-center relative overflow-hidden">
-                      <View className="absolute -right-4 -bottom-4 w-16 h-16 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                      <Award size={28} color="#C9A96E" />
+                    <View className="bg-gradient-to-br from-[#FAF6F1] to-[#F5F0E8] h-28 flex items-center justify-center">
+                      {item.image_url ? (
+                        <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <ShoppingBag size={32} color="#C9A96E" />
+                      )}
                     </View>
                     <CardContent className="p-3">
-                      <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-[10px] px-1 py-0 mb-1">{item.category}</Badge>
-                      <Text className="block text-sm font-semibold text-[#1A1D2E] mb-1">{item.title}</Text>
+                      <Text className="block text-sm font-medium text-[#1A1D2E] mb-1 truncate">{item.name}</Text>
+                      {item.description && <Text className="block text-xs text-gray-400 mb-2 truncate">{item.description}</Text>}
                       <View className="flex flex-row items-center justify-between">
-                        <View className="flex flex-row items-baseline gap-0">
-                          <Text className="block text-sm font-bold text-[#C9A96E]">{item.points}</Text>
-                          <Text className="block text-[10px] text-gray-400">积分</Text>
+                        <View className="flex flex-row items-center gap-1">
+                          <Award size={12} color="#C9A96E" />
+                          <Text className="block text-sm font-bold text-[#C9A96E]">{item.points_price}积分</Text>
                         </View>
-                        <Text className="block text-[10px] text-gray-400">剩{item.stock}件</Text>
+                        <Badge className="bg-gray-100 text-gray-500 text-[10px] px-1 py-0">剩{item.stock}</Badge>
                       </View>
                     </CardContent>
                   </Card>
                 ))}
               </View>
+              {products.length === 0 && !loading && (
+                <View className="flex items-center justify-center py-16">
+                  <Text className="block text-sm text-gray-400">商城暂无商品</Text>
+                </View>
+              )}
             </ScrollView>
           </TabsContent>
         </Tabs>
       </View>
+      <View className="h-16" />
     </View>
   )
 }

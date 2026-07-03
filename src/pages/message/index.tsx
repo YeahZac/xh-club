@@ -1,57 +1,42 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { View, Text, ScrollView } from "@tarojs/components"
 import Taro from "@tarojs/taro"
 import {
-  Search, Bell, ChevronRight, Users, Clock
+  Bell, ChevronRight, Clock, CircleAlert,
+  CircleCheck, Gift, TrendingUp, UserPlus
 } from "lucide-react-taro"
 import { Card, CardContent } from "@/components/ui/card"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Network } from "@/network"
 
-/* ── Mock Data ── */
-const CHATS = [
-  { id: 1, name: "张伟明", avatar: "", lastMsg: "那个项目方案你看了吗？我觉得很有潜力", time: "10:32", unread: 2, isGroup: false },
-  { id: 2, name: "广州分会·金融部", avatar: "", lastMsg: "刘部长：下周三例会改到2点", time: "09:15", unread: 5, isGroup: true },
-  { id: 3, name: "陈国强", avatar: "", lastMsg: "好的，明天下午3点见面详谈", time: "昨天", unread: 0, isGroup: false },
-  { id: 4, name: "2025峰会筹备组", avatar: "", lastMsg: "王秘书：场地已确认，方案已更新", time: "昨天", unread: 0, isGroup: true },
-  { id: 5, name: "黄晓琳", avatar: "", lastMsg: "渠道合作方案我发你邮箱了", time: "周一", unread: 0, isGroup: false },
-  { id: 6, name: "智能制造兴趣圈", avatar: "", lastMsg: "李工：新出的AI质检方案大家看看", time: "周一", unread: 12, isGroup: true },
-]
+interface ChatItem {
+  id: string
+  name: string
+  lastMessage: string
+  time: string
+  unread: number
+  avatar: string
+}
 
-const NOTIFICATIONS = [
-  {
-    id: 1, type: "approval", title: "入会审批", desc: "新会员赵XX的入会申请需要您审批",
-    time: "30分钟前", read: false,
-  },
-  {
-    id: 2, type: "deal", title: "成交确认", desc: "您撮合的智能仓储项目已成交，获得56积分",
-    time: "1小时前", read: false,
-  },
-  {
-    id: 3, type: "activity", title: "活动提醒", desc: "粤商年度峰会将于明天09:00开始，请准时参加",
-    time: "2小时前", read: false,
-  },
-  {
-    id: 4, type: "recommend", title: "推荐奖励", desc: "您推荐的王XX已正式入会，获得100积分奖励",
-    time: "昨天", read: true,
-  },
-  {
-    id: 5, type: "system", title: "信用评分更新", desc: "您的信用评分已更新为82分，继续保持",
-    time: "昨天", read: true,
-  },
-  {
-    id: 6, type: "credit", title: "等级晋升", desc: "恭喜！您已晋升为金卡会员，解锁更多特权",
-    time: "3天前", read: true,
-  },
-]
+interface NotificationItem {
+  id: string
+  type: string
+  title: string
+  content: string
+  is_read: boolean
+  created_at: string
+  link: string
+}
 
-const NOTIFICATION_TYPE_MAP: Record<string, { color: string; bg: string }> = {
-  approval: { color: "#6366F1", bg: "#F0F0FE" },
-  deal: { color: "#C9A96E", bg: "#FAF6F1" },
-  activity: { color: "#10B981", bg: "#ECFDF5" },
-  recommend: { color: "#EC4899", bg: "#FDF2F8" },
-  system: { color: "#3B82F6", bg: "#EFF6FF" },
-  credit: { color: "#F59E0B", bg: "#FFFBEB" },
+const notifIconMap: Record<string, any> = {
+  system: CircleAlert,
+  activity: Clock,
+  approval: CircleCheck,
+  commission: Gift,
+  credit: TrendingUp,
+  referral: UserPlus,
 }
 
 const MessagePage = () => {
@@ -59,19 +44,53 @@ const MessagePage = () => {
   const isMiniApp = ([Taro.ENV_TYPE.WEAPP, Taro.ENV_TYPE.TT] as string[]).includes(Taro.getEnv() as string)
   const statusBarHeight = isMiniApp ? 22 : 8
 
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [loading, setLoading] = useState(true)
+
+  const mockChats: ChatItem[] = [
+    { id: '1', name: '张伟', lastMessage: '您好，关于项目合作想和您聊聊', time: '10:30', unread: 2, avatar: '' },
+    { id: '2', name: '广州分会群', lastMessage: '本周六沙龙活动报名中...', time: '09:15', unread: 5, avatar: '' },
+    { id: '3', name: '李明', lastMessage: 'BP已发送到您邮箱，请查收', time: '昨天', unread: 0, avatar: '' },
+    { id: '4', name: '科技部群', lastMessage: '下月路演项目征集', time: '昨天', unread: 0, avatar: '' },
+  ]
+
+  useEffect(() => {
+    loadNotifications()
+  }, [])
+
+  const loadNotifications = async () => {
+    try {
+      setLoading(true)
+      const res = await Network.request({ url: '/api/messages/notifications' })
+      console.log('[消息页] notifications:', res?.data)
+      if (res?.data?.data) {
+        setNotifications(res.data.data)
+        setUnreadCount(res.data.data.filter((n: NotificationItem) => !n.is_read).length)
+      }
+    } catch (err) {
+      console.error('[消息页] 加载失败:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatTime = (dateStr: string) => {
+    if (!dateStr) return ''
+    const d = new Date(dateStr)
+    const now = new Date()
+    const diff = now.getTime() - d.getTime()
+    if (diff < 3600000) return `${Math.max(1, Math.floor(diff / 60000))}分钟前`
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
+    return `${(d.getMonth() + 1)}/${d.getDate()}`
+  }
+
   return (
     <View className="flex flex-col h-full bg-[#F5F6FA]">
       {/* Header */}
       <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pb-4">
         <View style={{ height: `${statusBarHeight}px` }} />
-        <View className="flex flex-row items-center justify-between mb-3">
-          <Text className="block text-xl font-bold text-white">消息</Text>
-          <Bell size={20} color="#ffffff" />
-        </View>
-        <View className="rounded-xl px-3 py-2 flex flex-row items-center gap-2" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
-          <Search size={16} color="rgba(255,255,255,0.6)" />
-          <Text className="block text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>搜索联系人、群聊...</Text>
-        </View>
+        <Text className="block text-xl font-bold text-white">消息</Text>
       </View>
 
       {/* Tabs */}
@@ -81,43 +100,38 @@ const MessagePage = () => {
             <TabsTrigger value="chat" className="flex-1 rounded-lg data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-2 text-sm">
               聊天
             </TabsTrigger>
-            <TabsTrigger value="notify" className="flex-1 rounded-lg data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-2 text-sm">
+            <TabsTrigger value="notification" className="flex-1 rounded-lg data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-2 text-sm relative">
               通知
+              {unreadCount > 0 && (
+                <Badge className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] px-1 py-0 min-w-[16px] h-4 flex items-center justify-center">{unreadCount > 99 ? '99+' : unreadCount}</Badge>
+              )}
             </TabsTrigger>
           </TabsList>
 
           {/* Chat Tab */}
           <TabsContent value="chat">
-            <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 200px)' }}>
+            <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 180px)' }}>
               <View className="flex flex-col gap-2 pb-8">
-                {CHATS.map((chat) => (
-                  <Card key={chat.id} className="shadow-sm border-0">
-                    <CardContent className="p-3">
+                {mockChats.map((item) => (
+                  <Card key={item.id} className="shadow-sm border-0">
+                    <CardContent className="p-4">
                       <View className="flex flex-row items-center gap-3">
-                        <View className="relative flex-shrink-0">
-                          <Avatar className="w-11 h-11">
-                            {chat.isGroup ? (
-                              <AvatarFallback className="bg-[#1B2A4A]">
-                                <Users size={18} color="#ffffff" />
-                              </AvatarFallback>
-                            ) : (
-                              <AvatarFallback className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] text-white text-sm">{chat.name[0]}</AvatarFallback>
-                            )}
+                        <View className="relative">
+                          <Avatar className="w-12 h-12">
+                            <AvatarFallback className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] text-white text-base">{item.name[0]}</AvatarFallback>
                           </Avatar>
-                          {chat.unread > 0 && (
-                            <View className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center">
-                              <Text className="block text-[10px] text-white font-bold">{chat.unread > 99 ? '99+' : chat.unread}</Text>
-                            </View>
+                          {item.unread > 0 && (
+                            <Badge className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] px-1 py-0 min-w-[16px] h-4 flex items-center justify-center">{item.unread}</Badge>
                           )}
                         </View>
                         <View className="flex-1 min-w-0">
                           <View className="flex flex-row items-center justify-between mb-1">
-                            <Text className="block text-sm font-semibold text-[#1A1D2E] truncate">{chat.name}</Text>
-                            <Text className="block text-[10px] text-gray-400 flex-shrink-0 ml-2">{chat.time}</Text>
+                            <Text className="block text-sm font-semibold text-[#1A1D2E]">{item.name}</Text>
+                            <Text className="block text-xs text-gray-400">{item.time}</Text>
                           </View>
-                          <Text className="block text-xs text-gray-500 truncate">{chat.lastMsg}</Text>
+                          <Text className="block text-xs text-gray-500 truncate">{item.lastMessage}</Text>
                         </View>
-                        <ChevronRight size={14} color="#D1D5DB" className="flex-shrink-0" />
+                        <ChevronRight size={16} color="#D1D5DB" />
                       </View>
                     </CardContent>
                   </Card>
@@ -127,39 +141,42 @@ const MessagePage = () => {
           </TabsContent>
 
           {/* Notification Tab */}
-          <TabsContent value="notify">
-            <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 200px)' }}>
-              <View className="flex flex-col gap-3 pb-8">
-                {NOTIFICATIONS.map((item) => {
-                  const typeStyle = NOTIFICATION_TYPE_MAP[item.type] || NOTIFICATION_TYPE_MAP.system
+          <TabsContent value="notification">
+            <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 180px)' }}>
+              <View className="flex flex-col gap-2 pb-8">
+                {notifications.map((item) => {
+                  const IconComp = notifIconMap[item.type] || Bell
                   return (
-                    <Card key={item.id} className={`shadow-sm border-0 ${!item.read ? 'border-l-2 border-l-[#C9A96E]' : ''}`}>
+                    <Card key={item.id} className={`shadow-sm border-0 ${!item.is_read ? 'bg-blue-50' : ''}`}>
                       <CardContent className="p-4">
                         <View className="flex flex-row items-start gap-3">
-                          <View className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: typeStyle.bg }}>
-                            <View className="w-2 h-2 rounded-full" style={{ backgroundColor: typeStyle.color }} />
+                          <View className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${!item.is_read ? 'bg-[#1B2A4A]' : 'bg-gray-100'}`}>
+                            <IconComp size={18} color={item.is_read ? '#9CA3AF' : '#ffffff'} />
                           </View>
                           <View className="flex-1 min-w-0">
                             <View className="flex flex-row items-center justify-between mb-1">
                               <Text className="block text-sm font-semibold text-[#1A1D2E]">{item.title}</Text>
-                              {!item.read && <View className="w-2 h-2 bg-red-500 rounded-full" />}
+                              {!item.is_read && <View className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
                             </View>
-                            <Text className="block text-xs text-gray-500 leading-relaxed mb-1">{item.desc}</Text>
-                            <View className="flex flex-row items-center gap-1">
-                              <Clock size={10} color="#9CA3AF" />
-                              <Text className="block text-[10px] text-gray-400">{item.time}</Text>
-                            </View>
+                            <Text className="block text-xs text-gray-500 mb-1">{item.content}</Text>
+                            <Text className="block text-[10px] text-gray-400">{formatTime(item.created_at)}</Text>
                           </View>
                         </View>
                       </CardContent>
                     </Card>
                   )
                 })}
+                {notifications.length === 0 && !loading && (
+                  <View className="flex items-center justify-center py-16">
+                    <Text className="block text-sm text-gray-400">暂无通知</Text>
+                  </View>
+                )}
               </View>
             </ScrollView>
           </TabsContent>
         </Tabs>
       </View>
+      <View className="h-16" />
     </View>
   )
 }

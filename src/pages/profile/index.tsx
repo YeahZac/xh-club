@@ -1,199 +1,240 @@
+import { useState, useEffect } from "react"
 import { View, Text, ScrollView } from "@tarojs/components"
 import Taro from "@tarojs/taro"
 import {
-  ChevronRight, Award, Star, Handshake, Users,
-  Wallet, Crown, Gift, Settings, Bell, Shield, BookOpen
+  User, Award, TrendingUp, ChevronRight, Settings, Shield,
+  FileText, Users, Gift, ShoppingBag, Star, Wallet, ChartBar, LogOut, Crown
 } from "lucide-react-taro"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Network } from "@/network"
 
-/* ── Mock Data ── */
-const PROFILE = {
-  name: "李志远",
-  company: "深圳优品科技有限公司",
-  title: "创始人 · CEO",
-  industry: "科技互联网",
-  level: "gold" as const,
-  credit: 82,
-  joinDate: "2023年6月入会",
-  branch: "深圳分会",
-  department: "科技互联网部",
+interface MemberProfile {
+  id: string
+  name: string
+  avatar: string
+  phone: string
+  company_name: string
+  company_position: string
+  industry_primary: string
+  membership_level: string
+  member_type: string
+  credit_score: number
+  active_score: number
+  contribution_score: number
+  total_points: number
+  available_points: number
+  total_transactions: number
+  total_transaction_amount: number
+  referrer_count: number
+  match_count: number
 }
 
-const STATS = [
-  { label: "活跃值", value: "1720", target: "2000", icon: BookOpen, color: "#3B82F6", bg: "#EFF6FF" },
-  { label: "贡献值", value: "2340", target: "1500", icon: Award, color: "#C9A96E", bg: "#FAF6F1" },
-  { label: "信用分", value: "82", target: "80", icon: Shield, color: "#10B981", bg: "#ECFDF5" },
-]
+const industryMap: Record<string, string> = {
+  tech: '科技互联网', finance: '金融资本', manufacture: '先进制造', health: '大健康',
+  realestate: '房地产建筑', education: '教育培训', media: '文化传媒', law: '法律服务',
+  agriculture: '现代农业', crossborder: '跨境贸易', food: '餐饮消费', energy: '环保能源',
+  service: '综合服务',
+}
 
-const DEAL_STATS = [
-  { label: "累计成交", value: "12单", sub: "¥386万" },
-  { label: "推荐会员", value: "8人", sub: "转化6人" },
-  { label: "撮合成功", value: "6次", sub: "¥124万" },
-  { label: "可用积分", value: "3,850", sub: "分" },
-]
-
-const MENU_SECTIONS = [
-  {
-    title: "我的业务",
-    items: [
-      { icon: Handshake, label: "成交记录", extra: "12单", color: "#C9A96E", bg: "#FAF6F1" },
-      { icon: Users, label: "推荐管理", extra: "8人", color: "#3B82F6", bg: "#EFF6FF" },
-      { icon: Wallet, label: "收益明细", extra: "¥12,800", color: "#10B981", bg: "#ECFDF5" },
-      { icon: Gift, label: "积分兑换", extra: "3,850分", color: "#EC4899", bg: "#FDF2F8" },
-    ],
-  },
-  {
-    title: "会员服务",
-    items: [
-      { icon: Crown, label: "会员等级", extra: "金卡会员", color: "#C9A96E", bg: "#FAF6F1" },
-      { icon: Star, label: "信用评分", extra: "82分", color: "#F59E0B", bg: "#FFFBEB" },
-      { icon: Award, label: "荣誉徽章", extra: "5枚", color: "#6366F1", bg: "#F0F0FE" },
-    ],
-  },
-  {
-    title: "设置",
-    items: [
-      { icon: Bell, label: "消息设置", extra: "", color: "#6B7280", bg: "#F3F4F6" },
-      { icon: Settings, label: "账户设置", extra: "", color: "#6B7280", bg: "#F3F4F6" },
-    ],
-  },
-]
-
-const LEVEL_MAP: Record<string, { label: string; color: string; bg: string }> = {
-  diamond: { label: "钻石会员", color: "#C9A96E", bg: "#FAF6F1" },
-  gold: { label: "金卡会员", color: "#F59E0B", bg: "#FFFBEB" },
-  silver: { label: "银卡会员", color: "#6B7280", bg: "#F3F4F6" },
-  normal: { label: "普通会员", color: "#9CA3AF", bg: "#F9FAFB" },
+const levelMap: Record<string, { label: string; color: string; icon: any }> = {
+  normal: { label: '普通会员', color: 'bg-gray-200 text-gray-700', icon: User },
+  silver: { label: '银卡会员', color: 'bg-gray-300 text-gray-800', icon: Award },
+  gold: { label: '金卡会员', color: 'bg-amber-100 text-amber-700', icon: Crown },
+  diamond: { label: '钻石会员', color: 'bg-sky-100 text-sky-700', icon: Star },
 }
 
 const ProfilePage = () => {
   const isMiniApp = ([Taro.ENV_TYPE.WEAPP, Taro.ENV_TYPE.TT] as string[]).includes(Taro.getEnv() as string)
   const statusBarHeight = isMiniApp ? 22 : 8
-  const lv = LEVEL_MAP[PROFILE.level] || LEVEL_MAP.normal
+
+  const [profile, setProfile] = useState<MemberProfile | null>(null)
+
+  useEffect(() => {
+    loadProfile()
+  }, [])
+
+  const loadProfile = async () => {
+    try {
+      const memberId = Taro.getStorageSync('member_id')
+      if (!memberId) {
+        console.log('[我的页] 未登录')
+        return
+      }
+      const res = await Network.request({ url: `/api/members/profile/${memberId}` })
+      console.log('[我的页] profile:', res?.data)
+      if (res?.data?.data) setProfile(res.data.data)
+    } catch (err) {
+      console.error('[我的页] 加载失败:', err)
+    }
+  }
+
+  const currentLevel = levelMap[profile?.membership_level || 'normal'] || levelMap.normal
+
+  const menuSections = [
+    {
+      title: '业务管理',
+      items: [
+        { icon: FileText, label: '成交记录', badge: profile?.total_transactions ? `${profile.total_transactions}单` : '', color: '#1B2A4A' },
+        { icon: TrendingUp, label: '推荐管理', badge: profile?.referrer_count ? `${profile.referrer_count}人` : '', color: '#2D4A7A' },
+        { icon: Users, label: '撮合对接', badge: profile?.match_count ? `${profile.match_count}次` : '', color: '#3B5998' },
+      ]
+    },
+    {
+      title: '资产与权益',
+      items: [
+        { icon: Gift, label: '积分明细', badge: profile?.available_points ? `${profile.available_points}` : '', color: '#C9A96E' },
+        { icon: ShoppingBag, label: '积分兑换', color: '#B8935E' },
+        { icon: Wallet, label: '收益管理', color: '#8B7355' },
+        { icon: Crown, label: '会员等级', badge: currentLevel.label, color: '#1B2A4A' },
+      ]
+    },
+    {
+      title: '其他',
+      items: [
+        { icon: Shield, label: '隐私设置', color: '#6B7280' },
+        { icon: Settings, label: '系统设置', color: '#6B7280' },
+        { icon: LogOut, label: '退出登录', color: '#EF4444' },
+      ]
+    },
+  ]
 
   return (
-    <ScrollView scrollY className="h-full bg-[#F5F6FA]">
-      {/* ── Profile Header ── */}
-      <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pb-8 relative overflow-hidden">
-        <View style={{ height: `${statusBarHeight}px` }} />
-        {/* Decorative circles */}
-        <View className="absolute -right-12 -top-12 w-40 h-40 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
-        <View className="absolute right-8 bottom-2 w-20 h-20 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
-        <View className="absolute left-20 -bottom-8 w-16 h-16 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
+    <View className="flex flex-col h-full bg-[#F5F6FA]">
+      <ScrollView scrollY style={{ height: '100vh' }}>
+        {/* Header with profile */}
+        <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pb-6 relative overflow-hidden">
+          <View style={{ height: `${statusBarHeight}px` }} />
+          {/* Decorative circles */}
+          <View className="absolute -right-12 -top-12 w-40 h-40 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.03)' }} />
+          <View className="absolute right-20 bottom-2 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.03)' }} />
 
-        <View className="flex flex-row items-center gap-4 relative z-10">
-          <Avatar className="w-16 h-16">
-            <AvatarFallback className="bg-[#C9A96E] text-white text-xl font-bold">{PROFILE.name[0]}</AvatarFallback>
-          </Avatar>
-          <View className="flex-1">
-            <View className="flex flex-row items-center gap-2 mb-1">
-              <Text className="block text-lg font-bold text-white">{PROFILE.name}</Text>
-              <Badge className="text-[10px] px-2 py-0 font-semibold" style={{ backgroundColor: lv.bg, color: lv.color }}>
-                {lv.label}
-              </Badge>
-            </View>
-            <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>{PROFILE.title}</Text>
-            <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>{PROFILE.company}</Text>
-          </View>
-          <ChevronRight size={18} color="rgba(255,255,255,0.5)" />
-        </View>
-
-        {/* Sub info */}
-        <View className="flex flex-row items-center gap-4 mt-4 relative z-10">
-          <View className="flex flex-row items-center gap-1">
-            <Crown size={12} color="#C9A96E" />
-            <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>{PROFILE.branch}</Text>
-          </View>
-          <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>|</Text>
-          <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>{PROFILE.department}</Text>
-          <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>|</Text>
-          <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>{PROFILE.joinDate}</Text>
-        </View>
-      </View>
-
-      {/* ── Growth Stats ── */}
-      <View className="px-4 -mt-4">
-        <Card className="shadow-sm border-0">
-          <CardContent className="p-4">
-            <View className="flex flex-row items-center justify-between mb-3">
-              <Text className="block text-sm font-semibold text-[#1A1D2E]">成长体系</Text>
-              <View className="flex flex-row items-center gap-0">
-                <Text className="block text-xs text-[#C9A96E]">距钻石还需活跃值+280</Text>
-                <ChevronRight size={12} color="#C9A96E" />
+          <View className="flex flex-row items-center gap-4 mt-2">
+            <Avatar className="w-16 h-16 border-2 border-[#C9A96E]">
+              <AvatarFallback className="bg-gradient-to-br from-[#C9A96E] to-[#E8D5A8] text-white text-xl">
+                {(profile?.name || '星')[0]}
+              </AvatarFallback>
+            </Avatar>
+            <View className="flex-1">
+              <View className="flex flex-row items-center gap-2 mb-1">
+                <Text className="block text-lg font-bold text-white">{profile?.name || '星河百谷会员'}</Text>
+                <Badge className={`${currentLevel.color} text-[10px] px-2 py-0`}>{currentLevel.label}</Badge>
               </View>
+              <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                {profile?.company_position || ''}{profile?.company_name ? ` · ${profile.company_name}` : ''}
+              </Text>
+              {profile?.industry_primary && (
+                <Badge className="bg-[#C9A96E]/20 text-[#C9A96E] text-[10px] px-1 py-0 mt-1">{industryMap[profile.industry_primary] || profile.industry_primary}</Badge>
+              )}
             </View>
-            <View className="flex flex-row gap-4">
-              {STATS.map((stat) => (
-                <View key={stat.label} className="flex-1">
-                  <View className="flex flex-row items-center gap-1 mb-2">
-                    <View className="w-6 h-6 rounded-md flex items-center justify-center" style={{ backgroundColor: stat.bg }}>
-                      <stat.icon size={14} color={stat.color} />
-                    </View>
-                    <Text className="block text-xs text-gray-500">{stat.label}</Text>
+            <ChevronRight size={20} color="rgba(255,255,255,0.5)" />
+          </View>
+        </View>
+
+        {/* Stats Cards */}
+        <View className="px-4 -mt-3">
+          <Card className="shadow-sm border-0">
+            <CardContent className="p-4">
+              <View className="flex flex-row items-center justify-around">
+                <View className="flex flex-col items-center">
+                  <Text className="block text-lg font-bold text-[#1A1D2E]">{profile?.total_transactions || 0}</Text>
+                  <Text className="block text-xs text-gray-500">成交单数</Text>
+                </View>
+                <View className="w-px h-8 bg-[#E8EAF0]" />
+                <View className="flex flex-col items-center">
+                  <Text className="block text-lg font-bold text-[#C9A96E]">{profile?.available_points || 0}</Text>
+                  <Text className="block text-xs text-gray-500">可用积分</Text>
+                </View>
+                <View className="w-px h-8 bg-[#E8EAF0]" />
+                <View className="flex flex-col items-center">
+                  <Text className="block text-lg font-bold text-[#1A1D2E]">{profile?.referrer_count || 0}</Text>
+                  <Text className="block text-xs text-gray-500">推荐人数</Text>
+                </View>
+                <View className="w-px h-8 bg-[#E8EAF0]" />
+                <View className="flex flex-col items-center">
+                  <Text className="block text-lg font-bold text-[#C9A96E]">{profile?.credit_score || 60}</Text>
+                  <Text className="block text-xs text-gray-500">信用分</Text>
+                </View>
+              </View>
+            </CardContent>
+          </Card>
+        </View>
+
+        {/* Growth Section */}
+        <View className="px-4 mt-4">
+          <Card className="shadow-sm border-0">
+            <CardContent className="p-4">
+              <View className="flex flex-row items-center justify-between mb-4">
+                <Text className="block text-sm font-bold text-[#1A1D2E]">成长体系</Text>
+                <View className="flex flex-row items-center gap-1">
+                  <ChartBar size={14} color="#C9A96E" />
+                  <Text className="block text-xs text-[#C9A96E]">查看详情</Text>
+                </View>
+              </View>
+              <View className="flex flex-col gap-3">
+                <View>
+                  <View className="flex flex-row items-center justify-between mb-1">
+                    <Text className="block text-xs text-gray-600">活跃值</Text>
+                    <Text className="block text-xs font-semibold text-[#1A1D2E]">{profile?.active_score || 0}</Text>
                   </View>
-                  <View className="flex flex-row items-baseline gap-1">
-                    <Text className="block text-lg font-bold text-[#1A1D2E]">{stat.value}</Text>
-                    <Text className="block text-[10px] text-gray-400">/ {stat.target}</Text>
-                  </View>
-                  <View className="w-full h-1 bg-gray-100 rounded-full overflow-hidden mt-1">
-                    <View className="h-full rounded-full" style={{ backgroundColor: stat.color, width: `${Math.min((parseInt(stat.value) / parseInt(stat.target)) * 100, 100)}%` }} />
+                  <View className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <View className="h-full bg-gradient-to-r from-[#1B2A4A] to-[#3B5998] rounded-full" style={{ width: `${Math.min((profile?.active_score || 0) / 2000 * 100, 100)}%` }} />
                   </View>
                 </View>
-              ))}
-            </View>
-          </CardContent>
-        </Card>
-      </View>
-
-      {/* ── Deal Stats Grid ── */}
-      <View className="px-4 mt-4">
-        <Card className="shadow-sm border-0">
-          <CardContent className="p-4">
-            <View className="grid grid-cols-4 gap-2">
-              {DEAL_STATS.map((item) => (
-                <View key={item.label} className="flex flex-col items-center">
-                  <Text className="block text-base font-bold text-[#1A1D2E]">{item.value}</Text>
-                  <Text className="block text-[10px] text-gray-400">{item.label}</Text>
-                  <Text className="block text-[10px] text-[#C9A96E]">{item.sub}</Text>
+                <View>
+                  <View className="flex flex-row items-center justify-between mb-1">
+                    <Text className="block text-xs text-gray-600">贡献值</Text>
+                    <Text className="block text-xs font-semibold text-[#C9A96E]">{profile?.contribution_score || 0}</Text>
+                  </View>
+                  <View className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <View className="h-full bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8] rounded-full" style={{ width: `${Math.min((profile?.contribution_score || 0) / 1500 * 100, 100)}%` }} />
+                  </View>
                 </View>
-              ))}
-            </View>
-          </CardContent>
-        </Card>
-      </View>
+                <View>
+                  <View className="flex flex-row items-center justify-between mb-1">
+                    <Text className="block text-xs text-gray-600">信用值</Text>
+                    <Text className="block text-xs font-semibold text-[#1A1D2E]">{profile?.credit_score || 60}/100</Text>
+                  </View>
+                  <View className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <View className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full" style={{ width: `${profile?.credit_score || 60}%` }} />
+                  </View>
+                </View>
+              </View>
+            </CardContent>
+          </Card>
+        </View>
 
-      {/* ── Menu Sections ── */}
-      <View className="px-4 mt-4 pb-8">
-        {MENU_SECTIONS.map((section) => (
-          <View key={section.title} className="mb-4">
-            <Text className="block text-xs text-gray-400 mb-2 px-1">{section.title}</Text>
+        {/* Menu Sections */}
+        {menuSections.map((section, sIdx) => (
+          <View className="px-4 mt-4" key={sIdx}>
+            <Text className="block text-xs text-gray-400 mb-2 ml-1">{section.title}</Text>
             <Card className="shadow-sm border-0">
               <CardContent className="p-0">
-                {section.items.map((item, idx) => (
-                  <View
-                    key={item.label}
-                    className={`flex flex-row items-center justify-between px-4 py-3 ${idx < section.items.length - 1 ? 'border-b border-[#F3F4F6]' : ''}`}
-                  >
-                    <View className="flex flex-row items-center gap-3">
-                      <View className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: item.bg }}>
-                        <item.icon size={16} color={item.color} />
+                {section.items.map((item, iIdx) => {
+                  const ItemIcon = item.icon
+                  return (
+                    <View key={iIdx}>
+                      <View className="flex flex-row items-center px-4 py-3">
+                        <View className="w-8 h-8 rounded-lg flex items-center justify-center mr-3" style={{ backgroundColor: `${item.color}15` }}>
+                          <ItemIcon size={16} color={item.color} />
+                        </View>
+                        <Text className="block flex-1 text-sm text-[#1A1D2E]">{item.label}</Text>
+                        {item.badge && <Badge className="bg-[#C9A96E]/10 text-[#C9A96E] text-[10px] px-2 py-0 mr-2">{item.badge}</Badge>}
+                        <ChevronRight size={16} color="#D1D5DB" />
                       </View>
-                      <Text className="block text-sm text-[#1A1D2E]">{item.label}</Text>
+                      {iIdx < section.items.length - 1 && <View className="h-px bg-[#F0F1F5] ml-15" />}
                     </View>
-                    <View className="flex flex-row items-center gap-1">
-                      {item.extra && <Text className="block text-xs text-gray-400">{item.extra}</Text>}
-                      <ChevronRight size={14} color="#D1D5DB" />
-                    </View>
-                  </View>
-                ))}
+                  )
+                })}
               </CardContent>
             </Card>
           </View>
         ))}
-      </View>
-    </ScrollView>
+
+        <View className="h-24" />
+      </ScrollView>
+    </View>
   )
 }
 
