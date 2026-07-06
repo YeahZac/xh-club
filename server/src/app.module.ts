@@ -7,6 +7,7 @@ import { TransactionsModule } from './transactions/transactions.module'
 import { CommunityModule } from './community/community.module'
 import { MessagesModule } from './messages/messages.module'
 import { AdminModule } from './admin/admin.module'
+import { MallModule } from './mall/mall.module'
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { AdminModule } from './admin/admin.module'
     CommunityModule,
     MessagesModule,
     AdminModule,
+    MallModule,
   ],
   controllers: [AppController],
   providers: [AppService],

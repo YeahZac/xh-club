@@ -413,11 +413,74 @@ export const mallProducts = pgTable("mall_products", {
   category: varchar("category", { length: 32 }).notNull(), // rights/service/gift/activity/learning
   status: varchar("status", { length: 32 }).notNull().default("active"), // active/offline
   sort_order: integer("sort_order").notNull().default(0),
+  // 分销设置
+  enable_distribution: boolean("enable_distribution").notNull().default(false),
+  distribution_rate: numeric("distribution_rate", { precision: 5, scale: 2 }).default("0"), // 分销比例，如 10.00 表示 10%
+  sales_count: integer("sales_count").notNull().default(0),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
 }, (table) => [
   index("mall_products_category_idx").on(table.category),
   index("mall_products_status_idx").on(table.status),
   index("mall_products_sort_order_idx").on(table.sort_order),
+]);
+
+/** 商城订单表 */
+export const mallOrders = pgTable("mall_orders", {
+  id: varchar("id", { length: 36 }).default(sql`gen_random_uuid()`).primaryKey().notNull(),
+  order_no: varchar("order_no", { length: 64 }).notNull().unique(),
+  member_id: varchar("member_id", { length: 36 }).notNull().references(() => members.id),
+  product_id: varchar("product_id", { length: 36 }).notNull().references(() => mallProducts.id),
+  product_name: varchar("product_name", { length: 255 }).notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  // 价格信息
+  total_amount: numeric("total_amount", { precision: 10, scale: 2 }).notNull(),
+  points_used: integer("points_used").notNull().default(0),
+  cash_amount: numeric("cash_amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  // 分销信息
+  referrer_id: varchar("referrer_id", { length: 36 }), // 推荐人ID
+  distribution_amount: numeric("distribution_amount", { precision: 10, scale: 2 }).default("0"),
+  // 状态
+  status: varchar("status", { length: 32 }).notNull().default("pending"), // pending/paid/shipped/completed/cancelled
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+}, (table) => [
+  index("mall_orders_member_id_idx").on(table.member_id),
+  index("mall_orders_product_id_idx").on(table.product_id),
+  index("mall_orders_status_idx").on(table.status),
+  index("mall_orders_created_at_idx").on(table.created_at),
+  index("mall_orders_referrer_id_idx").on(table.referrer_id),
+]);
+
+/** 分销关系表 */
+export const distributionRelations = pgTable("distribution_relations", {
+  id: varchar("id", { length: 36 }).default(sql`gen_random_uuid()`).primaryKey().notNull(),
+  parent_id: varchar("parent_id", { length: 36 }).notNull().references(() => members.id), // 上级会员
+  child_id: varchar("child_id", { length: 36 }).notNull().references(() => members.id), // 下级会员
+  level: integer("level").notNull().default(1), // 层级：1=直推，2=间推
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("distribution_relations_parent_id_idx").on(table.parent_id),
+  index("distribution_relations_child_id_idx").on(table.child_id),
+  index("distribution_relations_level_idx").on(table.level),
+]);
+
+/** 分销收益表 */
+export const distributionEarnings = pgTable("distribution_earnings", {
+  id: varchar("id", { length: 36 }).default(sql`gen_random_uuid()`).primaryKey().notNull(),
+  member_id: varchar("member_id", { length: 36 }).notNull().references(() => members.id), // 收益人
+  order_id: varchar("order_id", { length: 36 }).notNull().references(() => mallOrders.id),
+  from_member_id: varchar("from_member_id", { length: 36 }).notNull().references(() => members.id), // 来源会员（下级）
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(), // 收益金额
+  rate: numeric("rate", { precision: 5, scale: 2 }).notNull(), // 分成比例
+  level: integer("level").notNull().default(1), // 层级
+  status: varchar("status", { length: 32 }).notNull().default("pending"), // pending/settled/withdrawn
+  settled_at: timestamp("settled_at", { withTimezone: true }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("distribution_earnings_member_id_idx").on(table.member_id),
+  index("distribution_earnings_order_id_idx").on(table.order_id),
+  index("distribution_earnings_status_idx").on(table.status),
 ]);
 
 /** 系统配置表 */

@@ -194,6 +194,8 @@ export class AdminService {
         category: dto.category,
         status: 'active',
         sort_order: dto.sort_order || 0,
+        enable_distribution: dto.enable_distribution || false,
+        distribution_rate: dto.distribution_rate || '0',
       })
       .select()
       .single()

@@ -5,7 +5,8 @@ export default defineAppConfig({
     'pages/admin/index',
     'pages/business/index',
     'pages/discover/index',
-    'pages/message/index',
+    'pages/mall/index',
+    'pages/mall/product-detail/index',
     'pages/profile/index'
   ],
   window: {
@@ -39,10 +40,10 @@ export default defineAppConfig({
         selectedIconPath: './assets/tabbar/compass-active.png',
       },
       {
-        pagePath: 'pages/message/index',
-        text: '消息',
-        iconPath: './assets/tabbar/message-square.png',
-        selectedIconPath: './assets/tabbar/message-square-active.png',
+        pagePath: 'pages/mall/index',
+        text: '商城',
+        iconPath: './assets/tabbar/shopping-bag.png',
+        selectedIconPath: './assets/tabbar/shopping-bag-active.png',
       },
       {
         pagePath: 'pages/profile/index',

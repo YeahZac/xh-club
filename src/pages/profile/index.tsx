@@ -3,7 +3,8 @@ import { View, Text, ScrollView } from "@tarojs/components"
 import Taro from "@tarojs/taro"
 import {
   User, Award, TrendingUp, ChevronRight, Settings, Shield,
-  FileText, Users, Gift, ShoppingBag, Star, Wallet, ChartBar, LogOut, Crown
+  FileText, Users, Gift, ShoppingBag, Star, Wallet, ChartBar, LogOut, Crown,
+  DollarSign, UserPlus
 } from "lucide-react-taro"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -31,6 +32,24 @@ interface MemberProfile {
   match_count: number
 }
 
+interface DistributionStats {
+  total_earnings: number
+  pending_earnings: number
+  settled_earnings: number
+  subordinate_count: number
+  direct_count: number
+  indirect_count: number
+}
+
+interface Subordinate {
+  id: string
+  name: string
+  avatar: string
+  company_name: string
+  level: number
+  created_at: string
+}
+
 const industryMap: Record<string, string> = {
   tech: '科技互联网', finance: '金融资本', manufacture: '先进制造', health: '大健康',
   realestate: '房地产建筑', education: '教育培训', media: '文化传媒', law: '法律服务',
@@ -50,9 +69,13 @@ const ProfilePage = () => {
   const statusBarHeight = isMiniApp ? 22 : 8
 
   const [profile, setProfile] = useState<MemberProfile | null>(null)
+  const [distStats, setDistStats] = useState<DistributionStats | null>(null)
+  const [subordinates, setSubordinates] = useState<Subordinate[]>([])
+  const [showSubordinates, setShowSubordinates] = useState(false)
 
   useEffect(() => {
     loadProfile()
+    loadDistributionStats()
   }, [])
 
   const loadProfile = async () => {
@@ -70,6 +93,35 @@ const ProfilePage = () => {
     }
   }
 
+  const loadDistributionStats = async () => {
+    try {
+      const memberId = Taro.getStorageSync('member_id')
+      if (!memberId) return
+      const res = await Network.request({ url: `/api/distribution/stats/${memberId}` })
+      console.log('[我的页] distribution stats:', res?.data)
+      if (res?.data?.data) {
+        setDistStats(res.data.data)
+      }
+    } catch (err) {
+      console.error('[我的页] 加载分销统计失败:', err)
+    }
+  }
+
+  const loadSubordinates = async () => {
+    try {
+      const memberId = Taro.getStorageSync('member_id')
+      if (!memberId) return
+      const res = await Network.request({ url: `/api/distribution/subordinates/${memberId}` })
+      console.log('[我的页] subordinates:', res?.data)
+      if (res?.data?.data) {
+        setSubordinates(res.data.data)
+        setShowSubordinates(true)
+      }
+    } catch (err) {
+      console.error('[我的页] 加载下级人员失败:', err)
+    }
+  }
+
   const currentLevel = levelMap[profile?.membership_level || 'normal'] || levelMap.normal
 
   const menuSections = [
@@ -77,7 +129,7 @@ const ProfilePage = () => {
       title: '业务管理',
       items: [
         { icon: FileText, label: '成交记录', badge: profile?.total_transactions ? `${profile.total_transactions}单` : '', color: '#1B2A4A' },
-        { icon: TrendingUp, label: '推荐管理', badge: profile?.referrer_count ? `${profile.referrer_count}人` : '', color: '#2D4A7A' },
+        { icon: TrendingUp, label: '推荐管理', badge: profile?.referrer_count ? `${profile.referrer_count}人` : '', color: '#2D4A7A', action: 'subordinates' },
         { icon: Users, label: '撮合对接', badge: profile?.match_count ? `${profile.match_count}次` : '', color: '#3B5998' },
       ]
     },
@@ -85,7 +137,8 @@ const ProfilePage = () => {
       title: '资产与权益',
       items: [
         { icon: Gift, label: '积分明细', badge: profile?.available_points ? `${profile.available_points}` : '', color: '#C9A96E' },
-        { icon: ShoppingBag, label: '积分兑换', color: '#B8935E' },
+        { icon: ShoppingBag, label: '积分商城', color: '#B8935E', action: 'mall' },
+        { icon: DollarSign, label: '分销收益', badge: distStats?.total_earnings ? `¥${distStats.total_earnings.toFixed(0)}` : '', color: '#10B981' },
         { icon: Wallet, label: '收益管理', color: '#8B7355' },
         { icon: Crown, label: '会员等级', badge: currentLevel.label, color: '#1B2A4A' },
       ]
@@ -125,7 +178,7 @@ const ProfilePage = () => {
                 {profile?.company_position || ''}{profile?.company_name ? ` · ${profile.company_name}` : ''}
               </Text>
               {profile?.industry_primary && (
-                <Badge className="bg-[#C9A96E]/20 text-[#C9A96E] text-[10px] px-1 py-0 mt-1">{industryMap[profile.industry_primary] || profile.industry_primary}</Badge>
+                <Badge className="bg-[#C9A96E] bg-opacity-20 text-[#C9A96E] text-[10px] px-1 py-0 mt-1">{industryMap[profile.industry_primary] || profile.industry_primary}</Badge>
               )}
             </View>
             <ChevronRight size={20} color="rgba(255,255,255,0.5)" />
@@ -205,6 +258,87 @@ const ProfilePage = () => {
           </Card>
         </View>
 
+        {/* 分销收益卡片 */}
+        {distStats && (
+          <View className="px-4 mt-4">
+            <Card className="shadow-sm border-0 bg-gradient-to-br from-emerald-50 to-teal-50">
+              <CardContent className="p-4">
+                <View className="flex items-center justify-between mb-3">
+                  <View className="flex items-center gap-2">
+                    <DollarSign size={18} color="#10B981" />
+                    <Text className="block text-sm font-semibold text-gray-900">分销收益</Text>
+                  </View>
+                  <Text className="text-xs text-emerald-600">邀请好友赚收益</Text>
+                </View>
+                <View className="flex items-center justify-around">
+                  <View className="flex flex-col items-center">
+                    <Text className="block text-lg font-bold text-emerald-600">
+                      ¥{(distStats.total_earnings || 0).toFixed(2)}
+                    </Text>
+                    <Text className="block text-xs text-gray-500 mt-1">累计收益</Text>
+                  </View>
+                  <View className="w-px h-8 bg-emerald-200" />
+                  <View className="flex flex-col items-center">
+                    <Text className="block text-lg font-bold text-amber-600">
+                      ¥{(distStats.pending_earnings || 0).toFixed(2)}
+                    </Text>
+                    <Text className="block text-xs text-gray-500 mt-1">待结算</Text>
+                  </View>
+                  <View className="w-px h-8 bg-emerald-200" />
+                  <View className="flex flex-col items-center">
+                    <Text className="block text-lg font-bold text-gray-900">
+                      {distStats.subordinate_count || 0}
+                    </Text>
+                    <Text className="block text-xs text-gray-500 mt-1">下级人数</Text>
+                  </View>
+                </View>
+              </CardContent>
+            </Card>
+          </View>
+        )}
+
+        {/* 下级人员弹窗 */}
+        {showSubordinates && (
+          <View className="fixed inset-0 z-50 flex items-end justify-center bg-black bg-opacity-50" onClick={() => setShowSubordinates(false)}>
+            <View className="bg-white rounded-t-3xl w-full max-h-96 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <View className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <Text className="text-base font-semibold text-gray-900">我的下级</Text>
+                <View onClick={() => setShowSubordinates(false)}>
+                  <Text className="text-gray-400 text-sm">关闭</Text>
+                </View>
+              </View>
+              <ScrollView scrollY className="max-h-80">
+                {subordinates.length === 0 ? (
+                  <View className="flex flex-col items-center py-12">
+                    <UserPlus size={40} color="#d1d5db" />
+                    <Text className="text-gray-400 text-sm mt-3">暂无下级成员</Text>
+                    <Text className="text-gray-400 text-xs mt-1">分享邀请好友加入</Text>
+                  </View>
+                ) : (
+                  <View className="p-4">
+                    {subordinates.map((sub) => (
+                      <View key={sub.id} className="flex items-center gap-3 py-3 border-b border-gray-50">
+                        <Avatar className="w-10 h-10">
+                          <AvatarFallback className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] text-white text-sm">
+                            {sub.name[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <View className="flex-1">
+                          <Text className="block text-sm font-medium text-gray-900">{sub.name}</Text>
+                          <Text className="block text-xs text-gray-500">{sub.company_name || '未设置公司'}</Text>
+                        </View>
+                        <Badge className={sub.level === 1 ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}>
+                          {sub.level === 1 ? '直推' : '间推'}
+                        </Badge>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        )}
+
         {/* Menu Sections */}
         {menuSections.map((section, sIdx) => (
           <View className="px-4 mt-4" key={sIdx}>
@@ -213,14 +347,21 @@ const ProfilePage = () => {
               <CardContent className="p-0">
                 {section.items.map((item, iIdx) => {
                   const ItemIcon = item.icon
+                  const handleItemClick = () => {
+                    if (item.action === 'subordinates') {
+                      loadSubordinates()
+                    } else if (item.action === 'mall') {
+                      Taro.switchTab({ url: '/pages/mall/index' })
+                    }
+                  }
                   return (
                     <View key={iIdx}>
-                      <View className="flex flex-row items-center px-4 py-3">
+                      <View className="flex flex-row items-center px-4 py-3" onClick={handleItemClick}>
                         <View className="w-8 h-8 rounded-lg flex items-center justify-center mr-3" style={{ backgroundColor: `${item.color}15` }}>
                           <ItemIcon size={16} color={item.color} />
                         </View>
                         <Text className="block flex-1 text-sm text-[#1A1D2E]">{item.label}</Text>
-                        {item.badge && <Badge className="bg-[#C9A96E]/10 text-[#C9A96E] text-[10px] px-2 py-0 mr-2">{item.badge}</Badge>}
+                        {item.badge && <Badge className="bg-[#C9A96E] bg-opacity-10 text-[#C9A96E] text-[10px] px-2 py-0 mr-2">{item.badge}</Badge>}
                         <ChevronRight size={16} color="#D1D5DB" />
                       </View>
                       {iIdx < section.items.length - 1 && <View className="h-px bg-[#F0F1F5] ml-15" />}
