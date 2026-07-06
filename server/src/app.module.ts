@@ -8,6 +8,7 @@ import { CommunityModule } from './community/community.module'
 import { MessagesModule } from './messages/messages.module'
 import { AdminModule } from './admin/admin.module'
 import { MallModule } from './mall/mall.module'
+import { UploadModule } from './upload/upload.module'
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { MallModule } from './mall/mall.module'
     MessagesModule,
     AdminModule,
     MallModule,
+    UploadModule,
   ],
   controllers: [AppController],
   providers: [AppService],
