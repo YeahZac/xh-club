@@ -9,6 +9,7 @@ import { MessagesModule } from './messages/messages.module'
 import { AdminModule } from './admin/admin.module'
 import { MallModule } from './mall/mall.module'
 import { UploadModule } from './upload/upload.module'
+import { ArticlesModule } from './articles/articles.module'
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { UploadModule } from './upload/upload.module'
     AdminModule,
     MallModule,
     UploadModule,
+    ArticlesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

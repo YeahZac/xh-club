@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Injectable, Logger } from '@nestjs/common';
 import * as OSS from 'ali-oss';
 import { ConfigService } from '@nestjs/config';

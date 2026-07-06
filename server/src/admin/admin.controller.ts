@@ -198,4 +198,40 @@ export class AdminController {
     return { code: 200, msg: '更新成功', data: result }
   }
 
+  /** ====== 文章管理 ====== */
+  @Get('articles')
+  async getArticles(@Query() query: any) {
+    console.log('[AdminController] GET /api/admin/articles')
+    const result = await this.adminService.getAllArticles(query)
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post('articles')
+  async createArticle(@Body() dto: any) {
+    console.log('[AdminController] POST /api/admin/articles')
+    const result = await this.adminService.createArticle(dto)
+    return { code: 200, msg: '创建成功', data: result }
+  }
+
+  @Put('articles/:id')
+  async updateArticle(@Param('id') id: string, @Body() dto: any) {
+    console.log('[AdminController] PUT /api/admin/articles/:id')
+    const result = await this.adminService.updateArticle(id, dto)
+    return { code: 200, msg: '更新成功', data: result }
+  }
+
+  @Delete('articles/:id')
+  async deleteArticle(@Param('id') id: string) {
+    console.log('[AdminController] DELETE /api/admin/articles/:id')
+    const result = await this.adminService.deleteArticle(id)
+    return { code: 200, msg: '删除成功', data: result }
+  }
+
+  @Post('articles/:id/publish')
+  async publishArticle(@Param('id') id: string) {
+    console.log('[AdminController] POST /api/admin/articles/:id/publish')
+    const result = await this.adminService.publishArticle(id)
+    return { code: 200, msg: '发布成功', data: result }
+  }
+
 }

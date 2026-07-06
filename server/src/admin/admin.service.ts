@@ -48,6 +48,7 @@ export class AdminService {
         image_url: dto.image_url,
         link_type: dto.link_type || null,
         link_id: dto.link_id || null,
+        link_config: dto.link_config || null,
         sort_order: dto.sort_order || 0,
         is_active: dto.is_active !== false,
         start_time: dto.start_time || null,
@@ -454,5 +455,47 @@ export class AdminService {
     const { data, error } = await this.client().from('notifications').insert(notifications).select()
     if (error) throw new HttpException(`群发通知失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
     return { success: true, count: data.length }
+  }
+
+  // 文章管理
+  async getAllArticles(params: { status?: string; category?: string; page?: number; pageSize?: number }) {
+    const page = params.page || 1
+    const pageSize = params.pageSize || 20
+    const from = (page - 1) * pageSize
+    let query = this.client().from('articles').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, from + pageSize - 1)
+    if (params.status) query = query.eq('status', params.status)
+    if (params.category) query = query.eq('category', params.category)
+    const { data, error, count } = await query
+    if (error) throw new HttpException(`获取文章列表失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return { list: data, total: count, page, pageSize }
+  }
+
+  async createArticle(dto: any) {
+    const { data, error } = await this.client().from('articles').insert(dto).select().single()
+    if (error) throw new HttpException(`创建文章失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return data
+  }
+
+  async updateArticle(id: string, dto: any) {
+    const { data, error } = await this.client().from('articles').update(dto).eq('id', id).select().single()
+    if (error) throw new HttpException(`更新文章失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return data
+  }
+
+  async deleteArticle(id: string) {
+    const { error } = await this.client().from('articles').delete().eq('id', id)
+    if (error) throw new HttpException(`删除文章失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return { success: true }
+  }
+
+  async publishArticle(id: string) {
+    const { data, error } = await this.client()
+      .from('articles')
+      .update({ status: 'published', publish_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw new HttpException(`发布失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+    return data
   }
 }

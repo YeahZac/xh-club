@@ -202,6 +202,7 @@ export const events = pgTable("events", {
   org_id: varchar("org_id", { length: 36 }).references(() => organizations.id),
   status: varchar("status", { length: 32 }).notNull().default("draft"), // draft/open/full/ended/cancelled
   is_featured: boolean("is_featured").notNull().default(false),
+  form_fields: jsonb("form_fields"), // [{ name, type, required, options }]
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true }),
 }, (table) => [
@@ -389,8 +390,10 @@ export const banners = pgTable("banners", {
   id: varchar("id", { length: 36 }).default(sql`gen_random_uuid()`).primaryKey().notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   image_url: varchar("image_url", { length: 500 }).notNull(),
-  link_type: varchar("link_type", { length: 32 }), // project/event/web/profile
-  link_id: varchar("link_id", { length: 36 }),
+  link_type: varchar("link_type", { length: 32 }), // article/event/link/miniprogram
+  link_id: varchar("link_id", { length: 36 }), // for article/event
+  link_url: varchar("link_url", { length: 500 }), // for link type
+  link_config: jsonb("link_config"), // { appid, path } for miniprogram
   sort_order: integer("sort_order").notNull().default(0),
   is_active: boolean("is_active").notNull().default(true),
   start_time: timestamp("start_time", { withTimezone: true }),
@@ -399,6 +402,32 @@ export const banners = pgTable("banners", {
 }, (table) => [
   index("banners_is_active_idx").on(table.is_active),
   index("banners_sort_order_idx").on(table.sort_order),
+]);
+
+/** 文章表 */
+export const articles = pgTable("articles", {
+  id: varchar("id", { length: 36 }).default(sql`gen_random_uuid()`).primaryKey().notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  subtitle: varchar("subtitle", { length: 255 }),
+  summary: varchar("summary", { length: 500 }),
+  content: text("content").notNull(),
+  cover_image: varchar("cover_image", { length: 500 }),
+  author_id: varchar("author_id", { length: 36 }).references(() => members.id),
+  category: varchar("category", { length: 64 }), // news/notice/industry/activity
+  tags: jsonb("tags"), // ["tag1", "tag2"]
+  view_count: integer("view_count").notNull().default(0),
+  like_count: integer("like_count").notNull().default(0),
+  status: varchar("status", { length: 32 }).notNull().default("draft"), // draft/published/archived
+  is_featured: boolean("is_featured").notNull().default(false),
+  publish_at: timestamp("publish_at", { withTimezone: true }),
+  published_at: timestamp("published_at", { withTimezone: true }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+}, (table) => [
+  index("articles_status_idx").on(table.status),
+  index("articles_category_idx").on(table.category),
+  index("articles_published_at_idx").on(table.published_at),
+  index("articles_is_featured_idx").on(table.is_featured),
 ]);
 
 /** 会员商城商品表 */

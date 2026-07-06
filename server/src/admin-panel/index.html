@@ -94,6 +94,10 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         Banner管理
       </a>
+      <a onclick="switchPage('articles')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="articles">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
+        文章管理
+      </a>
       <a onclick="switchPage('mall')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="mall">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
         积分商城
@@ -292,6 +296,45 @@
       </div>
     </div>
 
+    <!-- ====== 文章管理 ====== -->
+    <div data-page="articles" class="p-8 fade-in">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+          <select id="articleStatusFilter" onchange="loadArticles()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+            <option value="">全部状态</option>
+            <option value="draft">草稿</option>
+            <option value="published">已发布</option>
+            <option value="archived">已归档</option>
+          </select>
+          <select id="articleCategoryFilter" onchange="loadArticles()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+            <option value="">全部分类</option>
+            <option value="news">商会新闻</option>
+            <option value="insight">行业洞察</option>
+            <option value="member">会员风采</option>
+            <option value="report">活动报道</option>
+            <option value="policy">政策解读</option>
+          </select>
+        </div>
+        <button onclick="showArticleModal()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          新建文章
+        </button>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table class="w-full">
+          <thead><tr class="bg-gray-50 border-b border-gray-100">
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">文章</th>
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">分类</th>
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">状态</th>
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">浏览/点赞</th>
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">发布时间</th>
+            <th class="text-center px-6 py-3 text-xs font-medium text-gray-500 uppercase">操作</th>
+          </tr></thead>
+          <tbody id="articleTableBody"><tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- ====== 积分商城 ====== -->
     <div data-page="mall" class="p-8 fade-in">
       <div class="flex items-center justify-between mb-6">
@@ -441,10 +484,10 @@ function switchPage(page) {
   document.querySelector(`[data-page="${page}"]`).classList.add('active')
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'))
   document.querySelector(`[data-nav="${page}"]`).classList.add('active')
-  const titles = { dashboard: '数据看板', members: '会员管理', events: '活动管理', projects: '项目管理', banners: 'Banner管理', mall: '积分商城', org: '组织架构', config: '系统配置' }
+  const titles = { dashboard: '数据看板', members: '会员管理', events: '活动管理', projects: '项目管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置' }
   document.getElementById('pageTitle').textContent = titles[page] || page
   // 加载数据
-  const loaders = { dashboard: loadDashboard, members: loadMembers, events: loadEvents, projects: loadProjects, banners: loadBanners, mall: loadMallProducts, org: loadOrg, config: loadConfig }
+  const loaders = { dashboard: loadDashboard, members: loadMembers, events: loadEvents, projects: loadProjects, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig }
   if (loaders[page]) loaders[page]()
 }
 
@@ -622,7 +665,7 @@ async function loadEvents() {
 
 function showEventModal() {
   showModal(`
-    <div class="p-6">
+    <div class="p-6" style="max-width:600px">
       <h3 class="text-lg font-bold text-navy-800 mb-6">创建活动</h3>
       <div class="space-y-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">活动名称</label><input id="evTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动名称"></div>
@@ -637,6 +680,15 @@ function showEventModal() {
           <div><label class="block text-sm font-medium text-gray-700 mb-1">费用(元)</label><input id="evFee" type="number" value="0" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         </div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">活动描述</label><textarea id="evDesc" rows="3" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动描述..."></textarea></div>
+        <!-- 报名表单构建器 -->
+        <div class="border-t border-gray-100 pt-4">
+          <div class="flex items-center justify-between mb-3">
+            <label class="text-sm font-medium text-gray-700">报名表单字段（可选）</label>
+            <button onclick="addFormField()" class="px-3 py-1 text-xs bg-navy-100 text-navy-700 rounded-lg hover:bg-navy-200 transition">+ 添加字段</button>
+          </div>
+          <div id="formFieldsList" class="space-y-2"></div>
+          <p class="text-xs text-gray-400 mt-2">默认包含"姓名"和"手机号"，此处添加额外字段</p>
+        </div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
           <button onclick="createEvent()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
@@ -646,7 +698,44 @@ function showEventModal() {
   `)
 }
 
+let _formFields = []
+function addFormField() {
+  _formFields.push({ label: '', type: 'text', required: false, options: '' })
+  renderFormFields()
+}
+function removeFormField(idx) {
+  _formFields.splice(idx, 1)
+  renderFormFields()
+}
+function renderFormFields() {
+  const container = document.getElementById('formFieldsList')
+  if (!container) return
+  container.innerHTML = _formFields.map((f, i) => `
+    <div class="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
+      <input value="${f.label}" onchange="_formFields[${i}].label=this.value" placeholder="字段名称" class="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none">
+      <select onchange="_formFields[${i}].type=this.value;renderFormFields()" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none">
+        <option value="text" ${f.type==='text'?'selected':''}>文本</option>
+        <option value="textarea" ${f.type==='textarea'?'selected':''}>多行文本</option>
+        <option value="select" ${f.type==='select'?'selected':''}>单选</option>
+        <option value="number" ${f.type==='number'?'selected':''}>数字</option>
+        <option value="date" ${f.type==='date'?'selected':''}>日期</option>
+      </select>
+      ${f.type === 'select' ? `<input value="${f.options||''}" onchange="_formFields[${i}].options=this.value" placeholder="选项用逗号分隔" class="w-32 px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none">` : ''}
+      <label class="flex items-center gap-1 text-xs text-gray-500"><input type="checkbox" ${f.required?'checked':''} onchange="_formFields[${i}].required=this.checked">必填</label>
+      <button onclick="removeFormField(${i})" class="text-red-400 hover:text-red-600 text-sm">✕</button>
+    </div>
+  `).join('')
+}
+
 async function createEvent() {
+  // 收集表单字段
+  const formFields = _formFields.filter(f => f.label.trim()).map(f => ({
+    label: f.label,
+    type: f.type,
+    required: f.required,
+    ...(f.type === 'select' && f.options ? { options: f.options.split(',').map(o => o.trim()).filter(Boolean) } : {})
+  }))
+
   const body = {
     title: document.getElementById('evTitle').value,
     event_type: document.getElementById('evType').value,
@@ -657,6 +746,7 @@ async function createEvent() {
     fee: parseInt(document.getElementById('evFee').value) || 0,
     description: document.getElementById('evDesc').value,
     status: 'open',
+    form_fields: formFields.length > 0 ? formFields : null
     current_participants: 0
   }
   const res = await api('/admin/events', { method: 'POST', body })
@@ -739,7 +829,15 @@ async function loadBanners() {
     document.getElementById('bannerCards').innerHTML = '<p class="text-gray-400 col-span-2 text-center py-12">暂无Banner</p>'
     return
   }
-  document.getElementById('bannerCards').innerHTML = banners.map(b => `
+  const LINK_TYPE_MAP = { article: '文章', event: '活动', link: '链接', miniapp: '小程序' }
+  document.getElementById('bannerCards').innerHTML = banners.map(b => {
+    const lc = b.link_config || {}
+    let linkDesc = ''
+    if (b.link_type === 'article') linkDesc = `文章ID: ${(lc.article_id || '').slice(0,8)}...`
+    else if (b.link_type === 'event') linkDesc = `活动ID: ${(lc.event_id || '').slice(0,8)}...`
+    else if (b.link_type === 'link') linkDesc = lc.url || ''
+    else if (b.link_type === 'miniapp') linkDesc = `APPID: ${lc.appid || ''}`
+    return `
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">
       <div class="h-40 bg-gradient-to-br from-navy-600 to-brand-400 flex items-center justify-center relative">
         ${b.image_url ? `<img src="${b.image_url}" class="w-full h-full object-cover" onerror="this.style.display='none'">` : ''}
@@ -749,15 +847,15 @@ async function loadBanners() {
       <div class="p-4 flex items-center justify-between">
         <div>
           <p class="font-medium text-navy-800">${b.title}</p>
-          <p class="text-xs text-gray-400">排序: ${b.sort_order} · 类型: ${b.link_type}</p>
+          <p class="text-xs text-gray-400">排序: ${b.sort_order} · <span class="px-1.5 py-0.5 rounded bg-brand-50 text-brand-600">${LINK_TYPE_MAP[b.link_type] || b.link_type}</span> ${linkDesc ? '· ' + linkDesc.slice(0,30) : ''}</p>
         </div>
         <div class="flex gap-2">
           <button onclick="toggleBanner('${b.id}', ${!b.is_active})" class="px-3 py-1.5 text-xs rounded-lg ${b.is_active ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}">${b.is_active ? '禁用' : '启用'}</button>
           <button onclick="deleteBanner('${b.id}')" class="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200">删除</button>
         </div>
       </div>
-    </div>
-  `).join('')
+    </div>`
+  }).join('')
 }
 
 function showBannerModal() {
@@ -766,10 +864,39 @@ function showBannerModal() {
       <h3 class="text-lg font-bold text-navy-800 mb-6">添加Banner</h3>
       <div class="space-y-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">标题</label><input id="bnTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">图片URL</label><input id="bnImage" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="https://..."></div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">封面图片</label>
+          <div class="flex items-center gap-3">
+            <input id="bnImage" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入图片URL或上传文件">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">
+              上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'bnImage')">
+            </label>
+          </div>
+        </div>
         <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">链接类型</label><select id="bnLinkType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="event">活动</option><option value="project">项目</option><option value="web">网页</option><option value="profile">会员主页</option></select></div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">跳转类型</label>
+            <select id="bnLinkType" onchange="toggleBannerLinkFields()" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+              <option value="article">文章</option>
+              <option value="event">活动</option>
+              <option value="link">链接地址</option>
+              <option value="miniapp">外部小程序</option>
+            </select>
+          </div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">排序</label><input id="bnSort" type="number" value="1" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        </div>
+        <!-- 文章选择 -->
+        <div id="bnArticleField"><label class="block text-sm font-medium text-gray-700 mb-1">选择文章</label><select id="bnArticleId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
+        <!-- 活动选择 -->
+        <div id="bnEventField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1">选择活动</label><select id="bnEventId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
+        <!-- 链接地址 -->
+        <div id="bnLinkField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1">URL链接</label><input id="bnUrl" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="https://..."></div>
+        <!-- 外部小程序 -->
+        <div id="bnMiniappField" class="hidden">
+          <div class="grid grid-cols-2 gap-4">
+            <div><label class="block text-sm font-medium text-gray-700 mb-1">小程序APPID</label><input id="bnAppId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="wx..."></div>
+            <div><label class="block text-sm font-medium text-gray-700 mb-1">路径</label><input id="bnMiniPath" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="pages/index/index"></div>
+          </div>
         </div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
@@ -778,13 +905,50 @@ function showBannerModal() {
       </div>
     </div>
   `)
+  // 加载文章和活动列表供选择
+  loadBannerArticleOptions()
+  loadBannerEventOptions()
+}
+
+function toggleBannerLinkFields() {
+  const type = document.getElementById('bnLinkType').value
+  document.getElementById('bnArticleField').classList.toggle('hidden', type !== 'article')
+  document.getElementById('bnEventField').classList.toggle('hidden', type !== 'event')
+  document.getElementById('bnLinkField').classList.toggle('hidden', type !== 'link')
+  document.getElementById('bnMiniappField').classList.toggle('hidden', type !== 'miniapp')
+}
+
+async function loadBannerArticleOptions() {
+  const res = await api('/admin/articles?limit=200')
+  if (res.code === 200) {
+    const articles = res.data?.list || res.data || []
+    const sel = document.getElementById('bnArticleId')
+    if (sel) sel.innerHTML = '<option value="">请选择文章</option>' + articles.map(a => `<option value="${a.id}">${a.title}</option>`).join('')
+  }
+}
+
+async function loadBannerEventOptions() {
+  const res = await api('/events?limit=200')
+  if (res.code === 200) {
+    const events = res.data?.list || res.data || []
+    const sel = document.getElementById('bnEventId')
+    if (sel) sel.innerHTML = '<option value="">请选择活动</option>' + events.map(e => `<option value="${e.id}">${e.title}</option>`).join('')
+  }
 }
 
 async function createBanner() {
+  const linkType = document.getElementById('bnLinkType').value
+  let linkConfig = {}
+  if (linkType === 'article') linkConfig = { article_id: document.getElementById('bnArticleId').value }
+  else if (linkType === 'event') linkConfig = { event_id: document.getElementById('bnEventId').value }
+  else if (linkType === 'link') linkConfig = { url: document.getElementById('bnUrl').value }
+  else if (linkType === 'miniapp') linkConfig = { appid: document.getElementById('bnAppId').value, path: document.getElementById('bnMiniPath').value }
+
   const body = {
     title: document.getElementById('bnTitle').value,
     image_url: document.getElementById('bnImage').value,
-    link_type: document.getElementById('bnLinkType').value,
+    link_type: linkType,
+    link_config: linkConfig,
     sort_order: parseInt(document.getElementById('bnSort').value) || 1,
     is_active: true
   }
@@ -985,6 +1149,159 @@ setInterval(() => {
   const now = new Date()
   document.getElementById('currentTime').textContent = now.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric', weekday:'long' }) + ' ' + now.toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' })
 }, 1000)
+
+// ===== 文件上传 =====
+async function uploadFile(input, targetId) {
+  const file = input.files[0]
+  if (!file) return
+  const formData = new FormData()
+  formData.append('file', file)
+  try {
+    const isImage = file.type.startsWith('image/')
+    const endpoint = isImage ? '/upload/image' : '/upload/file'
+    const res = await fetch(`/api${endpoint}`, {
+      method: 'POST',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: formData
+    })
+    const data = await res.json()
+    if (data.code === 200 && data.data?.url) {
+      document.getElementById(targetId).value = data.data.url
+      toast('上传成功')
+    } else {
+      toast(data.msg || '上传失败', 'error')
+    }
+  } catch (e) {
+    toast('上传异常: ' + e.message, 'error')
+  }
+  input.value = ''
+}
+
+// ===== 文章管理 =====
+const ARTICLE_STATUS_MAP = { draft: '草稿', published: '已发布', archived: '已归档' }
+const ARTICLE_STATUS_COLORS = { draft: 'bg-gray-100 text-gray-600', published: 'bg-green-100 text-green-700', archived: 'bg-yellow-100 text-yellow-700' }
+const ARTICLE_CATEGORY_MAP = { news: '商会新闻', insight: '行业洞察', member: '会员风采', report: '活动报道', policy: '政策解读' }
+
+async function loadArticles() {
+  const status = document.getElementById('articleStatusFilter').value
+  const category = document.getElementById('articleCategoryFilter').value
+  let url = '/admin/articles?limit=100'
+  if (status) url += `&status=${status}`
+  if (category) url += `&category=${category}`
+  const res = await api(url)
+  if (res.code !== 200) return
+  const articles = res.data?.list || res.data || []
+  if (!articles.length) {
+    document.getElementById('articleTableBody').innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">暂无文章</td></tr>'
+    return
+  }
+  document.getElementById('articleTableBody').innerHTML = articles.map(a => `
+    <tr class="hover:bg-gray-50 transition border-b border-gray-50">
+      <td class="px-6 py-4">
+        <div class="flex items-center gap-3">
+          ${a.cover_image ? `<img src="${a.cover_image}" class="w-16 h-10 rounded-lg object-cover shrink-0">` : '<div class="w-16 h-10 rounded-lg bg-gray-100 shrink-0 flex items-center justify-center text-gray-400 text-xs">无图</div>'}
+          <div class="min-w-0">
+            <p class="font-medium text-navy-800 truncate max-w-xs">${a.title}</p>
+            <p class="text-xs text-gray-400 truncate max-w-xs">${a.summary || ''}</p>
+          </div>
+        </div>
+      </td>
+      <td class="px-6 py-4"><span class="text-xs px-2.5 py-1 rounded-full bg-navy-50 text-navy-600">${ARTICLE_CATEGORY_MAP[a.category] || a.category || '-'}</span></td>
+      <td class="px-6 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${ARTICLE_STATUS_COLORS[a.status] || 'bg-gray-100 text-gray-500'}">${ARTICLE_STATUS_MAP[a.status] || a.status}</span></td>
+      <td class="px-6 py-4 text-sm text-gray-500">${a.view_count || 0} / ${a.like_count || 0}</td>
+      <td class="px-6 py-4 text-sm text-gray-500">${a.publish_at ? new Date(a.publish_at).toLocaleDateString('zh-CN') : '-'}</td>
+      <td class="px-6 py-4 text-center">
+        <div class="flex justify-center gap-2">
+          ${a.status === 'draft' ? `<button onclick="publishArticle('${a.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-green-100 text-green-700 hover:bg-green-200">发布</button>` : ''}
+          <button onclick="showArticleModal('${a.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200">编辑</button>
+          <button onclick="deleteArticle('${a.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200">删除</button>
+        </div>
+      </td>
+    </tr>
+  `).join('')
+}
+
+async function showArticleModal(editId) {
+  let article = null
+  if (editId) {
+    const res = await api(`/articles/${editId}`)
+    if (res.code === 200) article = res.data
+  }
+  showModal(`
+    <div class="p-6" style="max-width:640px">
+      <h3 class="text-lg font-bold text-navy-800 mb-6">${editId ? '编辑文章' : '新建文章'}</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">标题 *</label><input id="artTitle" value="${article?.title || ''}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">副标题</label><input id="artSubtitle" value="${article?.subtitle || ''}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">分类</label>
+            <select id="artCategory" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+              <option value="news" ${article?.category === 'news' ? 'selected' : ''}>商会新闻</option>
+              <option value="insight" ${article?.category === 'insight' ? 'selected' : ''}>行业洞察</option>
+              <option value="member" ${article?.category === 'member' ? 'selected' : ''}>会员风采</option>
+              <option value="report" ${article?.category === 'report' ? 'selected' : ''}>活动报道</option>
+              <option value="policy" ${article?.category === 'policy' ? 'selected' : ''}>政策解读</option>
+            </select>
+          </div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">状态</label>
+            <select id="artStatus" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+              <option value="draft" ${(!article || article?.status === 'draft') ? 'selected' : ''}>草稿</option>
+              <option value="published" ${article?.status === 'published' ? 'selected' : ''}>发布</option>
+              <option value="archived" ${article?.status === 'archived' ? 'selected' : ''}>归档</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">封面图</label>
+          <div class="flex items-center gap-3">
+            <input id="artCover" value="${article?.cover_image || ''}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入URL或上传">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'artCover')"></label>
+          </div>
+        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">摘要</label><textarea id="artSummary" rows="2" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400 resize-none">${article?.summary || ''}</textarea></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">正文内容</label><textarea id="artContent" rows="8" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400 resize-y">${article?.content || ''}</textarea></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">标签（逗号分隔）</label><input id="artTags" value="${(article?.tags || []).join(', ')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="商会, 活动, 合作"></div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="saveArticle('${editId || ''}')" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function saveArticle(editId) {
+  const tagsStr = document.getElementById('artTags').value
+  const body = {
+    title: document.getElementById('artTitle').value,
+    subtitle: document.getElementById('artSubtitle').value,
+    category: document.getElementById('artCategory').value,
+    status: document.getElementById('artStatus').value,
+    cover_image: document.getElementById('artCover').value,
+    summary: document.getElementById('artSummary').value,
+    content: document.getElementById('artContent').value,
+    tags: tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : []
+  }
+  if (!body.title) return toast('请输入标题', 'error')
+  const url = editId ? `/admin/articles/${editId}` : '/admin/articles'
+  const method = editId ? 'PUT' : 'POST'
+  const res = await api(url, { method, body })
+  if (res.code === 200) { toast(editId ? '更新成功' : '创建成功'); closeModal(); loadArticles(); }
+  else toast(res.msg || '操作失败', 'error')
+}
+
+async function publishArticle(id) {
+  const res = await api(`/admin/articles/${id}/publish`, { method: 'POST' })
+  if (res.code === 200) { toast('已发布'); loadArticles(); }
+  else toast(res.msg || '发布失败', 'error')
+}
+
+async function deleteArticle(id) {
+  if (!confirm('确定删除此文章？')) return
+  const res = await api(`/admin/articles/${id}`, { method: 'DELETE' })
+  if (res.code === 200) { toast('已删除'); loadArticles(); }
+  else toast(res.msg || '删除失败', 'error')
+}
 </script>
 </body>
 </html>
