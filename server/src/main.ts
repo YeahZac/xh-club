@@ -6,6 +6,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 function parsePort(): number {
+  // 优先使用环境变量 PORT（微信云托管等平台会注入）
+  if (process.env.PORT) {
+    const envPort = parseInt(process.env.PORT, 10);
+    if (!isNaN(envPort) && envPort > 0 && envPort < 65536) {
+      return envPort;
+    }
+  }
   const args = process.argv.slice(2);
   const portIndex = args.indexOf('-p');
   if (portIndex !== -1 && args[portIndex + 1]) {
