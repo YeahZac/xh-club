@@ -316,5 +316,5 @@ export async function execute(
 
   console.log('[MySQL] Execute:', sql, 'Params:', params)
   const [result] = await pool.query(sql, params)
-  return result
+  return result as ResultSetHeader
 }

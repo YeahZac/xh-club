@@ -1,18 +1,15 @@
-import { drizzle } from 'drizzle-orm/mysql2';
 import * as mysql from 'mysql2/promise';
-import * as schema from './shared/schema-mysql';
+import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
-// MySQL 连接池配置
-let pool: any = null;
-let db: any = null;
+// MySQL 连接池
+let pool: mysql.Pool | null = null;
 
 // 解析连接字符串或环境变量
-function getMySQLConfig(): any {
+function getMySQLConfig(): mysql.PoolOptions | null {
   // 优先使用连接字符串
   const url = process.env.DATABASE_URL || process.env.MYSQL_URL;
   if (url) {
     console.log('[MySQL] 使用连接字符串配置');
-    // 解析连接字符串
     try {
       const urlObj = new URL(url);
       return {
@@ -20,7 +17,7 @@ function getMySQLConfig(): any {
         port: parseInt(urlObj.port || '3306'),
         user: urlObj.username,
         password: urlObj.password,
-        database: urlObj.pathname.slice(1), // 移除开头的 /
+        database: urlObj.pathname.slice(1),
       };
     } catch (e) {
       console.error('[MySQL] 连接字符串解析失败:', e);
@@ -58,11 +55,9 @@ export function initMySQL() {
       queueLimit: 0,
       enableKeepAlive: true,
       keepAliveInitialDelay: 0,
-      connectTimeout: 10000, // 10秒连接超时
-      idleTimeout: 60000, // 60秒空闲超时
+      connectTimeout: 10000,
     });
     
-    db = drizzle(pool, { schema, mode: 'default' });
     console.log('[MySQL] 连接池创建成功（延迟连接）');
     
     // 异步测试连接，不阻塞启动
@@ -78,15 +73,7 @@ export function initMySQL() {
   }
 }
 
-// 获取数据库实例
-export function getDb() {
-  if (!db) {
-    initMySQL();
-  }
-  return db;
-}
-
-// 获取连接池
+// 获取连接池 - 返回类型包装
 export function getPool() {
   if (!pool) {
     initMySQL();
@@ -94,9 +81,25 @@ export function getPool() {
   return pool;
 }
 
-// 兼容旧代码
-export { pool as _pool };
-export const _db = db;
+// 类型安全的查询辅助方法
+export async function queryRows<T extends RowDataPacket = RowDataPacket>(sql: string, params?: any[]): Promise<T[]> {
+  const p = getPool();
+  if (!p) throw new Error('数据库未连接');
+  const [rows] = await p.query(sql, params) as [T[], any];
+  return rows;
+}
+
+export async function queryOne<T extends RowDataPacket = RowDataPacket>(sql: string, params?: any[]): Promise<T | null> {
+  const rows = await queryRows<T>(sql, params);
+  return rows[0] || null;
+}
+
+export async function queryExecute(sql: string, params?: any[]): Promise<ResultSetHeader> {
+  const p = getPool();
+  if (!p) throw new Error('数据库未连接');
+  const [result] = await p.query(sql, params) as [ResultSetHeader, any];
+  return result;
+}
 
 // 测试连接
 export async function testConnection(): Promise<boolean> {
@@ -120,7 +123,7 @@ export function getConnectionStatus() {
   return {
     connected: pool !== null,
     config: pool ? {
-      host: process.env.MYSQL_HOST || 'configured',
+      host: process.env.MYSQL_HOST || process.env.DATABASE_URL ? 'from-url' : 'localhost',
       port: parseInt(process.env.MYSQL_PORT || '3306'),
       database: process.env.MYSQL_DATABASE || 'xh_club',
       user: process.env.MYSQL_USER || 'configured',
