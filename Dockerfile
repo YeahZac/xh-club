@@ -36,8 +36,8 @@ RUN npm install -g pnpm && \
 # 复制构建产物（从 builder 的 /app/dist）
 COPY --from=builder /app/dist ./dist
 
-# 复制 admin-panel 静态资源（如果有）
-COPY --from=builder /app/admin-panel ./admin-panel
+# 复制 admin-panel 到 main.ts 期望的位置
+COPY --from=builder /app/dist/admin-panel ./src/admin-panel
 
 # 微信云托管默认监听 80 端口
 ENV PORT=80
