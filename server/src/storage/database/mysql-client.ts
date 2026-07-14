@@ -27,7 +27,14 @@ function getMySQLConfig() {
 
 try {
   const config = getMySQLConfig();
-  console.log('[MySQL] 配置:', typeof config === 'string' ? config.replace(/\/\/.*:.*@/, '//***:***@') : `host=${config.host}, port=${config.port}, user=${config.user}, database=${config.database}`);
+  if (!config) {
+    console.error('[MySQL] 配置为空');
+  } else {
+    const logConfig = typeof config === 'string' 
+      ? config.replace(/\/\/.*:.*@/, '//***:***@') 
+      : `host=${(config as any).host}, port=${(config as any).port}, user=${(config as any).user}, database=${(config as any).database}`;
+    console.log('[MySQL] 配置:', logConfig);
+  }
   
   pool = (mysql as any).createPool({
     ...(typeof config === 'string' ? { uri: config } : config),
