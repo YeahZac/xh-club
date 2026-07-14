@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { getSupabaseClient } from '@/storage/database/supabase-client';
+import { getSupabaseClient } from '@/storage/database/supabase-compat';
 
 @Injectable()
 export class EventRegistrationService {

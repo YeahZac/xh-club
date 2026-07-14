@@ -1,5 +1,5 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
-import { getSupabaseClient } from '@/storage/database/supabase-client'
+import { getSupabaseClient } from '@/storage/database/supabase-compat'
 import * as bcrypt from 'bcryptjs'
 import * as jwt from 'jsonwebtoken'
 

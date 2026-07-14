@@ -1,74 +1,83 @@
 import { Injectable } from '@nestjs/common';
-import { getSupabaseClient } from '../storage/database/supabase-client';
+import * as fs from 'fs';
 import * as path from 'path';
 
 @Injectable()
 export class UploadService {
-  private readonly bucket = 'uploads';
-  private client() { return getSupabaseClient() }
+  private readonly uploadDir = path.join(process.cwd(), 'uploads');
+
+  constructor() {
+    // 确保上传目录存在
+    if (!fs.existsSync(this.uploadDir)) {
+      fs.mkdirSync(this.uploadDir, { recursive: true });
+    }
+  }
 
   async uploadFile(file: Express.Multer.File, folder: string = 'general'): Promise<any> {
     try {
       const timestamp = Date.now();
       const ext = path.extname(file.originalname);
-      const filename = `${folder}/${timestamp}-${Math.random().toString(36).substring(7)}${ext}`;
+      const filename = `${folder}-${timestamp}-${Math.random().toString(36).substring(7)}${ext}`;
+      
+      const folderPath = path.join(this.uploadDir, folder);
+      if (!fs.existsSync(folderPath)) {
+        fs.mkdirSync(folderPath, { recursive: true });
+      }
 
-      const fileData = file.buffer || (file as any).path;
-      const { data, error } = await this.client().storage
-        .from(this.bucket)
-        .upload(filename, fileData, {
-          contentType: file.mimetype,
-          upsert: false,
-        });
+      const filePath = path.join(folderPath, filename);
+      
+      // 写入文件
+      if (file.buffer) {
+        fs.writeFileSync(filePath, file.buffer);
+      } else if ((file as any).path) {
+        fs.copyFileSync((file as any).path, filePath);
+      }
 
-      if (error) throw new Error(`Upload failed: ${error.message}`);
-
-      const { data: urlData } = this.client().storage
-        .from(this.bucket)
-        .getPublicUrl(data.path);
-
+      // 返回文件信息（使用相对路径作为 URL）
+      const relativePath = `uploads/${folder}/${filename}`;
+      
       return {
-        url: urlData.publicUrl,
-        path: data.path,
+        url: relativePath,
+        path: relativePath,
         filename: file.originalname,
         size: file.size,
         mimetype: file.mimetype,
       };
     } catch (error) {
-      throw new Error(`File upload error: ${error.message}`);
+      throw new Error(`File upload error: ${(error as Error).message}`);
     }
   }
 
   async deleteFile(filePath: string): Promise<boolean> {
     try {
-      const { error } = await this.client().storage
-        .from(this.bucket)
-        .remove([filePath]);
-
-      if (error) throw new Error(`Delete failed: ${error.message}`);
+      const fullPath = path.join(process.cwd(), filePath);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
       return true;
     } catch (error) {
-      throw new Error(`File delete error: ${error.message}`);
+      throw new Error(`File delete error: ${(error as Error).message}`);
     }
   }
 
   async listFiles(folder: string = 'general'): Promise<any[]> {
     try {
-      const { data, error } = await this.client().storage
-        .from(this.bucket)
-        .list(folder, {
-          limit: 100,
-          offset: 0,
-          sortBy: { column: 'created_at', order: 'desc' },
-        });
-
-      if (error) {
-        throw new Error(`List failed: ${error.message}`);
+      const folderPath = path.join(this.uploadDir, folder);
+      if (!fs.existsSync(folderPath)) {
+        return [];
       }
 
-      return data || [];
+      const files = fs.readdirSync(folderPath);
+      return files.map(filename => {
+        const stats = fs.statSync(path.join(folderPath, filename));
+        return {
+          name: filename,
+          path: `uploads/${folder}/${filename}`,
+          created_at: stats.birthtime.toISOString(),
+        };
+      }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     } catch (error) {
-      throw new Error(`File list error: ${error.message}`);
+      throw new Error(`File list error: ${(error as Error).message}`);
     }
   }
 }
