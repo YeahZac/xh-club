@@ -19,6 +19,11 @@ export class AdminService {
   async login(username: string, password: string) {
     console.log('[AdminService] login - username:', username)
     
+    if (!pool) {
+      console.error('[AdminService] MySQL pool is not initialized')
+      throw new HttpException('数据库连接未初始化', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+    
     try {
       // 查询 users 表，phone 字段存储 admin 标识
       const [rows] = await pool.query(
