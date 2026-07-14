@@ -37,6 +37,22 @@ async function bootstrap() {
     console.log('✅ Admin panel available at /admin');
   }
 
+  // 根路径处理 - 提供 API 信息
+  app.use('/', (req: express.Request, res: express.Response) => {
+    if (req.path === '/') {
+      res.json({
+        name: '星河平台俱乐部 API',
+        version: '1.0.0',
+        status: 'running',
+        endpoints: {
+          health: '/api/health',
+          admin: '/admin',
+          api: '/api',
+        },
+      });
+    }
+  });
+
   app.enableCors({
     origin: true,
     credentials: true,
