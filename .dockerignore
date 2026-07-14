@@ -12,13 +12,20 @@ node_modules
 *.swp
 *.swo
 
-# Build outputs (前端构建产物不需要)
-dist
-build
-.weapp
-.h5
+# 前端相关文件（不需要）
+src/
+design_guidelines.md
+DESIGN.md
+README.md
 
-# Logs
+# 构建产物（会在容器内重新构建）
+server/dist
+server/build
+
+# 部署脚本（不需要在容器内）
+deploy/
+
+# 日志
 logs
 *.log
 npm-debug.log*
@@ -27,6 +34,16 @@ pnpm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# 测试
+**/*.test.ts
+**/*.spec.ts
+**/test/
+**/__tests__/
+
+# 临时文件
+tmp/
+temp/
 
 # Test
 coverage

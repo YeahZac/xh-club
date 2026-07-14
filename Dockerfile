@@ -1,5 +1,5 @@
 # ============================================
-# 粤商汇 - 微信云托管 Dockerfile
+# 星河平台俱乐部 - 微信云托管 Dockerfile
 # 后端服务 (NestJS)
 # ============================================
 
@@ -10,12 +10,10 @@ WORKDIR /app
 # 安装 pnpm
 RUN npm install -g pnpm
 
-# 只复制后端相关文件
-COPY server/package.json server/pnpm-lock* ./server/
-COPY package.json pnpm-lock* ./
+# 复制后端依赖文件
+COPY server/package.json server/pnpm-lock* ./
 
-# 安装依赖
-WORKDIR /app/server
+# 安装所有依赖（包括开发依赖用于构建）
 RUN if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install; fi
 
 # 复制后端源码
@@ -28,17 +26,18 @@ RUN pnpm build
 FROM node:18-alpine AS runner
 WORKDIR /app
 
-# 安装 pnpm
-RUN npm install -g pnpm
+# 复制 package.json 用于生产依赖
+COPY server/package.json ./
 
-# 复制依赖文件
-COPY server/package.json server/pnpm-lock* ./
+# 安装 pnpm 并只安装生产依赖
+RUN npm install -g pnpm && \
+    if [ -f pnpm-lock.yaml ]; then pnpm install --prod --frozen-lockfile; else pnpm install --prod; fi
 
-# 只安装生产依赖
-RUN if [ -f pnpm-lock.yaml ]; then pnpm install --prod --frozen-lockfile; else pnpm install --prod; fi
-
-# 复制构建产物
+# 复制构建产物（从 builder 的 /app/dist）
 COPY --from=builder /app/dist ./dist
+
+# 复制 admin-panel 静态资源（如果有）
+COPY --from=builder /app/admin-panel ./admin-panel
 
 # 微信云托管默认监听 80 端口
 ENV PORT=80
