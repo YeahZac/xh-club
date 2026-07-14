@@ -21,10 +21,10 @@ export class AdminService {
     
     try {
       // 查询 users 表，phone 字段存储 admin 标识
-      const [rows] = await pool.query<UserRow[]>(
+      const [rows] = await pool.query(
         'SELECT * FROM users WHERE phone = ? LIMIT 1',
         [username]
-      )
+      ) as [UserRow[], any]
 
       if (rows.length === 0) {
         console.log('[AdminService] login failed - user not found:', username)
