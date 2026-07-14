@@ -4,14 +4,28 @@ import * as schema from './shared/schema-mysql';
 
 // MySQL 连接池配置
 let pool: any = null;
+let db: any = null;
 
 // 解析连接字符串或环境变量
-function getMySQLConfig() {
+function getMySQLConfig(): any {
   // 优先使用连接字符串
-  if (process.env.DATABASE_URL || process.env.MYSQL_URL) {
-    const url = process.env.DATABASE_URL || process.env.MYSQL_URL;
+  const url = process.env.DATABASE_URL || process.env.MYSQL_URL;
+  if (url) {
     console.log('[MySQL] 使用连接字符串配置');
-    return url;
+    // 解析连接字符串
+    try {
+      const urlObj = new URL(url);
+      return {
+        host: urlObj.hostname,
+        port: parseInt(urlObj.port || '3306'),
+        user: urlObj.username,
+        password: urlObj.password,
+        database: urlObj.pathname.slice(1), // 移除开头的 /
+      };
+    } catch (e) {
+      console.error('[MySQL] 连接字符串解析失败:', e);
+      return null;
+    }
   }
   
   // 使用分开的环境变量
@@ -25,36 +39,58 @@ function getMySQLConfig() {
   };
 }
 
-try {
-  const config = getMySQLConfig();
-  if (!config) {
-    console.error('[MySQL] 配置为空');
-  } else {
-    const logConfig = typeof config === 'string' 
-      ? config.replace(/\/\/.*:.*@/, '//***:***@') 
-      : `host=${(config as any).host}, port=${(config as any).port}, user=${(config as any).user}, database=${(config as any).database}`;
-    console.log('[MySQL] 配置:', logConfig);
+// 初始化 MySQL 连接池
+export function initMySQL() {
+  try {
+    const config = getMySQLConfig();
+    if (!config) {
+      console.error('[MySQL] 配置为空，跳过数据库初始化');
+      return;
+    }
+    
+    console.log('[MySQL] 配置:', `host=${config.host}, port=${config.port}, user=${config.user}, database=${config.database}`);
+    
+    pool = mysql.createPool({
+      ...config,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 0,
+      connectTimeout: 5000, // 5秒连接超时
+    });
+    
+    db = drizzle(pool, { schema, mode: 'default' });
+    console.log('[MySQL] 连接池创建成功');
+    
+    // 测试连接
+    testConnection().catch(err => {
+      console.error('[MySQL] 初始连接测试失败:', err.message);
+    });
+  } catch (error: any) {
+    console.error('[MySQL] 连接池创建失败:', error.message);
   }
-  
-  pool = (mysql as any).createPool({
-    ...(typeof config === 'string' ? { uri: config } : config),
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    enableKeepAlive: true,
-    keepAliveInitialDelay: 0,
-    connectTimeout: 10000, // 10秒连接超时
-  });
-  console.log('[MySQL] 连接池创建成功');
-} catch (error) {
-  console.error('[MySQL] 连接池创建失败:', error);
 }
 
-// 创建 Drizzle 实例
-export const db = pool ? drizzle(pool, { schema, mode: 'default' }) : null;
+// 获取数据库实例
+export function getDb() {
+  if (!db) {
+    initMySQL();
+  }
+  return db;
+}
 
-// 导出 pool 用于需要直接访问的情况
-export { pool };
+// 获取连接池
+export function getPool() {
+  if (!pool) {
+    initMySQL();
+  }
+  return pool;
+}
+
+// 兼容旧代码
+export { pool as _pool };
+export const _db = db;
 
 // 测试连接
 export async function testConnection(): Promise<boolean> {
@@ -65,10 +101,23 @@ export async function testConnection(): Promise<boolean> {
   try {
     const connection = await pool.getConnection();
     connection.release();
-    console.log('✅ MySQL 数据库连接成功');
+    console.log('[MySQL] 数据库连接正常');
     return true;
-  } catch (error) {
-    console.error('❌ MySQL 数据库连接失败:', error);
+  } catch (error: any) {
+    console.error('[MySQL] 数据库连接失败:', error.message);
     return false;
   }
+}
+
+// 获取连接状态
+export function getConnectionStatus() {
+  return {
+    connected: pool !== null,
+    config: pool ? {
+      host: process.env.MYSQL_HOST || 'configured',
+      port: parseInt(process.env.MYSQL_PORT || '3306'),
+      database: process.env.MYSQL_DATABASE || 'xh_club',
+      user: process.env.MYSQL_USER || 'configured',
+    } : null,
+  };
 }

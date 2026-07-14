@@ -1,5 +1,5 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
-import { pool } from '@/storage/database/mysql-client'
+import { getPool, getConnectionStatus } from '@/storage/database/mysql-client'
 import * as bcrypt from 'bcryptjs'
 import { RowDataPacket } from 'mysql2'
 
@@ -17,6 +17,7 @@ interface UserRow extends RowDataPacket {
 export class AdminService {
   /** 检查数据库连接状态 */
   async checkDatabaseConnection(): Promise<{ connected: boolean; message: string }> {
+    const pool = getPool()
     console.log('[AdminService] checkDatabaseConnection - pool exists:', !!pool)
     
     if (!pool) {
@@ -38,6 +39,8 @@ export class AdminService {
   /** 管理员登录 */
   async login(username: string, password: string) {
     console.log('[AdminService] login - username:', username)
+    
+    const pool = getPool()
     console.log('[AdminService] login - pool exists:', !!pool)
     
     if (!pool) {
@@ -103,10 +106,10 @@ export class AdminService {
     console.log('[AdminService] getDashboardStats')
     
     try {
-      const [members] = await pool.query('SELECT COUNT(*) as count FROM users')
-      const [events] = await pool.query('SELECT COUNT(*) as count FROM event_registrations')
-      const [projects] = await pool.query('SELECT COUNT(*) as count FROM business_opportunities')
-      const [orders] = await pool.query('SELECT COALESCE(SUM(total_amount), 0) as total FROM mall_orders WHERE status = "completed"')
+      const [members] = await getPool().query('SELECT COUNT(*) as count FROM users')
+      const [events] = await getPool().query('SELECT COUNT(*) as count FROM event_registrations')
+      const [projects] = await getPool().query('SELECT COUNT(*) as count FROM business_opportunities')
+      const [orders] = await getPool().query('SELECT COALESCE(SUM(total_amount), 0) as total FROM mall_orders WHERE status = "completed"')
 
       return {
         totalMembers: (members as any)[0].count,
@@ -125,7 +128,7 @@ export class AdminService {
     console.log('[AdminService] getBanners')
     
     try {
-      const [rows] = await pool.query('SELECT * FROM banners ORDER BY sort_order ASC')
+      const [rows] = await getPool().query('SELECT * FROM banners ORDER BY sort_order ASC')
       return rows
     } catch (error) {
       console.error('[AdminService] getBanners error:', error)
@@ -137,7 +140,7 @@ export class AdminService {
     console.log('[AdminService] createBanner - title:', dto.title)
     
     try {
-      const [result] = await pool.query(
+      const [result] = await getPool().query(
         `INSERT INTO banners (title, image_url, link_type, link_id, link_config, sort_order, is_active, start_time, end_time)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -153,7 +156,7 @@ export class AdminService {
         ]
       )
       
-      const [rows] = await pool.query('SELECT * FROM banners WHERE id = ?', [(result as any).insertId])
+      const [rows] = await getPool().query('SELECT * FROM banners WHERE id = ?', [(result as any).insertId])
       return (rows as any)[0]
     } catch (error) {
       console.error('[AdminService] createBanner error:', error)
@@ -165,8 +168,8 @@ export class AdminService {
     console.log('[AdminService] updateBanner - id:', id)
     
     try {
-      await pool.query('UPDATE banners SET ? WHERE id = ?', [dto, id])
-      const [rows] = await pool.query('SELECT * FROM banners WHERE id = ?', [id])
+      await getPool().query('UPDATE banners SET ? WHERE id = ?', [dto, id])
+      const [rows] = await getPool().query('SELECT * FROM banners WHERE id = ?', [id])
       return (rows as any)[0]
     } catch (error) {
       console.error('[AdminService] updateBanner error:', error)
@@ -178,7 +181,7 @@ export class AdminService {
     console.log('[AdminService] deleteBanner - id:', id)
     
     try {
-      await pool.query('DELETE FROM banners WHERE id = ?', [id])
+      await getPool().query('DELETE FROM banners WHERE id = ?', [id])
       return { success: true }
     } catch (error) {
       console.error('[AdminService] deleteBanner error:', error)
@@ -191,7 +194,7 @@ export class AdminService {
     console.log('[AdminService] getAllMembers', query)
     
     try {
-      const [rows] = await pool.query('SELECT * FROM users ORDER BY created_at DESC')
+      const [rows] = await getPool().query('SELECT * FROM users ORDER BY created_at DESC')
       return rows
     } catch (error) {
       console.error('[AdminService] getAllMembers error:', error)
@@ -204,7 +207,7 @@ export class AdminService {
     
     try {
       // 简化处理，返回所有用户
-      const [rows] = await pool.query('SELECT * FROM users ORDER BY created_at DESC LIMIT 10')
+      const [rows] = await getPool().query('SELECT * FROM users ORDER BY created_at DESC LIMIT 10')
       return rows
     } catch (error) {
       console.error('[AdminService] getPendingMembers error:', error)
@@ -216,7 +219,7 @@ export class AdminService {
     console.log('[AdminService] approveMember - id:', id, 'by:', approvedBy)
     
     try {
-      await pool.query('UPDATE users SET status = "approved" WHERE id = ?', [id])
+      await getPool().query('UPDATE users SET status = "approved" WHERE id = ?', [id])
       return { success: true }
     } catch (error) {
       console.error('[AdminService] approveMember error:', error)
@@ -228,7 +231,7 @@ export class AdminService {
     console.log('[AdminService] rejectMember - id:', id, 'reason:', reason)
     
     try {
-      await pool.query('UPDATE users SET status = "rejected" WHERE id = ?', [id])
+      await getPool().query('UPDATE users SET status = "rejected" WHERE id = ?', [id])
       return { success: true }
     } catch (error) {
       console.error('[AdminService] rejectMember error:', error)
@@ -241,7 +244,7 @@ export class AdminService {
     console.log('[AdminService] getAllEvents', query)
     
     try {
-      const [rows] = await pool.query('SELECT * FROM event_registrations ORDER BY created_at DESC')
+      const [rows] = await getPool().query('SELECT * FROM event_registrations ORDER BY created_at DESC')
       return rows
     } catch (error) {
       console.error('[AdminService] getAllEvents error:', error)
@@ -313,7 +316,7 @@ export class AdminService {
     console.log('[AdminService] getMallProducts')
     
     try {
-      const [rows] = await pool.query('SELECT * FROM mall_products ORDER BY created_at DESC')
+      const [rows] = await getPool().query('SELECT * FROM mall_products ORDER BY created_at DESC')
       return rows
     } catch (error) {
       console.error('[AdminService] getMallProducts error:', error)
@@ -326,7 +329,7 @@ export class AdminService {
     console.log('[AdminService] createMallProduct - name:', dto.name)
     
     try {
-      const [result] = await pool.query(
+      const [result] = await getPool().query(
         `INSERT INTO mall_products (name, description, points_price, cash_price, stock, category, image_url, enable_distribution, distribution_rate)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -342,7 +345,7 @@ export class AdminService {
         ]
       )
       
-      const [rows] = await pool.query('SELECT * FROM mall_products WHERE id = ?', [(result as any).insertId])
+      const [rows] = await getPool().query('SELECT * FROM mall_products WHERE id = ?', [(result as any).insertId])
       return (rows as any)[0]
     } catch (error) {
       console.error('[AdminService] createMallProduct error:', error)
@@ -354,8 +357,8 @@ export class AdminService {
     console.log('[AdminService] updateMallProduct - id:', id)
     
     try {
-      await pool.query('UPDATE mall_products SET ? WHERE id = ?', [dto, id])
-      const [rows] = await pool.query('SELECT * FROM mall_products WHERE id = ?', [id])
+      await getPool().query('UPDATE mall_products SET ? WHERE id = ?', [dto, id])
+      const [rows] = await getPool().query('SELECT * FROM mall_products WHERE id = ?', [id])
       return (rows as any)[0]
     } catch (error) {
       console.error('[AdminService] updateMallProduct error:', error)
@@ -367,7 +370,7 @@ export class AdminService {
     console.log('[AdminService] deleteMallProduct - id:', id)
     
     try {
-      await pool.query('DELETE FROM mall_products WHERE id = ?', [id])
+      await getPool().query('DELETE FROM mall_products WHERE id = ?', [id])
       return { success: true }
     } catch (error) {
       console.error('[AdminService] deleteMallProduct error:', error)
@@ -380,7 +383,7 @@ export class AdminService {
     console.log('[AdminService] getAllTransactions', query)
     
     try {
-      const [rows] = await pool.query('SELECT * FROM mall_orders ORDER BY created_at DESC')
+      const [rows] = await getPool().query('SELECT * FROM mall_orders ORDER BY created_at DESC')
       return rows
     } catch (error) {
       console.error('[AdminService] getAllTransactions error:', error)
