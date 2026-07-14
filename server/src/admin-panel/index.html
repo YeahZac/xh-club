@@ -404,10 +404,21 @@ let token = localStorage.getItem('admin_token') || ''
 async function api(path, options = {}) {
   const opts = { headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...options }
   if (opts.body && typeof opts.body === 'object') opts.body = JSON.stringify(opts.body)
-  const res = await fetch(`${API}${path}`, opts)
-  const data = await res.json()
-  console.log(`[API] ${options.method || 'GET'} ${path}`, data)
-  return data
+  
+  const url = `${API}${path}`
+  console.log(`[API] 请求: ${options.method || 'GET'} ${url}`)
+  
+  try {
+    const res = await fetch(url, opts)
+    console.log(`[API] 响应状态: ${res.status} ${res.statusText}`)
+    
+    const data = await res.json()
+    console.log(`[API] 响应数据:`, data)
+    return data
+  } catch (e) {
+    console.error(`[API] 请求失败:`, e)
+    throw e
+  }
 }
 
 function toast(msg, type = 'success') {
@@ -444,8 +455,18 @@ const INDUSTRY_MAP = { tech: '科技互联网', finance: '金融资本', manufac
 async function doLogin() {
   const username = document.getElementById('loginUsername').value
   const password = document.getElementById('loginPassword').value
+  const errorEl = document.getElementById('loginError')
+  
+  // 清空之前的错误信息
+  errorEl.textContent = ''
+  errorEl.classList.add('hidden')
+  
+  console.log('[Login] 开始登录，用户名:', username)
+  
   try {
     const res = await api('/admin/login', { method: 'POST', body: { username, password } })
+    console.log('[Login] 登录响应:', res)
+    
     if (res.code === 200) {
       token = 'admin_session'
       localStorage.setItem('admin_token', token)
@@ -455,12 +476,21 @@ async function doLogin() {
       document.getElementById('mainApp').classList.remove('hidden')
       loadDashboard()
     } else {
-      document.getElementById('loginError').textContent = res.msg || '登录失败'
-      document.getElementById('loginError').classList.remove('hidden')
+      // 显示详细错误信息
+      const errorMsg = res.msg || res.message || '登录失败，请检查用户名和密码'
+      console.error('[Login] 登录失败:', errorMsg)
+      errorEl.textContent = errorMsg
+      errorEl.classList.remove('hidden')
+      // 同时弹出 alert
+      alert('登录失败: ' + errorMsg)
     }
   } catch (e) {
-    document.getElementById('loginError').textContent = '网络错误'
-    document.getElementById('loginError').classList.remove('hidden')
+    console.error('[Login] 网络错误:', e)
+    const errorMsg = '网络错误: ' + (e.message || '无法连接到服务器')
+    errorEl.textContent = errorMsg
+    errorEl.classList.remove('hidden')
+    // 同时弹出 alert
+    alert('登录失败: ' + errorMsg)
   }
 }
 
