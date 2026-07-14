@@ -50,6 +50,7 @@ export function initMySQL() {
     
     console.log('[MySQL] 配置:', `host=${config.host}, port=${config.port}, user=${config.user}, database=${config.database}`);
     
+    // 创建连接池，不立即连接
     pool = mysql.createPool({
       ...config,
       waitForConnections: true,
@@ -57,16 +58,21 @@ export function initMySQL() {
       queueLimit: 0,
       enableKeepAlive: true,
       keepAliveInitialDelay: 0,
-      connectTimeout: 5000, // 5秒连接超时
+      connectTimeout: 10000, // 10秒连接超时
+      idleTimeout: 60000, // 60秒空闲超时
     });
     
     db = drizzle(pool, { schema, mode: 'default' });
-    console.log('[MySQL] 连接池创建成功');
+    console.log('[MySQL] 连接池创建成功（延迟连接）');
     
-    // 测试连接
-    testConnection().catch(err => {
-      console.error('[MySQL] 初始连接测试失败:', err.message);
-    });
+    // 异步测试连接，不阻塞启动
+    setTimeout(() => {
+      testConnection().then(() => {
+        console.log('[MySQL] 连接测试成功');
+      }).catch(err => {
+        console.error('[MySQL] 连接测试失败:', err.message);
+      });
+    }, 1000);
   } catch (error: any) {
     console.error('[MySQL] 连接池创建失败:', error.message);
   }
