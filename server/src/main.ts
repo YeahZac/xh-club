@@ -31,7 +31,16 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
-  // 提供 Admin 管理后台静态页面（必须在 setGlobalPrefix 之前）
+  app.enableCors({
+    origin: true,
+    credentials: true,
+  });
+  
+  // 全局中间件（在 setGlobalPrefix 之前）
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+  
+  // 提供 Admin 管理后台静态页面
   const adminHtmlPath = path.resolve(process.cwd(), 'src/admin-panel/index.html');
   if (fs.existsSync(adminHtmlPath)) {
     const adminHtml = fs.readFileSync(adminHtmlPath, 'utf-8');
@@ -40,30 +49,9 @@ async function bootstrap() {
     });
     console.log('✅ Admin panel available at /admin');
   }
-
-  // 根路径处理 - 提供 API 信息
-  app.use('/', (req: express.Request, res: express.Response) => {
-    if (req.path === '/') {
-      res.json({
-        name: '星河平台俱乐部 API',
-        version: '1.0.0',
-        status: 'running',
-        endpoints: {
-          health: '/api/health',
-          admin: '/admin',
-          api: '/api',
-        },
-      });
-    }
-  });
-
-  app.enableCors({
-    origin: true,
-    credentials: true,
-  });
+  
+  // 设置全局前缀
   app.setGlobalPrefix('api');
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // 全局拦截器：统一将 POST 请求的 201 状态码改为 200
   app.useGlobalInterceptors(new HttpStatusInterceptor());
@@ -83,6 +71,6 @@ async function bootstrap() {
       throw err;
     }
   }
-  console.log(`Application is running on: http://localhost:3000`);
+  console.log(`Application is running on: http://localhost:${port}`);
 }
 bootstrap();
