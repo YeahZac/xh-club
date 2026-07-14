@@ -4,6 +4,7 @@ import * as express from 'express';
 import { HttpStatusInterceptor } from '@/interceptors/http-status.interceptor';
 import * as fs from 'fs';
 import * as path from 'path';
+import { initMySQL } from '@/storage/database/mysql-client';
 
 function parsePort(): number {
   // 优先使用环境变量 PORT（微信云托管等平台会注入）
@@ -25,6 +26,9 @@ function parsePort(): number {
 }
 
 async function bootstrap() {
+  // 初始化 MySQL 连接
+  initMySQL();
+
   const app = await NestFactory.create(AppModule);
 
   // 提供 Admin 管理后台静态页面（必须在 setGlobalPrefix 之前）
