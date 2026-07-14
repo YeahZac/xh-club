@@ -1,6 +1,7 @@
 # ============================================
 # 星河平台俱乐部 - 微信云托管 Dockerfile
 # 后端服务 (NestJS)
+# Version: 1.0.4
 # ============================================
 
 # 阶段1：构建
@@ -36,13 +37,20 @@ RUN npm install -g pnpm && \
 # 复制构建产物（从 builder 的 /app/dist）
 COPY --from=builder /app/dist ./dist
 
-# 复制 admin-panel 静态资源到 main.ts 期望的位置 (v1.0.3)
-RUN mkdir -p ./src/admin-panel && \
-    cp -r /app/dist/admin-panel/* ./src/admin-panel/ 2>/dev/null || true
+# 创建 admin-panel 目录（如果 builder 中有的话复制过来）
+RUN mkdir -p ./src/admin-panel
+COPY --from=builder /app/dist/admin-panel/ ./src/admin-panel/
 
 # 微信云托管默认监听 80 端口
 ENV PORT=80
 EXPOSE 80
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/api/health || exit 1
+
+# 启动命令
+CMD ["node", "dist/src/main.js"]
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
