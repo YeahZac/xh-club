@@ -5,13 +5,32 @@ import * as schema from './shared/schema-mysql';
 // MySQL 连接池配置
 let pool: any = null;
 
-try {
-  pool = (mysql as any).createPool({
+// 解析连接字符串或环境变量
+function getMySQLConfig() {
+  // 优先使用连接字符串
+  if (process.env.DATABASE_URL || process.env.MYSQL_URL) {
+    const url = process.env.DATABASE_URL || process.env.MYSQL_URL;
+    console.log('[MySQL] 使用连接字符串配置');
+    return url;
+  }
+  
+  // 使用分开的环境变量
+  console.log('[MySQL] 使用环境变量配置');
+  return {
     host: process.env.MYSQL_HOST || 'localhost',
     port: parseInt(process.env.MYSQL_PORT || '3306'),
     user: process.env.MYSQL_USER || 'root',
     password: process.env.MYSQL_PASSWORD || '',
     database: process.env.MYSQL_DATABASE || 'xh_club',
+  };
+}
+
+try {
+  const config = getMySQLConfig();
+  console.log('[MySQL] 配置:', typeof config === 'string' ? config.replace(/\/\/.*:.*@/, '//***:***@') : `host=${config.host}, port=${config.port}, user=${config.user}, database=${config.database}`);
+  
+  pool = (mysql as any).createPool({
+    ...(typeof config === 'string' ? { uri: config } : config),
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
