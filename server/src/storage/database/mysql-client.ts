@@ -3,6 +3,7 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 // MySQL 连接池
 let pool: mysql.Pool | null = null;
+let isInitialized = false;
 
 // 解析连接字符串或环境变量
 function getMySQLConfig(): mysql.PoolOptions | null {
@@ -36,18 +37,23 @@ function getMySQLConfig(): mysql.PoolOptions | null {
   };
 }
 
-// 初始化 MySQL 连接池
-export function initMySQL() {
+// 初始化 MySQL 连接池（异步，不阻塞）
+export async function initMySQL(): Promise<void> {
+  if (isInitialized) {
+    console.log('[MySQL] 已初始化，跳过');
+    return;
+  }
+
   try {
     const config = getMySQLConfig();
     if (!config) {
       console.error('[MySQL] 配置为空，跳过数据库初始化');
       return;
     }
-    
+  
     console.log('[MySQL] 配置:', `host=${config.host}, port=${config.port}, user=${config.user}, database=${config.database}`);
-    
-    // 创建连接池，不立即连接
+  
+    // 创建连接池
     pool = mysql.createPool({
       ...config,
       waitForConnections: true,
@@ -55,29 +61,54 @@ export function initMySQL() {
       queueLimit: 0,
       enableKeepAlive: true,
       keepAliveInitialDelay: 0,
-      connectTimeout: 10000,
+      connectTimeout: 5000, // 5秒超时
+    });
+  
+    console.log('[MySQL] 连接池创建成功');
+    
+    // 测试连接（带超时）
+    const testPromise = testConnection();
+    const timeoutPromise = new Promise<void>((_, reject) => {
+      setTimeout(() => reject(new Error('连接测试超时')), 3000);
     });
     
-    console.log('[MySQL] 连接池创建成功（延迟连接）');
+    try {
+      await Promise.race([testPromise, timeoutPromise]);
+      console.log('[MySQL] 连接测试成功');
+    } catch (err: any) {
+      console.error('[MySQL] 连接测试失败或超时:', err.message);
+      // 不抛出错误，允许服务继续启动
+    }
     
-    // 异步测试连接，不阻塞启动
-    setTimeout(() => {
-      testConnection().then(() => {
-        console.log('[MySQL] 连接测试成功');
-      }).catch(err => {
-        console.error('[MySQL] 连接测试失败:', err.message);
-      });
-    }, 1000);
+    isInitialized = true;
   } catch (error: any) {
     console.error('[MySQL] 连接池创建失败:', error.message);
+    // 不抛出错误，允许服务继续启动
   }
 }
 
-// 获取连接池 - 返回类型包装
-export function getPool() {
-  if (!pool) {
-    initMySQL();
+// 测试连接
+export async function testConnection(): Promise<void> {
+  if (!pool) throw new Error('连接池未创建');
+  
+  const conn = await pool.getConnection();
+  try {
+    await conn.ping();
+  } finally {
+    conn.release();
   }
+}
+
+// 获取连接状态
+export function getConnectionStatus(): { connected: boolean; pool: boolean } {
+  return {
+    connected: isInitialized && pool !== null,
+    pool: pool !== null,
+  };
+}
+
+// 获取连接池
+export function getPool(): mysql.Pool | null {
   return pool;
 }
 
@@ -99,34 +130,4 @@ export async function queryExecute(sql: string, params?: any[]): Promise<ResultS
   if (!p) throw new Error('数据库未连接');
   const [result] = await p.query(sql, params) as [ResultSetHeader, any];
   return result;
-}
-
-// 测试连接
-export async function testConnection(): Promise<boolean> {
-  if (!pool) {
-    console.error('[MySQL] 连接池未初始化');
-    return false;
-  }
-  try {
-    const connection = await pool.getConnection();
-    connection.release();
-    console.log('[MySQL] 数据库连接正常');
-    return true;
-  } catch (error: any) {
-    console.error('[MySQL] 数据库连接失败:', error.message);
-    return false;
-  }
-}
-
-// 获取连接状态
-export function getConnectionStatus() {
-  return {
-    connected: pool !== null,
-    config: pool ? {
-      host: process.env.MYSQL_HOST || process.env.DATABASE_URL ? 'from-url' : 'localhost',
-      port: parseInt(process.env.MYSQL_PORT || '3306'),
-      database: process.env.MYSQL_DATABASE || 'xh_club',
-      user: process.env.MYSQL_USER || 'configured',
-    } : null,
-  };
 }

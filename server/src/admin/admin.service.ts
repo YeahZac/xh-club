@@ -18,10 +18,8 @@ export class AdminService {
   /** 检查数据库连接状态 */
   async checkDatabaseConnection(): Promise<{ connected: boolean; message: string }> {
     try {
-      const ok = await testConnection()
-      return ok
-        ? { connected: true, message: '数据库连接正常' }
-        : { connected: false, message: '数据库连接失败' }
+      await testConnection()
+      return { connected: true, message: '数据库连接正常' }
     } catch (error) {
       return { connected: false, message: `数据库连接失败: ${(error as Error).message}` }
     }
