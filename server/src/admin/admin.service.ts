@@ -15,13 +15,43 @@ interface UserRow extends RowDataPacket {
 
 @Injectable()
 export class AdminService {
+  /** 检查数据库连接状态 */
+  async checkDatabaseConnection(): Promise<{ connected: boolean; message: string }> {
+    console.log('[AdminService] checkDatabaseConnection - pool exists:', !!pool)
+    
+    if (!pool) {
+      console.error('[AdminService] MySQL pool is NOT initialized')
+      return { connected: false, message: '数据库连接池未初始化' }
+    }
+    
+    try {
+      // 执行简单查询测试连接
+      await pool.query('SELECT 1 as test')
+      console.log('[AdminService] Database connection OK')
+      return { connected: true, message: '数据库连接正常' }
+    } catch (error) {
+      console.error('[AdminService] Database connection failed:', error)
+      return { connected: false, message: `数据库连接失败: ${(error as Error).message}` }
+    }
+  }
+
   /** 管理员登录 */
   async login(username: string, password: string) {
     console.log('[AdminService] login - username:', username)
+    console.log('[AdminService] login - pool exists:', !!pool)
     
     if (!pool) {
       console.error('[AdminService] MySQL pool is not initialized')
-      throw new HttpException('数据库连接未初始化', HttpStatus.INTERNAL_SERVER_ERROR)
+      throw new HttpException('数据库连接未初始化，请检查 DATABASE_URL 环境变量', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+    
+    // 测试数据库连接
+    try {
+      await pool.query('SELECT 1')
+      console.log('[AdminService] Database connection test OK')
+    } catch (connError) {
+      console.error('[AdminService] Database connection test failed:', connError)
+      throw new HttpException(`数据库连接失败: ${(connError as Error).message}`, HttpStatus.INTERNAL_SERVER_ERROR)
     }
     
     try {

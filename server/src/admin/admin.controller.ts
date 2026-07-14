@@ -5,6 +5,14 @@ import { AdminService } from './admin.service'
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
+  /** 数据库连接状态检查 */
+  @Get('db-status')
+  async checkDatabaseStatus() {
+    console.log('[AdminController] GET /api/admin/db-status')
+    const result = await this.adminService.checkDatabaseConnection()
+    return { code: 200, msg: 'success', data: result }
+  }
+
   /** 登录 */
   @Post('login')
   async login(@Body() body: { username: string; password: string }) {
