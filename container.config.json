@@ -1,0 +1,23 @@
+{
+  "containerPort": 80,
+  "dockerfilePath": "Dockerfile",
+  "buildDir": "",
+  "minNum": 0,
+  "maxNum": 5,
+  "cpu": 0.5,
+  "mem": 1,
+  "policyType": "cpu",
+  "policyThreshold": 60,
+  "envParams": {
+    "NODE_ENV": "production",
+    "SUPABASE_URL": "",
+    "SUPABASE_SERVICE_ROLE_KEY": "",
+    "JWT_SECRET": "xh-club-jwt-secret-change-in-production",
+    "ADMIN_USERNAME": "admin",
+    "ADMIN_PASSWORD": "admin123"
+  },
+  "customLogs": "stdout",
+  "initialDelaySeconds": 10,
+  "dataBaseName": "",
+  "executeSQLs": []
+}

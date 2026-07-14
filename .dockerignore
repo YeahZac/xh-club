@@ -1,0 +1,59 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Build outputs (前端构建产物不需要)
+dist
+build
+.weapp
+.h5
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+coverage
+.nyc_output
+**/__tests__
+
+# Docs
+*.md
+!README.md
+docs
+
+# Deploy scripts (不需要在容器内)
+deploy
+
+# Frontend source (后端部署不需要前端源码)
+src
+config
+*.config.ts
+*.config.js
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Misc
+*.tgz
+*.tar.gz
+.npm
+.pnpm-store
