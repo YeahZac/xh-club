@@ -789,7 +789,7 @@ async function createEvent() {
     fee: parseInt(document.getElementById('evFee').value) || 0,
     description: document.getElementById('evDesc').value,
     status: 'open',
-    form_fields: formFields.length > 0 ? formFields : null
+    form_fields: formFields.length > 0 ? formFields : null,
     current_participants: 0
   }
   const res = await api('/admin/events', { method: 'POST', body })
