@@ -14,6 +14,12 @@ function loadEnv(): void {
     return;
   }
 
+  // 在微信云托管或其他云环境中，跳过 Python 执行
+  if (process.env.WX_CLOUD_ENV || process.env.KUBERNETES_SERVICE_HOST) {
+    envLoaded = true;
+    return;
+  }
+
   try {
     try {
       require('dotenv').config();
@@ -23,6 +29,13 @@ function loadEnv(): void {
       }
     } catch {
       // dotenv not available
+    }
+
+    // 检查是否在 Coze 平台环境
+    const isCozePlatform = process.env.COZE_WORKSPACE_PATH || process.env.COZE_ENV;
+    if (!isCozePlatform) {
+      envLoaded = true;
+      return;
     }
 
     const pythonCode = `
@@ -41,7 +54,7 @@ except Exception as e:
 
     const output = execSync(`python3 -c '${pythonCode.replace(/'/g, "'\"'\"'")}'`, {
       encoding: 'utf-8',
-      timeout: 10000,
+      timeout: 3000, // 缩短超时时间到 3 秒
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
@@ -64,7 +77,8 @@ except Exception as e:
 
     envLoaded = true;
   } catch {
-    // Silently fail
+    // Silently fail - 在非 Coze 平台环境中这是正常的
+    envLoaded = true;
   }
 }
 
