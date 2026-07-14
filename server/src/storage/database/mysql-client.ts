@@ -1,9 +1,9 @@
 import { drizzle } from 'drizzle-orm/mysql2';
-import mysql from 'mysql2/promise';
+import * as mysql from 'mysql2/promise';
 import * as schema from './shared/schema-mysql';
 
 // MySQL 连接池配置
-const pool = mysql.createPool({
+const pool = (mysql as any).createPool({
   host: process.env.MYSQL_HOST || 'localhost',
   port: parseInt(process.env.MYSQL_PORT || '3306'),
   user: process.env.MYSQL_USER || 'root',
