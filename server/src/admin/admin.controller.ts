@@ -1,7 +1,232 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common'
 import { AdminService } from './admin.service'
-import * as fs from 'fs/promises'
-import * as path from 'path'
+
+// 数据库初始化 SQL（直接嵌入代码，避免文件路径问题）
+const INIT_SQL = `
+-- 角色表
+CREATE TABLE IF NOT EXISTS roles (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(50) NOT NULL UNIQUE,
+  display_name VARCHAR(100) NOT NULL,
+  description TEXT,
+  permissions JSON,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 管理员表
+CREATE TABLE IF NOT EXISTS admins (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  role_id INT NOT NULL DEFAULT 2,
+  status ENUM('active', 'inactive', 'locked') DEFAULT 'active',
+  last_login_at TIMESTAMP NULL,
+  last_login_ip VARCHAR(45),
+  login_attempts INT DEFAULT 0,
+  locked_until TIMESTAMP NULL,
+  created_by INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 操作日志表
+CREATE TABLE IF NOT EXISTS admin_operation_logs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  admin_id INT NOT NULL,
+  action VARCHAR(100) NOT NULL,
+  target_type VARCHAR(50),
+  target_id INT,
+  details JSON,
+  ip_address VARCHAR(45),
+  user_agent TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_admin_id (admin_id),
+  INDEX idx_action (action),
+  INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 会员等级配置表
+CREATE TABLE IF NOT EXISTS member_levels (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  level_code VARCHAR(20) NOT NULL UNIQUE,
+  level_name VARCHAR(50) NOT NULL,
+  level_icon VARCHAR(255),
+  min_contribution INT DEFAULT 0,
+  min_points INT DEFAULT 0,
+  discount_rate DECIMAL(3,2) DEFAULT 1.00,
+  points_multiplier DECIMAL(3,2) DEFAULT 1.00,
+  benefits JSON,
+  sort_order INT DEFAULT 0,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 会员等级变更记录
+CREATE TABLE IF NOT EXISTS member_level_logs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  member_id INT NOT NULL,
+  old_level VARCHAR(20),
+  new_level VARCHAR(20) NOT NULL,
+  reason VARCHAR(255),
+  changed_by INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_member_id (member_id),
+  INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 邀请奖励规则表
+CREATE TABLE IF NOT EXISTS invitation_reward_rules (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  rule_name VARCHAR(100) NOT NULL,
+  rule_type ENUM('direct', 'indirect', 'level_up', 'purchase') NOT NULL,
+  reward_type ENUM('points', 'contribution', 'both') NOT NULL,
+  reward_value INT NOT NULL,
+  conditions JSON,
+  max_rewards INT DEFAULT -1,
+  is_active BOOLEAN DEFAULT TRUE,
+  start_date TIMESTAMP NULL,
+  end_date TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 邀请记录表
+CREATE TABLE IF NOT EXISTS invitation_records (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  inviter_id INT NOT NULL,
+  invitee_id INT NOT NULL,
+  invitation_code VARCHAR(20),
+  status ENUM('pending', 'accepted', 'rewarded', 'cancelled') DEFAULT 'pending',
+  reward_points INT DEFAULT 0,
+  reward_contribution INT DEFAULT 0,
+  accepted_at TIMESTAMP NULL,
+  rewarded_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_inviter_id (inviter_id),
+  INDEX idx_invitee_id (invitee_id),
+  INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 邀请奖励发放记录
+CREATE TABLE IF NOT EXISTS invitation_rewards (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  record_id BIGINT NOT NULL,
+  member_id INT NOT NULL,
+  reward_type ENUM('points', 'contribution') NOT NULL,
+  reward_value INT NOT NULL,
+  rule_id INT,
+  description VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_member_id (member_id),
+  INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 积分规则表
+CREATE TABLE IF NOT EXISTS points_rules (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  rule_name VARCHAR(100) NOT NULL,
+  action_type VARCHAR(50) NOT NULL,
+  points_value INT NOT NULL,
+  conditions JSON,
+  daily_limit INT DEFAULT -1,
+  total_limit INT DEFAULT -1,
+  is_active BOOLEAN DEFAULT TRUE,
+  priority INT DEFAULT 0,
+  start_date TIMESTAMP NULL,
+  end_date TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 积分发放记录
+CREATE TABLE IF NOT EXISTS points_grants (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  member_id INT NOT NULL,
+  rule_id INT,
+  points INT NOT NULL,
+  balance_before INT NOT NULL,
+  balance_after INT NOT NULL,
+  action_type VARCHAR(50) NOT NULL,
+  description VARCHAR(255),
+  reference_type VARCHAR(50),
+  reference_id INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_member_id (member_id),
+  INDEX idx_action_type (action_type),
+  INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 贡献值规则表
+CREATE TABLE IF NOT EXISTS contribution_rules (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  rule_name VARCHAR(100) NOT NULL,
+  action_type VARCHAR(50) NOT NULL,
+  contribution_value INT NOT NULL,
+  conditions JSON,
+  calculation_method ENUM('fixed', 'percentage', 'formula') DEFAULT 'fixed',
+  formula TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
+  priority INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 贡献值变更记录
+CREATE TABLE IF NOT EXISTS contribution_logs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  member_id INT NOT NULL,
+  rule_id INT,
+  contribution_value INT NOT NULL,
+  balance_before INT NOT NULL,
+  balance_after INT NOT NULL,
+  action_type VARCHAR(50) NOT NULL,
+  description VARCHAR(255),
+  reference_type VARCHAR(50),
+  reference_id INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_member_id (member_id),
+  INDEX idx_action_type (action_type),
+  INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 部门表
+CREATE TABLE IF NOT EXISTS departments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  parent_id INT DEFAULT NULL,
+  leader_id INT,
+  sort_order INT DEFAULT 0,
+  description TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_parent_id (parent_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 会员部门关联表
+CREATE TABLE IF NOT EXISTS member_departments (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  member_id INT NOT NULL,
+  department_id INT NOT NULL,
+  is_primary BOOLEAN DEFAULT TRUE,
+  joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_member_id (member_id),
+  INDEX idx_department_id (department_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 插入默认角色
+INSERT IGNORE INTO roles (name, display_name, description, permissions) VALUES 
+('super_admin', '超级管理员', '拥有所有权限', '["*"]'),
+('admin', '普通管理员', '基础管理权限', '["dashboard","members","articles","banners"]');
+
+-- 插入默认会员等级
+INSERT IGNORE INTO member_levels (level_code, level_name, min_contribution, discount_rate, points_multiplier, sort_order) VALUES
+('normal', '普通会员', 0, 1.00, 1.00, 1),
+('silver', '银卡会员', 100, 0.95, 1.20, 2),
+('gold', '金卡会员', 500, 0.90, 1.50, 3),
+('diamond', '钻石会员', 2000, 0.85, 2.00, 4);
+`
 
 @Controller('admin')
 export class AdminController {
@@ -20,11 +245,8 @@ export class AdminController {
   async initDatabase() {
     console.log('[AdminController] POST /api/admin/init-database')
     try {
-      const sqlPath = path.join(__dirname, '../storage/database/init-admin-system.sql')
-      const sql = await fs.readFile(sqlPath, 'utf-8')
-      
       // Split SQL by statements and execute each
-      const statements = sql
+      const statements = INIT_SQL
         .split(';')
         .map(s => s.trim())
         .filter(s => s.length > 0 && !s.startsWith('--'))
