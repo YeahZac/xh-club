@@ -463,6 +463,56 @@
       </div>
     </div>
 
+    <!-- ====== 角色权限编辑（二级页面） ====== -->
+    <div data-page="role-edit" class="p-8 fade-in">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div class="flex items-center gap-4 mb-6">
+          <button onclick="switchPage('roles')" class="p-2 hover:bg-gray-100 rounded-lg transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <h3 class="font-bold text-navy-800 text-xl">编辑角色权限</h3>
+        </div>
+        <div class="mb-6 p-4 bg-gray-50 rounded-xl">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm text-gray-600 mb-1">角色名称</label>
+              <input type="text" id="editRoleName" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-brand-500">
+            </div>
+            <div>
+              <label class="block text-sm text-gray-600 mb-1">显示名称</label>
+              <input type="text" id="editRoleDisplayName" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-brand-500">
+            </div>
+          </div>
+          <div class="mt-3">
+            <label class="block text-sm text-gray-600 mb-1">角色描述</label>
+            <input type="text" id="editRoleDesc" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+        <div class="mb-6">
+          <h4 class="font-bold text-navy-800 mb-4">页面权限配置</h4>
+          <div class="border border-gray-200 rounded-xl overflow-hidden">
+            <table class="w-full">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">页面名称</th>
+                  <th class="px-4 py-3 text-center text-sm font-medium text-gray-600">查看</th>
+                  <th class="px-4 py-3 text-center text-sm font-medium text-gray-600">新增</th>
+                  <th class="px-4 py-3 text-center text-sm font-medium text-gray-600">编辑</th>
+                  <th class="px-4 py-3 text-center text-sm font-medium text-gray-600">删除</th>
+                </tr>
+              </thead>
+              <tbody id="permissionTableBody" class="divide-y divide-gray-100">
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="flex gap-3">
+          <button onclick="switchPage('roles')" class="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium">取消</button>
+          <button onclick="saveRolePermissions()" class="px-6 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg hover:shadow-lg transition font-medium">保存权限</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ====== 会员等级 ====== -->
     <div data-page="memberLevels" class="p-8 fade-in">
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -748,18 +798,22 @@ function hasButtonPermission(pageKey, buttonAction) {
 }
 
 function switchPage(page) {
-  // 检查权限（超级管理员跳过检查）
-  if (!hasPagePermission(page)) {
+  // 检查权限（超级管理员跳过检查，role-edit页面跳过检查）
+  if (page !== 'role-edit' && !hasPagePermission(page)) {
     toast('您没有访问此页面的权限', 'error');
     return;
   }
   document.querySelectorAll('[data-page]').forEach(el => el.classList.remove('active'))
   document.querySelector(`[data-page="${page}"]`).classList.add('active')
+  // 只更新侧边栏高亮（role-edit页面不高亮任何侧边栏项）
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'))
-  document.querySelector(`[data-nav="${page}"]`).classList.add('active')
-  const titles = { dashboard: '数据看板', members: '会员管理', events: '活动管理', projects: '项目管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
+  if (page !== 'role-edit') {
+    const navItem = document.querySelector(`[data-nav="${page}"]`)
+    if (navItem) navItem.classList.add('active')
+  }
+  const titles = { dashboard: '数据看板', members: '会员管理', events: '活动管理', projects: '项目管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
   document.getElementById('pageTitle').textContent = titles[page] || page
-  // 加载数据
+  // 加载数据（role-edit页面不加载数据）
   const loaders = { dashboard: loadDashboard, members: loadMembers, events: loadEvents, projects: loadProjects, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, memberLevels: loadMemberLevels, invitations: loadInvitationRules, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
   if (loaders[page]) loaders[page]()
 }
@@ -1811,11 +1865,15 @@ async function resetAdminPassword(id) {
 }
 
 // ===== 角色管理 =====
+// 存储角色列表数据，用于编辑权限时引用
+let rolesDataCache = []
+
 async function loadRoles() {
   const res = await api('/admin/roles')
   const list = document.getElementById('rolesList')
   if (res.code === 200 && res.data?.length) {
-    list.innerHTML = res.data.map(r => {
+    rolesDataCache = res.data
+    list.innerHTML = res.data.map((r, idx) => {
       // 解析 permissions（可能是字符串、对象或数组）
       let perms = r.permissions || {}
       if (typeof perms === 'string') {
@@ -1832,14 +1890,21 @@ async function loadRoles() {
           <p class="text-xs text-gray-400 mt-1">权限: ${permCount}</p>
         </div>
         <div class="flex gap-2">
-          <button onclick='showEditRoleModal(${JSON.stringify({...r, permissions: perms}).replace(/'/g, "\\'")})' class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑权限</button>
-          <button onclick="deleteRole(${r.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
+          <button onclick="editRoleFromList(${idx})" class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑权限</button>
+          <button onclick="deleteRole(${r.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg ${r.is_system ? 'opacity-50 cursor-not-allowed' : ''}" ${r.is_system ? 'disabled' : ''}>删除</button>
         </div>
       </div>
     `}).join('')
   } else {
     list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无角色</p>'
   }
+}
+
+// 从列表编辑角色权限
+function editRoleFromList(idx) {
+  const role = rolesDataCache[idx]
+  if (!role) return toast('角色数据不存在', 'error')
+  editRolePermissions(role)
 }
 
 function showAddRoleModal() {
@@ -1859,81 +1924,130 @@ function showAddRoleModal() {
   `)
 }
 
-function showEditRoleModal(role) {
-  const pages = [
-    { key: 'dashboard', name: '数据看板' },
-    { key: 'members', name: '会员管理' },
-    { key: 'events', name: '活动管理' },
-    { key: 'projects', name: '项目管理' },
-    { key: 'banners', name: 'Banner管理' },
-    { key: 'articles', name: '文章管理' },
-    { key: 'mall', name: '积分商城' },
-    { key: 'org', name: '组织架构' },
-    { key: 'admins', name: '管理员管理' },
-    { key: 'roles', name: '角色权限' },
-    { key: 'memberLevels', name: '会员等级' },
-    { key: 'invitations', name: '邀请奖励' },
-    { key: 'pointsRules', name: '积分规则' },
-    { key: 'contributions', name: '贡献值规则' },
-    { key: 'departments', name: '部门管理' },
-    { key: 'config', name: '系统配置' }
-  ]
-  const buttons = ['create', 'edit', 'delete', 'view']
-  // 解析 permissions（可能是字符串、对象或数组）
+// 当前正在编辑的角色ID
+let currentEditRoleId = null
+
+// 页面权限配置列表
+const PERMISSION_PAGES = [
+  { key: 'dashboard', name: '数据看板' },
+  { key: 'members', name: '会员管理' },
+  { key: 'events', name: '活动管理' },
+  { key: 'projects', name: '项目管理' },
+  { key: 'banners', name: 'Banner管理' },
+  { key: 'articles', name: '文章管理' },
+  { key: 'mall', name: '积分商城' },
+  { key: 'org', name: '组织架构' },
+  { key: 'admins', name: '管理员管理' },
+  { key: 'roles', name: '角色权限' },
+  { key: 'memberLevels', name: '会员等级' },
+  { key: 'invitations', name: '邀请奖励' },
+  { key: 'pointsRules', name: '积分规则' },
+  { key: 'contributions', name: '贡献值规则' },
+  { key: 'departments', name: '部门管理' },
+  { key: 'config', name: '系统配置' }
+]
+const PERMISSION_BUTTONS = ['create', 'edit', 'delete', 'view']
+const BUTTON_LABELS = { create: '新增', edit: '编辑', delete: '删除', view: '查看' }
+
+// 编辑角色权限 - 跳转到二级页面
+function editRolePermissions(role) {
+  currentEditRoleId = role.id
+  
+  // 解析 permissions
   let perms = role.permissions || {}
   if (typeof perms === 'string') {
     try { perms = JSON.parse(perms) } catch(e) { perms = {} }
   }
-  // 检查是否是超级管理员权限（["*"] 格式）
   const isAllPerms = Array.isArray(perms) && perms.includes('*')
-  // 如果是数组但不是 ["*"]，转换为空对象
-  if (Array.isArray(perms)) {
-    perms = isAllPerms ? {} : {}
+  if (Array.isArray(perms)) perms = {}
+  
+  // 填充角色基本信息
+  document.getElementById('editRoleName').value = role.name || ''
+  document.getElementById('editRoleDisplayName').value = role.display_name || ''
+  document.getElementById('editRoleDesc').value = role.description || ''
+  
+  // 渲染权限表格
+  const tbody = document.getElementById('permissionTableBody')
+  tbody.innerHTML = PERMISSION_PAGES.map(p => {
+    const hasView = isAllPerms || perms[p.key]?.view
+    const hasCreate = isAllPerms || perms[p.key]?.create
+    const hasEdit = isAllPerms || perms[p.key]?.edit
+    const hasDelete = isAllPerms || perms[p.key]?.delete
+    return `
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-3">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" class="page-check rounded text-brand-500" data-page="${p.key}" ${hasView ? 'checked' : ''} onchange="togglePagePermission('${p.key}', this.checked)">
+            <span class="text-sm font-medium text-gray-700">${p.name}</span>
+          </label>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <input type="checkbox" class="btn-check rounded text-brand-500" data-page="${p.key}" data-btn="create" ${hasCreate ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <input type="checkbox" class="btn-check rounded text-brand-500" data-page="${p.key}" data-btn="edit" ${hasEdit ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <input type="checkbox" class="btn-check rounded text-brand-500" data-page="${p.key}" data-btn="delete" ${hasDelete ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
+        </td>
+      </tr>
+    `
+  }).join('')
+  
+  // 跳转到编辑页面
+  switchPage('role-edit')
+}
+
+// 切换页面权限
+function togglePagePermission(pageKey, checked) {
+  const btnChecks = document.querySelectorAll(`.btn-check[data-page="${pageKey}"]`)
+  btnChecks.forEach(cb => {
+    cb.disabled = !checked
+    if (!checked) cb.checked = false
+  })
+}
+
+// 保存角色权限
+async function saveRolePermissions() {
+  if (!currentEditRoleId) return toast('未选择角色', 'error')
+  
+  const permissions = {}
+  PERMISSION_PAGES.forEach(p => {
+    const pageCheck = document.querySelector(`.page-check[data-page="${p.key}"]`)
+    if (pageCheck && pageCheck.checked) {
+      permissions[p.key] = { view: true }
+      const btnChecks = document.querySelectorAll(`.btn-check[data-page="${p.key}"]`)
+      btnChecks.forEach(btn => {
+        if (btn.checked) {
+          permissions[p.key][btn.dataset.btn] = true
+        }
+      })
+    }
+  })
+  
+  const body = {
+    name: document.getElementById('editRoleName').value,
+    display_name: document.getElementById('editRoleDisplayName').value,
+    description: document.getElementById('editRoleDesc').value,
+    permissions: permissions
   }
   
-  // 辅助函数：检查权限
-  const hasPageView = (key) => isAllPerms || perms[key]?.view
-  const hasButtonPerm = (key, btn) => isAllPerms || perms[key]?.[btn]
+  if (!body.name || !body.display_name) return toast('请填写角色名称和显示名称', 'error')
   
-  let pagesHtml = pages.map(p => `
-    <div class="border border-gray-100 rounded-lg p-3">
-      <div class="flex items-center justify-between mb-2">
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" class="page-check rounded" data-page="${p.key}" ${hasPageView(p.key) ? 'checked' : ''} onchange="togglePagePerms('${p.key}', this.checked)">
-          <span class="text-sm font-medium text-gray-700">${p.name}</span>
-        </label>
-      </div>
-      <div id="perms-${p.key}" class="flex gap-4 pl-6 ${hasPageView(p.key) ? '' : 'hidden'}">
-        ${buttons.map(b => `
-          <label class="flex items-center gap-1 cursor-pointer">
-            <input type="checkbox" class="btn-check rounded text-xs" data-page="${p.key}" data-btn="${b}" ${hasButtonPerm(p.key, b) ? 'checked' : ''}>
-            <span class="text-xs text-gray-500">${{create:'新增',edit:'编辑',delete:'删除',view:'查看'}[b]}</span>
-          </label>
-        `).join('')}
-      </div>
-    </div>
-  `).join('')
-  
-  showModal(`
-    <div class="p-6 max-h-[80vh] overflow-y-auto">
-      <h3 class="text-lg font-bold text-navy-800 mb-4">编辑角色 - ${role.display_name}</h3>
-      <div class="space-y-4">
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">角色名称</label><input id="editRoleName" value="${role.name}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">显示名称</label><input id="editRoleDisplayName" value="${role.display_name}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">描述</label><textarea id="editRoleDesc" rows="2" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400 resize-none">${role.description || ''}</textarea></div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">权限配置</label>
-          <div class="space-y-2 max-h-64 overflow-y-auto border border-gray-100 rounded-lg p-3">
-            ${pagesHtml}
-          </div>
-        </div>
-        <div class="flex justify-end gap-3 pt-4">
-          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
-          <button onclick="updateRole(${role.id})" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
-        </div>
-      </div>
-    </div>
-  `)
+  const res = await api(`/admin/roles/${currentEditRoleId}`, { method: 'PUT', body })
+  if (res.code === 200) {
+    toast('权限保存成功')
+    currentEditRoleId = null
+    switchPage('roles')
+    loadRoles()
+  } else {
+    toast(res.msg || '保存失败', 'error')
+  }
+}
+
+// 保留旧函数名作为兼容
+function showEditRoleModal(role) {
+  editRolePermissions(role)
 }
 
 function togglePagePerms(page, checked) {
