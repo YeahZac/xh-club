@@ -40,6 +40,7 @@ export const members = pgTable("members", {
   // 个人信息
   city: varchar("city", { length: 64 }),
   wechat_id: varchar("wechat_id", { length: 128 }),
+  wx_openid: varchar("wx_openid", { length: 128 }),
   bio: text("bio"),
 
   // 会员身份

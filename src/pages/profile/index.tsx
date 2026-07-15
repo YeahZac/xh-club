@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react"
-import { View, Text, ScrollView } from "@tarojs/components"
+import { View, Text, ScrollView, Image } from "@tarojs/components"
 import Taro from "@tarojs/taro"
 import {
   User, Award, TrendingUp, ChevronRight, Settings, Shield,
   FileText, Users, Gift, ShoppingBag, Star, Wallet, ChartBar, LogOut, Crown,
-  DollarSign, UserPlus
+  DollarSign, UserPlus, Camera
 } from "lucide-react-taro"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Input } from "@/components/ui/input"
 import { Network } from "@/network"
 
 interface MemberProfile {
@@ -72,6 +73,10 @@ const ProfilePage = () => {
   const [distStats, setDistStats] = useState<DistributionStats | null>(null)
   const [subordinates, setSubordinates] = useState<Subordinate[]>([])
   const [showSubordinates, setShowSubordinates] = useState(false)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [wxAvatar, setWxAvatar] = useState('')
+  const [wxNickname, setWxNickname] = useState('')
+  const [loginLoading, setLoginLoading] = useState(false)
 
   useEffect(() => {
     loadProfile()
@@ -122,6 +127,69 @@ const ProfilePage = () => {
     }
   }
 
+  /* ── WeChat Login ── */
+  const handleAvatarClick = () => {
+    if (!isMiniApp) {
+      Taro.showToast({ title: '请在小程序中授权登录', icon: 'none' })
+      return
+    }
+    setShowLoginModal(true)
+  }
+
+  const handleChooseAvatar = async (e: any) => {
+    const avatarUrl = e?.detail?.avatarUrl || ''
+    console.log('[我的页] 选择头像:', avatarUrl)
+    setWxAvatar(avatarUrl)
+  }
+
+  const handleNicknameInput = (e: any) => {
+    const value = e?.detail?.value || ''
+    setWxNickname(value)
+  }
+
+  const handleWxLogin = async () => {
+    if (!wxNickname.trim()) {
+      Taro.showToast({ title: '请输入昵称', icon: 'none' })
+      return
+    }
+    try {
+      setLoginLoading(true)
+      const loginRes = await Taro.login()
+      console.log('[我的页] wx.login code:', loginRes.code)
+
+      const memberId = Taro.getStorageSync('member_id')
+      const res = await Network.request({
+        url: '/api/auth/wx-login',
+        method: 'POST',
+        data: {
+          code: loginRes.code,
+          avatar: wxAvatar,
+          nickname: wxNickname.trim(),
+          member_id: memberId || undefined,
+        }
+      })
+      console.log('[我的页] wx-login response:', res?.data)
+
+      if (res?.data?.code === 200 && res?.data?.data) {
+        const { member_id, openid } = res.data.data
+        Taro.setStorageSync('member_id', member_id)
+        if (openid) Taro.setStorageSync('openid', openid)
+        Taro.showToast({ title: '登录成功', icon: 'success' })
+        setShowLoginModal(false)
+        setWxAvatar('')
+        setWxNickname('')
+        await loadProfile()
+      } else {
+        Taro.showToast({ title: res?.data?.msg || '登录失败', icon: 'none' })
+      }
+    } catch (err) {
+      console.error('[我的页] 微信登录失败:', err)
+      Taro.showToast({ title: '登录失败，请重试', icon: 'none' })
+    } finally {
+      setLoginLoading(false)
+    }
+  }
+
   const currentLevel = levelMap[profile?.membership_level || 'normal'] || levelMap.normal
 
   const menuSections = [
@@ -164,11 +232,22 @@ const ProfilePage = () => {
           <View className="absolute right-20 bottom-2 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.03)' }} />
 
           <View className="flex flex-row items-center gap-4 mt-2">
-            <Avatar className="w-16 h-16 border-2 border-[#C9A96E]">
-              <AvatarFallback className="bg-gradient-to-br from-[#C9A96E] to-[#E8D5A8] text-white text-xl">
-                {(profile?.name || '星')[0]}
-              </AvatarFallback>
-            </Avatar>
+            <View onClick={handleAvatarClick}>
+              <Avatar className="w-16 h-16 border-2 border-[#C9A96E]">
+                {profile?.avatar ? (
+                  <Image src={profile.avatar} className="w-full h-full rounded-full" mode="aspectFill" />
+                ) : (
+                  <AvatarFallback className="bg-gradient-to-br from-[#C9A96E] to-[#E8D5A8] text-white text-xl">
+                    {(profile?.name || '星')[0]}
+                  </AvatarFallback>
+                )}
+              </Avatar>
+              {isMiniApp && (
+                <View className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#C9A96E] rounded-full flex items-center justify-center">
+                  <Camera size={10} color="#fff" />
+                </View>
+              )}
+            </View>
             <View className="flex-1">
               <View className="flex flex-row items-center gap-2 mb-1">
                 <Text className="block text-lg font-bold text-white">{profile?.name || '星河百谷会员'}</Text>
@@ -375,6 +454,62 @@ const ProfilePage = () => {
 
         <View className="h-24" />
       </ScrollView>
+
+      {/* ── WeChat Login Modal ── */}
+      {showLoginModal && isMiniApp && (
+        <View className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View className="bg-white rounded-t-3xl w-full p-6 pb-10">
+            <View className="flex flex-row items-center justify-between mb-6">
+              <Text className="block text-lg font-bold text-[#1A1D2E]">微信授权登录</Text>
+              <View className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center" onClick={() => setShowLoginModal(false)}>
+                <Text className="block text-gray-500 text-lg">✕</Text>
+              </View>
+            </View>
+
+            <Text className="block text-sm text-gray-500 mb-4">
+              授权后我们将获取您的微信头像和昵称，用于完善会员资料
+            </Text>
+
+            {/* Avatar Selector */}
+            <View className="flex flex-col items-center mb-4">
+              {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}
+              <button
+                {...({ openType: 'chooseAvatar' } as any)}
+                onChooseAvatar={handleChooseAvatar}
+                className="bg-transparent border-none p-0 m-0"
+              >
+                <View className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden border-2 border-dashed border-[#C9A96E]">
+                  {wxAvatar ? (
+                    <Image src={wxAvatar} className="w-full h-full" mode="aspectFill" />
+                  ) : (
+                    <Camera size={24} color="#C9A96E" />
+                  )}
+                </View>
+              </button>
+              <Text className="block text-xs text-gray-400 mt-2">点击选择微信头像</Text>
+            </View>
+
+            {/* Nickname Input */}
+            <View className="bg-gray-50 rounded-xl px-4 py-3 mb-6">
+              <Input
+                className="w-full bg-transparent text-base text-[#1A1D2E]"
+                placeholder="请输入您的昵称"
+                value={wxNickname}
+                onInput={handleNicknameInput}
+              />
+            </View>
+
+            {/* Submit Button */}
+            <View className="w-full rounded-xl bg-gradient-to-r from-[#1B2A4A] to-[#2D4A7A] py-3 flex items-center justify-center" onClick={handleWxLogin}>
+              {loginLoading ? (
+                <Text className="block text-white text-base font-medium">登录中...</Text>
+              ) : (
+                <Text className="block text-white text-base font-medium">授权登录</Text>
+              )}
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   )
 }

@@ -1,4 +1,4 @@
-import { View, Text, ScrollView } from "@tarojs/components"
+import { View, Text, ScrollView, Image } from "@tarojs/components"
 import Taro from "@tarojs/taro"
 import { useState, useEffect } from "react"
 import {
@@ -19,12 +19,21 @@ import {
 import { Network } from "@/network"
 
 /* ── Types ── */
+interface BannerLinkConfig {
+  article_id?: string
+  event_id?: string
+  url?: string
+  appid?: string
+  path?: string
+}
+
 interface BannerItem {
   id: string
   title: string
   image_url: string
   link_type: string
   link_id: string
+  link_config: BannerLinkConfig
   sort_order: number
   is_active: boolean
 }
@@ -152,6 +161,44 @@ const IndexPage = () => {
     return `${days}天前`
   }
 
+  const handleBannerClick = (banner: BannerItem) => {
+    console.log('[首页] Banner点击:', banner.link_type, banner.link_config)
+    const config = banner.link_config || {}
+    switch (banner.link_type) {
+      case 'article':
+        if (config.article_id) {
+          Taro.showToast({ title: '文章详情开发中', icon: 'none' })
+        }
+        break
+      case 'event':
+        if (config.event_id) {
+          Taro.switchTab({ url: '/pages/discover/index' })
+        }
+        break
+      case 'link':
+        if (config.url) {
+          Taro.setClipboardData({
+            data: config.url,
+            success: () => Taro.showToast({ title: '链接已复制', icon: 'none' })
+          })
+        }
+        break
+      case 'miniapp':
+        if (config.appid && config.path) {
+          Taro.navigateToMiniProgram({
+            appId: config.appid,
+            path: config.path,
+          })
+        }
+        break
+      default:
+        if (banner.link_id) {
+          Taro.showToast({ title: '内容详情开发中', icon: 'none' })
+        }
+        break
+    }
+  }
+
   return (
     <ScrollView scrollY className="h-full bg-[#F5F6FA]">
       {/* ── Custom Header ── */}
@@ -185,14 +232,14 @@ const IndexPage = () => {
               {banners.map((banner) => (
                 <CarouselItem key={banner.id}>
                   {banner.image_url ? (
-                    <View className="rounded-2xl overflow-hidden relative" style={{ height: '140px' }}>
-                      <img src={banner.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <View className="rounded-2xl overflow-hidden relative" style={{ height: '140px' }} onClick={() => handleBannerClick(banner)}>
+                      <Image src={banner.image_url} mode="aspectFill" className="w-full h-full" />
                       <View className="absolute left-0 bottom-0 right-0 p-4" style={{ background: 'linear-gradient(transparent, rgba(27,42,74,0.85))' }}>
                         <Text className="block text-white text-base font-bold">{banner.title}</Text>
                       </View>
                     </View>
                   ) : (
-                    <View className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] rounded-2xl p-5 relative overflow-hidden">
+                    <View className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] rounded-2xl p-5 relative overflow-hidden" onClick={() => handleBannerClick(banner)}>
                       <View className="absolute -right-6 -top-6 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
                       <View className="absolute left-0 bottom-0 right-0 h-1 bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8] rounded-full" />
                       <Text className="block text-white text-lg font-bold mb-1">{banner.title}</Text>

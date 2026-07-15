@@ -10,6 +10,7 @@ import { AdminModule } from './admin/admin.module'
 import { MallModule } from './mall/mall.module'
 import { UploadModule } from './upload/upload.module'
 import { ArticlesModule } from './articles/articles.module'
+import { AuthModule } from './auth/auth.module'
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ArticlesModule } from './articles/articles.module'
     MallModule,
     UploadModule,
     ArticlesModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
