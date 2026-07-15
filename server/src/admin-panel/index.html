@@ -105,6 +105,38 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
         积分商城
       </a>
+      <!-- 系统管理分组 -->
+      <div class="px-5 py-2 mt-4">
+        <p class="text-xs text-navy-400 uppercase tracking-wider">系统管理</p>
+      </div>
+      <a onclick="switchPage('admins')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="admins">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        管理员管理
+      </a>
+      <a onclick="switchPage('roles')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="roles">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        角色权限
+      </a>
+      <a onclick="switchPage('memberLevels')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="memberLevels">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+        会员等级
+      </a>
+      <a onclick="switchPage('invitations')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="invitations">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+        邀请奖励
+      </a>
+      <a onclick="switchPage('pointsRules')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="pointsRules">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        积分规则
+      </a>
+      <a onclick="switchPage('contributions')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="contributions">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+        贡献值规则
+      </a>
+      <a onclick="switchPage('departments')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="departments">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+        部门管理
+      </a>
       <a onclick="switchPage('org')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="org">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
         组织架构
@@ -387,6 +419,97 @@
         </div>
       </div>
     </div>
+
+    <!-- ====== 管理员管理 ====== -->
+    <div data-page="admins" class="p-8 fade-in">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="font-bold text-navy-800">管理员列表</h3>
+          <button onclick="showAddAdminModal()" class="px-4 py-2 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg text-sm hover:shadow-lg transition">+ 新增管理员</button>
+        </div>
+        <div id="adminsList" class="space-y-3">
+          <p class="text-gray-400">加载中...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 角色权限 ====== -->
+    <div data-page="roles" class="p-8 fade-in">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="font-bold text-navy-800">角色列表</h3>
+          <button onclick="showAddRoleModal()" class="px-4 py-2 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg text-sm hover:shadow-lg transition">+ 新增角色</button>
+        </div>
+        <div id="rolesList" class="space-y-3">
+          <p class="text-gray-400">加载中...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 会员等级 ====== -->
+    <div data-page="memberLevels" class="p-8 fade-in">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="font-bold text-navy-800">会员等级配置</h3>
+          <button onclick="showAddLevelModal()" class="px-4 py-2 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg text-sm hover:shadow-lg transition">+ 新增等级</button>
+        </div>
+        <div id="levelsList" class="space-y-3">
+          <p class="text-gray-400">加载中...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 邀请奖励 ====== -->
+    <div data-page="invitations" class="p-8 fade-in">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="font-bold text-navy-800">邀请奖励规则</h3>
+          <button onclick="showAddInvitationRuleModal()" class="px-4 py-2 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg text-sm hover:shadow-lg transition">+ 新增规则</button>
+        </div>
+        <div id="invitationRulesList" class="space-y-3">
+          <p class="text-gray-400">加载中...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 积分规则 ====== -->
+    <div data-page="pointsRules" class="p-8 fade-in">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="font-bold text-navy-800">积分规则配置</h3>
+          <button onclick="showAddPointsRuleModal()" class="px-4 py-2 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg text-sm hover:shadow-lg transition">+ 新增规则</button>
+        </div>
+        <div id="pointsRulesList" class="space-y-3">
+          <p class="text-gray-400">加载中...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 贡献值规则 ====== -->
+    <div data-page="contributions" class="p-8 fade-in">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="font-bold text-navy-800">贡献值规则配置</h3>
+          <button onclick="showAddContributionRuleModal()" class="px-4 py-2 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg text-sm hover:shadow-lg transition">+ 新增规则</button>
+        </div>
+        <div id="contributionRulesList" class="space-y-3">
+          <p class="text-gray-400">加载中...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 部门管理 ====== -->
+    <div data-page="departments" class="p-8 fade-in">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="font-bold text-navy-800">部门列表</h3>
+          <button onclick="showAddDepartmentModal()" class="px-4 py-2 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg text-sm hover:shadow-lg transition">+ 新增部门</button>
+        </div>
+        <div id="departmentsList" class="space-y-3">
+          <p class="text-gray-400">加载中...</p>
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -538,10 +661,10 @@ function switchPage(page) {
   document.querySelector(`[data-page="${page}"]`).classList.add('active')
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'))
   document.querySelector(`[data-nav="${page}"]`).classList.add('active')
-  const titles = { dashboard: '数据看板', members: '会员管理', events: '活动管理', projects: '项目管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置' }
+  const titles = { dashboard: '数据看板', members: '会员管理', events: '活动管理', projects: '项目管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
   document.getElementById('pageTitle').textContent = titles[page] || page
   // 加载数据
-  const loaders = { dashboard: loadDashboard, members: loadMembers, events: loadEvents, projects: loadProjects, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig }
+  const loaders = { dashboard: loadDashboard, members: loadMembers, events: loadEvents, projects: loadProjects, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, memberLevels: loadMemberLevels, invitations: loadInvitationRules, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
   if (loaders[page]) loaders[page]()
 }
 
@@ -1355,6 +1478,473 @@ async function deleteArticle(id) {
   const res = await api(`/admin/articles/${id}`, { method: 'DELETE' })
   if (res.code === 200) { toast('已删除'); loadArticles(); }
   else toast(res.msg || '删除失败', 'error')
+}
+
+// ===== 管理员管理 =====
+async function loadAdmins() {
+  const res = await api('/admin/admins')
+  const list = document.getElementById('adminsList')
+  if (res.code === 200 && res.data?.length) {
+    list.innerHTML = res.data.map(a => `
+      <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
+        <div class="flex items-center gap-4">
+          <div class="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold">${a.name?.[0] || '管'}</div>
+          <div>
+            <p class="font-medium text-navy-800">${a.name}</p>
+            <p class="text-xs text-gray-400">${a.role_name || '普通管理员'} · ${a.status === 'active' ? '正常' : '禁用'}</p>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="showEditAdminModal(${a.id})" class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑</button>
+          <button onclick="resetAdminPassword(${a.id})" class="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg">重置密码</button>
+          <button onclick="deleteAdmin(${a.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
+        </div>
+      </div>
+    `).join('')
+  } else {
+    list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无管理员</p>'
+  }
+}
+
+function showAddAdminModal() {
+  openModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-4">新增管理员</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">姓名</label><input id="adminName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请输入姓名"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">手机号</label><input id="adminPhone" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请输入手机号"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">密码</label><input id="adminPassword" type="password" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请输入密码"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">角色</label>
+          <select id="adminRoleId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
+            <option value="1">超级管理员</option>
+            <option value="2" selected>普通管理员</option>
+          </select>
+        </div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="saveAdmin()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function saveAdmin() {
+  const body = {
+    name: document.getElementById('adminName').value,
+    phone: document.getElementById('adminPhone').value,
+    password: document.getElementById('adminPassword').value,
+    role_id: parseInt(document.getElementById('adminRoleId').value)
+  }
+  if (!body.name || !body.phone || !body.password) return toast('请填写完整信息', 'error')
+  const res = await api('/admin/admins', { method: 'POST', body })
+  if (res.code === 200) { toast('创建成功'); closeModal(); loadAdmins(); }
+  else toast(res.msg || '创建失败', 'error')
+}
+
+async function deleteAdmin(id) {
+  if (!confirm('确定删除此管理员？')) return
+  const res = await api(`/admin/admins/${id}`, { method: 'DELETE' })
+  if (res.code === 200) { toast('已删除'); loadAdmins(); }
+  else toast(res.msg || '删除失败', 'error')
+}
+
+async function resetAdminPassword(id) {
+  const newPwd = prompt('请输入新密码（至少6位）:')
+  if (!newPwd || newPwd.length < 6) return toast('密码至少6位', 'error')
+  const res = await api(`/admin/admins/${id}/reset-password`, { method: 'POST', body: { new_password: newPwd } })
+  if (res.code === 200) toast('密码重置成功')
+  else toast(res.msg || '重置失败', 'error')
+}
+
+// ===== 角色管理 =====
+async function loadRoles() {
+  const res = await api('/admin/roles')
+  const list = document.getElementById('rolesList')
+  if (res.code === 200 && res.data?.length) {
+    list.innerHTML = res.data.map(r => `
+      <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
+        <div>
+          <p class="font-medium text-navy-800">${r.display_name}</p>
+          <p class="text-xs text-gray-400">${r.name} · ${r.description || '无描述'}</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="showEditRoleModal(${r.id})" class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑</button>
+          <button onclick="deleteRole(${r.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
+        </div>
+      </div>
+    `).join('')
+  } else {
+    list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无角色</p>'
+  }
+}
+
+function showAddRoleModal() {
+  openModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-4">新增角色</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">角色名称</label><input id="roleName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: admin"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">显示名称</label><input id="roleDisplayName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 普通管理员"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">描述</label><textarea id="roleDesc" rows="2" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400 resize-none"></textarea></div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="saveRole()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function saveRole() {
+  const body = {
+    name: document.getElementById('roleName').value,
+    display_name: document.getElementById('roleDisplayName').value,
+    description: document.getElementById('roleDesc').value
+  }
+  if (!body.name || !body.display_name) return toast('请填写完整信息', 'error')
+  const res = await api('/admin/roles', { method: 'POST', body })
+  if (res.code === 200) { toast('创建成功'); closeModal(); loadRoles(); }
+  else toast(res.msg || '创建失败', 'error')
+}
+
+async function deleteRole(id) {
+  if (!confirm('确定删除此角色？')) return
+  const res = await api(`/admin/roles/${id}`, { method: 'DELETE' })
+  if (res.code === 200) { toast('已删除'); loadRoles(); }
+  else toast(res.msg || '删除失败', 'error')
+}
+
+// ===== 会员等级 =====
+async function loadMemberLevels() {
+  const res = await api('/admin/member-levels')
+  const list = document.getElementById('levelsList')
+  if (res.code === 200 && res.data?.length) {
+    list.innerHTML = res.data.map(l => `
+      <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white font-bold">${l.icon || '★'}</div>
+          <div>
+            <p class="font-medium text-navy-800">${l.name}</p>
+            <p class="text-xs text-gray-400">等级${l.level} · 贡献值要求: ${l.min_contribution}+ · 折扣: ${l.discount_rate}%</p>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="showEditLevelModal(${l.id})" class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑</button>
+          <button onclick="deleteMemberLevel(${l.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
+        </div>
+      </div>
+    `).join('')
+  } else {
+    list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无等级配置</p>'
+  }
+}
+
+function showAddLevelModal() {
+  openModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-4">新增会员等级</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">等级名称</label><input id="levelName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 银卡会员"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">等级数值</label><input id="levelNum" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 2"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">图标</label><input id="levelIcon" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: ★"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">最低贡献值</label><input id="levelMinContrib" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 100"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">折扣率(%)</label><input id="levelDiscount" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 95"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">积分倍率</label><input id="levelPointsMult" type="number" step="0.1" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 1.5"></div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="saveMemberLevel()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function saveMemberLevel() {
+  const body = {
+    name: document.getElementById('levelName').value,
+    level: parseInt(document.getElementById('levelNum').value),
+    icon: document.getElementById('levelIcon').value,
+    min_contribution: parseInt(document.getElementById('levelMinContrib').value),
+    discount_rate: parseInt(document.getElementById('levelDiscount').value),
+    points_multiplier: parseFloat(document.getElementById('levelPointsMult').value)
+  }
+  if (!body.name) return toast('请填写等级名称', 'error')
+  const res = await api('/admin/member-levels', { method: 'POST', body })
+  if (res.code === 200) { toast('创建成功'); closeModal(); loadMemberLevels(); }
+  else toast(res.msg || '创建失败', 'error')
+}
+
+async function deleteMemberLevel(id) {
+  if (!confirm('确定删除此等级？')) return
+  const res = await api(`/admin/member-levels/${id}`, { method: 'DELETE' })
+  if (res.code === 200) { toast('已删除'); loadMemberLevels(); }
+  else toast(res.msg || '删除失败', 'error')
+}
+
+// ===== 邀请奖励 =====
+async function loadInvitationRules() {
+  const res = await api('/admin/invitation-rules')
+  const list = document.getElementById('invitationRulesList')
+  if (res.code === 200 && res.data?.length) {
+    list.innerHTML = res.data.map(r => `
+      <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
+        <div>
+          <p class="font-medium text-navy-800">${r.rule_name}</p>
+          <p class="text-xs text-gray-400">奖励类型: ${r.reward_type} · 奖励值: ${r.reward_value} · 状态: ${r.is_active ? '启用' : '禁用'}</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="toggleInvitationRule(${r.id}, ${!r.is_active})" class="px-3 py-1.5 text-sm text-green-600 hover:bg-green-50 rounded-lg">${r.is_active ? '禁用' : '启用'}</button>
+          <button onclick="deleteInvitationRule(${r.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
+        </div>
+      </div>
+    `).join('')
+  } else {
+    list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无规则</p>'
+  }
+}
+
+function showAddInvitationRuleModal() {
+  openModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-4">新增邀请奖励规则</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">规则名称</label><input id="invRuleName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 邀请注册奖励"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">奖励类型</label>
+          <select id="invRuleType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
+            <option value="points">积分</option>
+            <option value="contribution">贡献值</option>
+          </select>
+        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">奖励值</label><input id="invRuleValue" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 100"></div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="saveInvitationRule()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function saveInvitationRule() {
+  const body = {
+    rule_name: document.getElementById('invRuleName').value,
+    reward_type: document.getElementById('invRuleType').value,
+    reward_value: parseInt(document.getElementById('invRuleValue').value)
+  }
+  if (!body.rule_name) return toast('请填写规则名称', 'error')
+  const res = await api('/admin/invitation-rules', { method: 'POST', body })
+  if (res.code === 200) { toast('创建成功'); closeModal(); loadInvitationRules(); }
+  else toast(res.msg || '创建失败', 'error')
+}
+
+async function toggleInvitationRule(id, active) {
+  const res = await api(`/admin/invitation-rules/${id}`, { method: 'PUT', body: { is_active: active } })
+  if (res.code === 200) { toast('更新成功'); loadInvitationRules(); }
+  else toast(res.msg || '更新失败', 'error')
+}
+
+async function deleteInvitationRule(id) {
+  if (!confirm('确定删除此规则？')) return
+  const res = await api(`/admin/invitation-rules/${id}`, { method: 'DELETE' })
+  if (res.code === 200) { toast('已删除'); loadInvitationRules(); }
+  else toast(res.msg || '删除失败', 'error')
+}
+
+// ===== 积分规则 =====
+async function loadPointsRules() {
+  const res = await api('/admin/points-rules')
+  const list = document.getElementById('pointsRulesList')
+  if (res.code === 200 && res.data?.length) {
+    list.innerHTML = res.data.map(r => `
+      <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
+        <div>
+          <p class="font-medium text-navy-800">${r.action}</p>
+          <p class="text-xs text-gray-400">奖励积分: ${r.points} · 每日上限: ${r.daily_limit || '无限制'} · 状态: ${r.is_active ? '启用' : '禁用'}</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="deletePointsRule(${r.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
+        </div>
+      </div>
+    `).join('')
+  } else {
+    list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无规则</p>'
+  }
+}
+
+function showAddPointsRuleModal() {
+  openModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-4">新增积分规则</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">行为</label>
+          <select id="prAction" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
+            <option value="daily_login">每日登录</option>
+            <option value="daily_checkin">每日签到</option>
+            <option value="invite_friend">邀请好友</option>
+            <option value="purchase">购买商品</option>
+          </select>
+        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">奖励积分</label><input id="prPoints" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 10"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">每日上限</label><input id="prDailyLimit" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 100"></div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="savePointsRule()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function savePointsRule() {
+  const body = {
+    action: document.getElementById('prAction').value,
+    points: parseInt(document.getElementById('prPoints').value),
+    daily_limit: parseInt(document.getElementById('prDailyLimit').value) || null
+  }
+  const res = await api('/admin/points-rules', { method: 'POST', body })
+  if (res.code === 200) { toast('创建成功'); closeModal(); loadPointsRules(); }
+  else toast(res.msg || '创建失败', 'error')
+}
+
+async function deletePointsRule(id) {
+  if (!confirm('确定删除此规则？')) return
+  const res = await api(`/admin/points-rules/${id}`, { method: 'DELETE' })
+  if (res.code === 200) { toast('已删除'); loadPointsRules(); }
+  else toast(res.msg || '删除失败', 'error')
+}
+
+// ===== 贡献值规则 =====
+async function loadContributionRules() {
+  const res = await api('/admin/contribution-rules')
+  const list = document.getElementById('contributionRulesList')
+  if (res.code === 200 && res.data?.length) {
+    list.innerHTML = res.data.map(r => `
+      <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
+        <div>
+          <p class="font-medium text-navy-800">${r.action}</p>
+          <p class="text-xs text-gray-400">奖励贡献值: ${r.contribution} · 状态: ${r.is_active ? '启用' : '禁用'}</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="deleteContributionRule(${r.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
+        </div>
+      </div>
+    `).join('')
+  } else {
+    list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无规则</p>'
+  }
+}
+
+function showAddContributionRuleModal() {
+  openModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-4">新增贡献值规则</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">行为</label>
+          <select id="crAction" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
+            <option value="purchase">购买商品</option>
+            <option value="invite">邀请好友</option>
+            <option value="participate_event">参与活动</option>
+            <option value="publish_content">发布内容</option>
+          </select>
+        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">奖励贡献值</label><input id="crContribution" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 50"></div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="saveContributionRule()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function saveContributionRule() {
+  const body = {
+    action: document.getElementById('crAction').value,
+    contribution: parseInt(document.getElementById('crContribution').value)
+  }
+  const res = await api('/admin/contribution-rules', { method: 'POST', body })
+  if (res.code === 200) { toast('创建成功'); closeModal(); loadContributionRules(); }
+  else toast(res.msg || '创建失败', 'error')
+}
+
+async function deleteContributionRule(id) {
+  if (!confirm('确定删除此规则？')) return
+  const res = await api(`/admin/contribution-rules/${id}`, { method: 'DELETE' })
+  if (res.code === 200) { toast('已删除'); loadContributionRules(); }
+  else toast(res.msg || '删除失败', 'error')
+}
+
+// ===== 部门管理 =====
+async function loadDepartments() {
+  const res = await api('/admin/departments')
+  const list = document.getElementById('departmentsList')
+  if (res.code === 200 && res.data?.length) {
+    list.innerHTML = res.data.map(d => `
+      <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
+        <div>
+          <p class="font-medium text-navy-800">${d.name}</p>
+          <p class="text-xs text-gray-400">${d.parent_id ? '上级部门ID: ' + d.parent_id : '顶级部门'} · 负责人: ${d.leader_name || '未设置'}</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="showEditDepartmentModal(${d.id})" class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑</button>
+          <button onclick="deleteDepartment(${d.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
+        </div>
+      </div>
+    `).join('')
+  } else {
+    list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无部门</p>'
+  }
+}
+
+function showAddDepartmentModal() {
+  openModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-4">新增部门</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">部门名称</label><input id="deptName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 技术部"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">上级部门ID（可选）</label><input id="deptParent" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="留空为顶级部门"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">负责人姓名</label><input id="deptLeader" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 张三"></div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="saveDepartment()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function saveDepartment() {
+  const body = {
+    name: document.getElementById('deptName').value,
+    parent_id: parseInt(document.getElementById('deptParent').value) || null,
+    leader_name: document.getElementById('deptLeader').value
+  }
+  if (!body.name) return toast('请填写部门名称', 'error')
+  const res = await api('/admin/departments', { method: 'POST', body })
+  if (res.code === 200) { toast('创建成功'); closeModal(); loadDepartments(); }
+  else toast(res.msg || '创建失败', 'error')
+}
+
+async function deleteDepartment(id) {
+  if (!confirm('确定删除此部门？')) return
+  const res = await api(`/admin/departments/${id}`, { method: 'DELETE' })
+  if (res.code === 200) { toast('已删除'); loadDepartments(); }
+  else toast(res.msg || '删除失败', 'error')
+}
+
+// ===== 数据库初始化 =====
+async function initDatabase() {
+  if (!confirm('确定要初始化数据库表结构吗？这将创建所有必要的表。')) return
+  const res = await api('/admin/init-database', { method: 'POST' })
+  if (res.code === 200) {
+    toast(`初始化完成: 执行 ${res.data.executed} 条语句, ${res.data.errors} 个错误`)
+    if (res.data.errorDetails?.length) {
+      console.log('错误详情:', res.data.errorDetails)
+    }
+  } else {
+    toast(res.msg || '初始化失败', 'error')
+  }
 }
 </script>
 </body>
