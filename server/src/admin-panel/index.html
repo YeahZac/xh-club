@@ -1868,6 +1868,7 @@ function showEditRoleModal(role) {
     { key: 'banners', name: 'Banner管理' },
     { key: 'articles', name: '文章管理' },
     { key: 'mall', name: '积分商城' },
+    { key: 'org', name: '组织架构' },
     { key: 'admins', name: '管理员管理' },
     { key: 'roles', name: '角色权限' },
     { key: 'memberLevels', name: '会员等级' },
@@ -1950,7 +1951,7 @@ function togglePagePerms(page, checked) {
 }
 
 async function updateRole(id) {
-  const pages = ['dashboard','members','events','projects','banners','articles','mall','admins','roles','memberLevels','invitations','pointsRules','contributions','departments','config']
+  const pages = ['dashboard','members','events','projects','banners','articles','mall','org','admins','roles','memberLevels','invitations','pointsRules','contributions','departments','config']
   const permissions = {}
   
   pages.forEach(page => {

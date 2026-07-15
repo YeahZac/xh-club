@@ -74,13 +74,19 @@ export class AdminService {
 
       console.log('[AdminService] login success:', username, 'role:', admin?.role_name, 'isSuperAdmin:', isSuperAdmin)
       
+      // 解析权限（可能是 JSON 字符串）
+      let permissions = admin?.role_permissions || {}
+      if (typeof permissions === 'string') {
+        try { permissions = JSON.parse(permissions) } catch(e) { permissions = {} }
+      }
+      
       return {
         id: user.id,
         username: user.login_account,
         name: user.name || '管理员',
         role: admin?.role_name || 'admin',
         role_display_name: admin?.role_display_name || '管理员',
-        permissions: isSuperAdmin ? null : (admin?.role_permissions || {}),
+        permissions: isSuperAdmin ? null : permissions,
         is_super_admin: isSuperAdmin,
         token
       }
