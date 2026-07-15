@@ -2095,10 +2095,10 @@ async function saveRolePermissions() {
   
   const permissions = {}
   PERMISSION_PAGES.forEach(p => {
-    const pageCheck = document.querySelector(`.page-check[data-page="${p.key}"]`)
+    const pageCheck = document.querySelector(`.page-checkbox[data-page="${p.key}"]`)
     if (pageCheck && pageCheck.checked) {
       permissions[p.key] = { view: true }
-      const btnChecks = document.querySelectorAll(`.btn-check[data-page="${p.key}"]`)
+      const btnChecks = document.querySelectorAll(`.perm-checkbox[data-page="${p.key}"]`)
       btnChecks.forEach(btn => {
         if (btn.checked) {
           permissions[p.key][btn.dataset.btn] = true
