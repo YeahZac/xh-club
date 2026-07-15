@@ -1911,6 +1911,9 @@ async function loadRoles() {
 function editRoleFromList(idx) {
   const role = rolesDataCache[idx]
   if (!role) return toast('角色数据不存在', 'error')
+  // 先切换到编辑页面
+  switchPage('role-edit')
+  // 然后填充数据
   editRolePermissions(role)
 }
 
