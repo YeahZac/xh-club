@@ -15,7 +15,7 @@ export class CommunityController {
   @Get('posts/:id')
   async getPost(@Param('id') id: string) {
     console.log('[CommunityController] GET /api/community/posts/:id')
-    const result = await this.communityService.getPostById(id)
+    const result = await this.communityService.getPostDetail(id)
     return { code: 200, msg: 'success', data: result }
   }
 
@@ -27,10 +27,17 @@ export class CommunityController {
   }
 
   @Post('posts/:id/like')
-  async likePost(@Param('id') id: string) {
+  async likePost(@Param('id') id: string, @Body() body: any) {
     console.log('[CommunityController] POST /api/community/posts/:id/like')
-    const result = await this.communityService.likePost(id)
+    const result = await this.communityService.likePost({ post_id: id, member_id: body.member_id || '0' })
     return { code: 200, msg: '点赞成功', data: result }
+  }
+
+  @Get('resources')
+  async getResources(@Query() query: any) {
+    console.log('[CommunityController] GET /api/community/resources')
+    const result = await this.communityService.getResources(query)
+    return { code: 200, msg: 'success', data: result }
   }
 
   @Post('posts/:id/comment')
