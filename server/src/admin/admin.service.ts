@@ -1,5 +1,5 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
-import { queryRows, queryOne, queryExecute, getConnectionStatus, testConnection } from '@/storage/database/mysql-client'
+import { queryRows, queryOne, queryExecute, getConnectionStatus, testConnection, getPool } from '@/storage/database/mysql-client'
 import * as bcrypt from 'bcryptjs'
 import { RowDataPacket, ResultSetHeader } from 'mysql2'
 
@@ -15,6 +15,14 @@ interface UserRow extends RowDataPacket {
 
 @Injectable()
 export class AdminService {
+  /** 执行原始 SQL */
+  async executeRaw(sql: string): Promise<any> {
+    const pool = getPool()
+    if (!pool) throw new Error('数据库未初始化')
+    const [result] = await pool.query(sql) as any
+    return result
+  }
+
   /** 检查数据库连接状态 */
   async checkDatabaseConnection(): Promise<{ connected: boolean; message: string }> {
     try {

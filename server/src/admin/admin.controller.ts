@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common'
 import { AdminService } from './admin.service'
+import * as fs from 'fs/promises'
+import * as path from 'path'
 
 @Controller('admin')
 export class AdminController {
@@ -11,6 +13,42 @@ export class AdminController {
     console.log('[AdminController] GET /api/admin/db-status')
     const result = await this.adminService.checkDatabaseConnection()
     return { code: 200, msg: 'success', data: result }
+  }
+
+  /** 初始化数据库表结构 */
+  @Post('init-database')
+  async initDatabase() {
+    console.log('[AdminController] POST /api/admin/init-database')
+    try {
+      const sqlPath = path.join(__dirname, '../storage/database/init-admin-system.sql')
+      const sql = await fs.readFile(sqlPath, 'utf-8')
+      
+      // Split SQL by statements and execute each
+      const statements = sql
+        .split(';')
+        .map(s => s.trim())
+        .filter(s => s.length > 0 && !s.startsWith('--'))
+      
+      let executed = 0
+      const errors: { statement: string; error: string }[] = []
+      
+      for (const statement of statements) {
+        try {
+          await this.adminService.executeRaw(statement + ';')
+          executed++
+        } catch (err: any) {
+          errors.push({ statement: statement.substring(0, 50), error: err.message })
+        }
+      }
+      
+      return { 
+        code: 200, 
+        msg: '数据库初始化完成', 
+        data: { executed, errors: errors.length, errorDetails: errors }
+      }
+    } catch (err: any) {
+      return { code: 500, msg: '初始化失败: ' + err.message }
+    }
   }
 
   /** 登录 */
