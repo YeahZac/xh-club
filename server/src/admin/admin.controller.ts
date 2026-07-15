@@ -860,6 +860,13 @@ export class AdminController {
     return { code: 200, msg: '密码修改成功', data: result }
   }
 
+  @Post('admins/:id/reset-password')
+  async resetAdminPassword(@Param('id') id: string, @Body() body: { new_password: string }) {
+    console.log('[AdminController] POST /api/admin/admins/:id/reset-password')
+    const result = await this.adminService.changeAdminPassword(id, body.new_password)
+    return { code: 200, msg: '密码重置成功', data: result }
+  }
+
   /** ====== 角色管理 ====== */
   @Get('roles')
   async getRoles() {
