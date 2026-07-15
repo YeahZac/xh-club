@@ -39,6 +39,8 @@ export class UploadService {
 
       const data = await response.json() as any;
       
+      this.logger.log(`临时密钥 API 响应: ${JSON.stringify(Object.keys(data))}`);
+      
       if (data.errcode) {
         throw new Error(`获取临时密钥失败: ${data.errmsg}`);
       }
@@ -51,6 +53,8 @@ export class UploadService {
         Region,
         ExpiredTime,
       } = data;
+
+      this.logger.log(`临时密钥: TmpSecretId=${TmpSecretId?.substring(0, 10)}..., Bucket=${Bucket}, Region=${Region}`);
 
       // 如果环境变量没有配置 bucket，使用接口返回的
       if (!this.bucket && Bucket) {
