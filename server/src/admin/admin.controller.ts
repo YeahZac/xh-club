@@ -259,47 +259,29 @@ export class AdminController {
   async initDatabase() {
     console.log('[AdminController] POST /api/admin/init-database')
     try {
-      // Split SQL by statements and execute each
-      const statements = INIT_SQL
-        .split(';')
-        .map(s => s.trim())
-        .filter(s => s.length > 0 && !s.startsWith('--'))
-      
-      let executed = 0
-      const errors: { statement: string; error: string }[] = []
-      
-      for (const statement of statements) {
-        try {
-          await this.adminService.executeRaw(statement + ';')
-          executed++
-        } catch (err: any) {
-          errors.push({ statement: statement.substring(0, 50), error: err.message })
-        }
-      }
+      // 执行完整的 SQL（包含所有表创建语句）
+      await this.adminService.executeRaw(INIT_SQL)
       
       // 创建默认管理员账号（密码: a123123）
-      try {
-        const passwordHash = await bcrypt.hash('a123123', 10)
-        await this.adminService.executeRaw(
-          `INSERT IGNORE INTO users (phone, password_hash, name) VALUES ('admin', '${passwordHash}', '系统管理员')`
-        )
-        // 获取刚插入的用户ID
-        const users = await this.adminService.executeRaw(`SELECT id FROM users WHERE phone = 'admin'`)
-        const userId = users[0]?.id || 1
-        // 创建管理员记录（关联到超级管理员角色）
-        await this.adminService.executeRaw(
-          `INSERT IGNORE INTO admins (user_id, role_id, status) VALUES (${userId}, 1, 'active')`
-        )
-      } catch (err: any) {
-        errors.push({ statement: '创建默认管理员', error: err.message })
-      }
+      const passwordHash = await bcrypt.hash('a123123', 10)
+      await this.adminService.executeRaw(
+        `INSERT IGNORE INTO users (phone, password_hash, name) VALUES ('admin', '${passwordHash}', '系统管理员')`
+      )
+      // 获取用户ID
+      const users = await this.adminService.executeRaw(`SELECT id FROM users WHERE phone = 'admin'`)
+      const userId = users[0]?.id || 1
+      // 创建管理员记录（关联到超级管理员角色）
+      await this.adminService.executeRaw(
+        `INSERT IGNORE INTO admins (user_id, role_id, status) VALUES (${userId}, 1, 'active')`
+      )
       
       return { 
         code: 200, 
-        msg: '数据库初始化完成', 
-        data: { executed, errors: errors.length, errorDetails: errors }
+        msg: '数据库初始化成功', 
+        data: { success: true }
       }
     } catch (err: any) {
+      console.error('[AdminController] init-database error:', err)
       return { code: 500, msg: '初始化失败: ' + err.message }
     }
   }

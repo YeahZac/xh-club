@@ -62,6 +62,7 @@ export async function initMySQL(): Promise<void> {
       enableKeepAlive: true,
       keepAliveInitialDelay: 0,
       connectTimeout: 5000, // 5秒超时
+      multipleStatements: true, // 支持多语句执行
     });
   
     console.log('[MySQL] 连接池创建成功');
