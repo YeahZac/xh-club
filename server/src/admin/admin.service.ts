@@ -87,24 +87,24 @@ export class AdminService {
       let ordersTotal = 0
 
       try {
-        const members = await queryOne('SELECT COUNT(*) as count FROM users')
+        const members = await queryOne('SELECT COUNT(*) as count FROM members')
         membersCount = (members as any)?.count || 0
       } catch (e) {
-        console.log('[AdminService] users table not found or empty')
+        console.log('[AdminService] members table not found or empty')
       }
 
       try {
-        const events = await queryOne('SELECT COUNT(*) as count FROM event_registrations')
+        const events = await queryOne('SELECT COUNT(*) as count FROM events')
         eventsCount = (events as any)?.count || 0
       } catch (e) {
-        console.log('[AdminService] event_registrations table not found or empty')
+        console.log('[AdminService] events table not found or empty')
       }
 
       try {
-        const projects = await queryOne('SELECT COUNT(*) as count FROM business_opportunities')
+        const projects = await queryOne('SELECT COUNT(*) as count FROM projects')
         projectsCount = (projects as any)?.count || 0
       } catch (e) {
-        console.log('[AdminService] business_opportunities table not found or empty')
+        console.log('[AdminService] projects table not found or empty')
       }
 
       try {
@@ -181,7 +181,7 @@ export class AdminService {
   /** ====== 会员管理 ====== */
   async getAllMembers(query: any) {
     try {
-      return await queryRows('SELECT * FROM users ORDER BY created_at DESC')
+      return await queryRows('SELECT * FROM members ORDER BY created_at DESC')
     } catch (error) {
       console.error('[AdminService] getAllMembers error:', error)
       throw new HttpException('获取会员列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
@@ -190,7 +190,7 @@ export class AdminService {
 
   async getPendingMembers(query: any) {
     try {
-      return await queryRows('SELECT * FROM users ORDER BY created_at DESC LIMIT 10')
+      return await queryRows('SELECT * FROM members ORDER BY created_at DESC LIMIT 10')
     } catch (error) {
       console.error('[AdminService] getPendingMembers error:', error)
       throw new HttpException('获取待审批会员失败', HttpStatus.INTERNAL_SERVER_ERROR)
@@ -199,7 +199,7 @@ export class AdminService {
 
   async approveMember(id: string, approvedBy: string) {
     try {
-      await queryExecute('UPDATE users SET status = "approved" WHERE id = ?', [id])
+      await queryExecute('UPDATE members SET status = "approved" WHERE id = ?', [id])
       return { success: true }
     } catch (error) {
       console.error('[AdminService] approveMember error:', error)
@@ -209,7 +209,7 @@ export class AdminService {
 
   async rejectMember(id: string, reason: string) {
     try {
-      await queryExecute('UPDATE users SET status = "rejected" WHERE id = ?', [id])
+      await queryExecute('UPDATE members SET status = "rejected" WHERE id = ?', [id])
       return { success: true }
     } catch (error) {
       console.error('[AdminService] rejectMember error:', error)
@@ -220,7 +220,7 @@ export class AdminService {
   /** ====== 活动管理 ====== */
   async getAllEvents(query: any) {
     try {
-      return await queryRows('SELECT * FROM event_registrations ORDER BY created_at DESC')
+      return await queryRows('SELECT * FROM events ORDER BY created_at DESC')
     } catch (error) {
       console.error('[AdminService] getAllEvents error:', error)
       throw new HttpException('获取活动列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
@@ -246,7 +246,7 @@ export class AdminService {
   /** ====== 项目管理 ====== */
   async getAllProjects(query: any) {
     try {
-      return await queryRows('SELECT * FROM business_opportunities ORDER BY created_at DESC')
+      return await queryRows('SELECT * FROM projects ORDER BY created_at DESC')
     } catch (error) {
       console.error('[AdminService] getAllProjects error:', error)
       return []

@@ -38,6 +38,9 @@ DROP TABLE IF EXISTS projects;
 DROP TABLE IF EXISTS resources;
 DROP TABLE IF EXISTS roadshows;
 DROP TABLE IF EXISTS transactions;
+DROP TABLE IF EXISTS organizations;
+DROP TABLE IF EXISTS configs;
+DROP TABLE IF EXISTS mall_orders;
 
 -- 用户表（管理员账号）
 CREATE TABLE users (
@@ -511,6 +514,49 @@ CREATE TABLE member_tags (
   member_id INT NOT NULL,
   tag VARCHAR(50) NOT NULL,
   INDEX idx_member_id (member_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 组织/商会表
+CREATE TABLE organizations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  description TEXT,
+  logo VARCHAR(255),
+  contact_person VARCHAR(50),
+  contact_phone VARCHAR(20),
+  address VARCHAR(255),
+  status VARCHAR(20) DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 系统配置表
+CREATE TABLE configs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  config_key VARCHAR(100) NOT NULL UNIQUE,
+  config_value TEXT,
+  description VARCHAR(255),
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 商城订单表
+CREATE TABLE mall_orders (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_no VARCHAR(50) NOT NULL UNIQUE,
+  member_id INT NOT NULL,
+  product_id INT NOT NULL,
+  quantity INT DEFAULT 1,
+  total_amount DECIMAL(10,2) NOT NULL,
+  points_used INT DEFAULT 0,
+  actual_amount DECIMAL(10,2) NOT NULL,
+  status VARCHAR(20) DEFAULT 'pending',
+  payment_method VARCHAR(20),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_member_id (member_id),
+  INDEX idx_status (status),
+  INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 插入默认角色
