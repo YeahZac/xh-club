@@ -10,7 +10,9 @@ import devConfig from './dev';
 import prodConfig from './prod';
 import pkg from '../package.json';
 
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+// Load base env first, then let .env.local override it when present.
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env.local'), override: true });
 
 const generateTTProjectConfig = (outputRoot: string) => {
   const config = {
@@ -182,7 +184,8 @@ export default defineConfig<'vite'>(async (merge, _env) => {
         mode: 'hash',
       },
       devServer: {
-        port: 5000,
+        // Avoid macOS AirPlay Receiver which occupies port 5000 and returns HTTP 403
+        port: 5173,
         host: '0.0.0.0',
         open: false,
         proxy: {

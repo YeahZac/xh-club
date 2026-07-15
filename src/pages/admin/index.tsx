@@ -6,12 +6,21 @@ export default function AdminPage() {
   const [adminUrl, setAdminUrl] = useState('')
 
   useEffect(() => {
-    // 获取当前环境的基础URL
+    // H5 环境优先打开后端托管的 /admin，避免本地 admin-page.html 请求到错误的 /api 源。
     const isH5 = Taro.getEnv() === Taro.ENV_TYPE.WEB
     if (isH5) {
-      // H5环境直接使用相对路径
-      const baseUrl = window.location.origin
-      setAdminUrl(`${baseUrl}/admin-page.html`)
+      const normalizedProjectDomain =
+        typeof PROJECT_DOMAIN === 'string' && PROJECT_DOMAIN.trim()
+          ? PROJECT_DOMAIN.replace(/\/$/, '')
+          : ''
+
+      if (normalizedProjectDomain) {
+        setAdminUrl(`${normalizedProjectDomain}/admin`)
+        return
+      }
+
+      // 本地未配置 PROJECT_DOMAIN 时，回退到本地后端 /admin（若已启动 dev:server）。
+      setAdminUrl(`${window.location.origin}/admin`)
     }
   }, [])
 
