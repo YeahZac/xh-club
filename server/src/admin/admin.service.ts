@@ -38,6 +38,7 @@ export class AdminService {
     console.log('[AdminService] login - username:', username)
     
     try {
+      // 查询用户
       const rows = await queryRows<UserRow>(
         'SELECT * FROM users WHERE login_account = ? LIMIT 1',
         [username]
@@ -58,15 +59,26 @@ export class AdminService {
         throw new HttpException('用户名或密码错误', HttpStatus.UNAUTHORIZED)
       }
 
-      const token = Buffer.from(`${user.id}:${Date.now()}`).toString('base64')
+      // 查询管理员信息（包含角色）
+      const adminRows = await queryRows(
+        'SELECT a.*, r.name as role_name, r.display_name as role_display_name, r.permissions as role_permissions, r.is_system as role_is_system FROM admins a LEFT JOIN roles r ON a.role_id = r.id WHERE a.user_id = ? LIMIT 1',
+        [user.id]
+      )
 
-      console.log('[AdminService] login success:', username)
+      const token = Buffer.from(`${user.id}:${Date.now()}`).toString('base64')
+      const admin = adminRows[0]
+      const isSuperAdmin = admin?.role_name === 'super_admin' || admin?.role_is_system
+
+      console.log('[AdminService] login success:', username, 'role:', admin?.role_name, 'isSuperAdmin:', isSuperAdmin)
       
       return {
         id: user.id,
-        username: user.phone,
+        username: user.login_account,
         name: user.name || '管理员',
-        role: 'super_admin',
+        role: admin?.role_name || 'admin',
+        role_display_name: admin?.role_display_name || '管理员',
+        permissions: isSuperAdmin ? null : (admin?.role_permissions || {}),
+        is_super_admin: isSuperAdmin,
         token
       }
     } catch (error) {
@@ -627,7 +639,7 @@ export class AdminService {
     }
   }
 
-  async createRole(dto: { name: string; display_name: string; description?: string; permissions?: string[] }) {
+  async createRole(dto: { name: string; display_name: string; description?: string; permissions?: Record<string, any> }) {
     try {
       const result = await queryExecute(
         'INSERT INTO roles (name, display_name, description, permissions) VALUES (?, ?, ?, ?)',
@@ -640,11 +652,15 @@ export class AdminService {
     }
   }
 
-  async updateRole(id: string, dto: { display_name?: string; description?: string; permissions?: string[] }) {
+  async updateRole(id: string, dto: { name?: string; display_name?: string; description?: string; permissions?: Record<string, any> }) {
     try {
       const updates: string[] = []
       const values: any[] = []
 
+      if (dto.name !== undefined) {
+        updates.push('name = ?')
+        values.push(dto.name)
+      }
       if (dto.display_name !== undefined) {
         updates.push('display_name = ?')
         values.push(dto.display_name)

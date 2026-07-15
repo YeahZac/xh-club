@@ -634,10 +634,17 @@ async function doLogin() {
     if (res.code === 200) {
       token = 'admin_session';
       localStorage.setItem('admin_token', token);
+      // 存储权限信息
+      const perms = res.data.permissions || {};
+      const isSuperAdmin = res.data.is_super_admin === true;
+      localStorage.setItem('admin_permissions', JSON.stringify(perms));
+      localStorage.setItem('admin_is_super', isSuperAdmin ? '1' : '0');
       document.getElementById('adminName').textContent = res.data.name;
-      document.getElementById('adminRole').textContent = res.data.role === 'super_admin' ? '超级管理员' : '管理员';
+      document.getElementById('adminRole').textContent = res.data.role_display_name || (isSuperAdmin ? '超级管理员' : '管理员');
       document.getElementById('loginPage').classList.add('hidden');
       document.getElementById('mainApp').classList.remove('hidden');
+      // 应用权限过滤菜单
+      applyMenuPermissions(isSuperAdmin, perms);
       loadDashboard();
     } else {
       // 显示详细错误信息
@@ -686,7 +693,66 @@ function toggleSystemMenu() {
   }
 }
 
+// 应用权限过滤侧边栏菜单
+function applyMenuPermissions(isSuperAdmin, permissions) {
+  if (isSuperAdmin) {
+    // 超级管理员显示所有菜单
+    document.querySelectorAll('.sidebar-item').forEach(el => {
+      el.style.display = '';
+    });
+    document.getElementById('systemSubMenu').style.display = 'block';
+    return;
+  }
+  
+  // 根据权限过滤菜单
+  const pages = permissions || {};
+  document.querySelectorAll('.sidebar-item').forEach(el => {
+    const navKey = el.getAttribute('data-nav');
+    if (!navKey) return;
+    
+    // 检查是否有该页面的查看权限
+    if (pages[navKey] && pages[navKey].view) {
+      el.style.display = '';
+    } else {
+      el.style.display = 'none';
+    }
+  });
+  
+  // 检查系统管理子菜单是否全部隐藏，如果是则隐藏整个系统管理分组
+  const systemSubMenu = document.getElementById('systemSubMenu');
+  const visibleItems = systemSubMenu.querySelectorAll('.sidebar-item:not([style*="display: none"])');
+  if (visibleItems.length === 0) {
+    systemSubMenu.parentElement.style.display = 'none';
+  } else {
+    systemSubMenu.parentElement.style.display = '';
+    systemSubMenu.style.display = 'block';
+  }
+}
+
+// 检查当前用户是否有页面权限
+function hasPagePermission(pageKey) {
+  const isSuperAdmin = localStorage.getItem('admin_is_super') === '1';
+  if (isSuperAdmin) return true;
+  
+  const perms = JSON.parse(localStorage.getItem('admin_permissions') || '{}');
+  return !!(perms[pageKey] && perms[pageKey].view);
+}
+
+// 检查当前用户是否有按钮权限
+function hasButtonPermission(pageKey, buttonAction) {
+  const isSuperAdmin = localStorage.getItem('admin_is_super') === '1';
+  if (isSuperAdmin) return true;
+  
+  const perms = JSON.parse(localStorage.getItem('admin_permissions') || '{}');
+  return !!(perms[pageKey] && perms[pageKey][buttonAction]);
+}
+
 function switchPage(page) {
+  // 检查权限（超级管理员跳过检查）
+  if (!hasPagePermission(page)) {
+    toast('您没有访问此页面的权限', 'error');
+    return;
+  }
   document.querySelectorAll('[data-page]').forEach(el => el.classList.remove('active'))
   document.querySelector(`[data-page="${page}"]`).classList.add('active')
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'))
@@ -1728,19 +1794,26 @@ async function loadRoles() {
   const res = await api('/admin/roles')
   const list = document.getElementById('rolesList')
   if (res.code === 200 && res.data?.length) {
-    list.innerHTML = res.data.map(r => `
+    list.innerHTML = res.data.map(r => {
+      // 解析 permissions（可能是字符串或对象）
+      let perms = r.permissions || {}
+      if (typeof perms === 'string') {
+        try { perms = JSON.parse(perms) } catch(e) { perms = {} }
+      }
+      const permCount = perms && typeof perms === 'object' ? Object.keys(perms).filter(k => perms[k]?.view).length : 0
+      return `
       <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
         <div>
           <p class="font-medium text-navy-800">${r.display_name}</p>
           <p class="text-xs text-gray-400">${r.name} · ${r.description || '无描述'}</p>
-          <p class="text-xs text-gray-400 mt-1">权限: ${r.permissions ? Object.keys(r.permissions).length + ' 个页面' : '未配置'}</p>
+          <p class="text-xs text-gray-400 mt-1">权限: ${permCount > 0 ? permCount + ' 个页面' : '未配置'}</p>
         </div>
         <div class="flex gap-2">
-          <button onclick='showEditRoleModal(${JSON.stringify(r).replace(/'/g, "\\'")})' class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑权限</button>
+          <button onclick='showEditRoleModal(${JSON.stringify({...r, permissions: perms}).replace(/'/g, "\\'")})' class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑权限</button>
           <button onclick="deleteRole(${r.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
         </div>
       </div>
-    `).join('')
+    `}).join('')
   } else {
     list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无角色</p>'
   }
@@ -1782,7 +1855,11 @@ function showEditRoleModal(role) {
     { key: 'config', name: '系统配置' }
   ]
   const buttons = ['create', 'edit', 'delete', 'view']
-  const perms = role.permissions || {}
+  // 解析 permissions（可能是字符串或对象）
+  let perms = role.permissions || {}
+  if (typeof perms === 'string') {
+    try { perms = JSON.parse(perms) } catch(e) { perms = {} }
+  }
   
   let pagesHtml = pages.map(p => `
     <div class="border border-gray-100 rounded-lg p-3">

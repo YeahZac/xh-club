@@ -933,7 +933,7 @@ export class AdminController {
   }
 
   @Put('roles/:id')
-  async updateRole(@Param('id') id: string, @Body() dto: { display_name?: string; description?: string; permissions?: string[] }) {
+  async updateRole(@Param('id') id: string, @Body() dto: { name?: string; display_name?: string; description?: string; permissions?: Record<string, any> }) {
     console.log('[AdminController] PUT /api/admin/roles/:id')
     const result = await this.adminService.updateRole(id, dto)
     return { code: 200, msg: '更新成功', data: result }

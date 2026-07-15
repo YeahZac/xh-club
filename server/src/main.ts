@@ -7,10 +7,17 @@ import * as path from 'path';
 import { initMySQL } from '@/storage/database/mysql-client';
 
 function parsePort(): number {
-  // 优先使用环境变量 PORT（微信云托管等平台会注入）
+  // 优先使用环境变量 SERVER_PORT（开发环境）或 PORT（微信云托管等平台会注入）
+  if (process.env.SERVER_PORT) {
+    const serverPort = parseInt(process.env.SERVER_PORT, 10);
+    if (!isNaN(serverPort) && serverPort > 0 && serverPort < 65536) {
+      return serverPort;
+    }
+  }
   if (process.env.PORT) {
     const envPort = parseInt(process.env.PORT, 10);
-    if (!isNaN(envPort) && envPort > 0 && envPort < 65536) {
+    // 如果 PORT 是 5000（Taro 开发服务器端口），则使用 3000
+    if (!isNaN(envPort) && envPort > 0 && envPort < 65536 && envPort !== 5000) {
       return envPort;
     }
   }
