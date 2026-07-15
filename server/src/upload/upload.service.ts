@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
-import COS from 'cos-nodejs-sdk-v5';
+import * as COS from 'cos-nodejs-sdk-v5';
 
 @Injectable()
 export class UploadService {
