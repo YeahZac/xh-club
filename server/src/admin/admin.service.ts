@@ -2,6 +2,7 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { queryRows, queryOne, queryExecute, getConnectionStatus, testConnection, getPool } from '@/storage/database/mysql-client'
 import * as bcrypt from 'bcryptjs'
 import { RowDataPacket, ResultSetHeader } from 'mysql2'
+import { normalizeMediaUrl } from '@/utils/media-url'
 
 interface UserRow extends RowDataPacket {
   id: number
@@ -160,6 +161,7 @@ export class AdminService {
       // 解析 JSON 字段（MySQL JSON 类型可能已自动解析为对象）
       return rows.map((row: any) => ({
         ...row,
+        image_url: normalizeMediaUrl(row.image_url),
         link_config: row.link_config
           ? (typeof row.link_config === 'string' ? JSON.parse(row.link_config) : row.link_config)
           : null,

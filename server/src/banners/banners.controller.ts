@@ -1,5 +1,6 @@
 import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common'
 import { queryRows } from '@/storage/database/mysql-client'
+import { normalizeMediaUrl } from '@/utils/media-url'
 
 @Controller('banners')
 export class BannersController {
@@ -14,6 +15,7 @@ export class BannersController {
         msg: 'success',
         data: rows.map((row: any) => ({
           ...row,
+          image_url: normalizeMediaUrl(row.image_url),
           link_config: row.link_config
             ? (typeof row.link_config === 'string' ? JSON.parse(row.link_config) : row.link_config)
             : null,

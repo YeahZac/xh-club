@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as COS from 'cos-nodejs-sdk-v5';
+import { normalizeMediaUrl } from '@/utils/media-url';
 
 @Injectable()
 export class UploadService {
@@ -171,17 +172,11 @@ export class UploadService {
    * 获取文件的访问 URL（COS 文件直接通过 URL 访问）
    */
   async getFileUrl(fileId: string, _maxAge?: number): Promise<string> {
-    // 如果是 cloud:// 格式，转换为 COS URL
-    if (fileId.startsWith('cloud://')) {
-      const key = fileId.replace('cloud://', '');
-      return `https://${this.bucket}.cos.${this.region}.myqcloud.com/${key}`;
+    const normalized = normalizeMediaUrl(fileId);
+    if (normalized) {
+      return normalized;
     }
-    // 如果已经是完整 URL，直接返回
-    if (fileId.startsWith('http')) {
-      return fileId;
-    }
-    // 否则当作 key 处理
-    return `https://${this.bucket}.cos.${this.region}.myqcloud.com/${fileId}`;
+    return fileId;
   }
 
   /**
