@@ -20,6 +20,24 @@ DROP TABLE IF EXISTS contribution_rules;
 DROP TABLE IF EXISTS contribution_logs;
 DROP TABLE IF EXISTS departments;
 DROP TABLE IF EXISTS member_departments;
+DROP TABLE IF EXISTS articles;
+DROP TABLE IF EXISTS comments;
+DROP TABLE IF EXISTS event_registrations;
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS financing;
+DROP TABLE IF EXISTS mall_products;
+DROP TABLE IF EXISTS member_organizations;
+DROP TABLE IF EXISTS member_tags;
+DROP TABLE IF EXISTS members;
+DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS notifications;
+DROP TABLE IF EXISTS points_exchanges;
+DROP TABLE IF EXISTS points_records;
+DROP TABLE IF EXISTS posts;
+DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS resources;
+DROP TABLE IF EXISTS roadshows;
+DROP TABLE IF EXISTS transactions;
 
 -- 用户表（管理员账号）
 CREATE TABLE users (
@@ -245,6 +263,253 @@ CREATE TABLE member_departments (
   joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_member_id (member_id),
   INDEX idx_department_id (department_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 业务表
+
+-- 会员表
+CREATE TABLE members (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  phone VARCHAR(20) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  name VARCHAR(50),
+  avatar VARCHAR(255),
+  company_name VARCHAR(100),
+  position VARCHAR(50),
+  industry VARCHAR(50),
+  bio TEXT,
+  membership_level VARCHAR(20) DEFAULT 'normal',
+  credit_score INT DEFAULT 0,
+  active_score INT DEFAULT 0,
+  contribution_score INT DEFAULT 0,
+  total_points INT DEFAULT 0,
+  available_points INT DEFAULT 0,
+  referrer_id INT,
+  status VARCHAR(20) DEFAULT 'pending',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_phone (phone),
+  INDEX idx_status (status),
+  INDEX idx_referrer (referrer_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 活动表
+CREATE TABLE events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  cover_image VARCHAR(500),
+  event_type VARCHAR(50),
+  status VARCHAR(20) DEFAULT 'draft',
+  start_time DATETIME,
+  end_time DATETIME,
+  location VARCHAR(200),
+  address TEXT,
+  max_participants INT DEFAULT 0,
+  current_participants INT DEFAULT 0,
+  fee DECIMAL(10,2) DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_status (status),
+  INDEX idx_start_time (start_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 活动报名表
+CREATE TABLE event_registrations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  event_id INT NOT NULL,
+  member_id INT NOT NULL,
+  status VARCHAR(20) DEFAULT 'pending',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_event_id (event_id),
+  INDEX idx_member_id (member_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 文章表
+CREATE TABLE articles (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  content TEXT,
+  summary VARCHAR(500),
+  cover_image VARCHAR(500),
+  author VARCHAR(100),
+  status VARCHAR(20) DEFAULT 'draft',
+  view_count INT DEFAULT 0,
+  like_count INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_status (status),
+  INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 评论表
+CREATE TABLE comments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  article_id INT,
+  member_id INT,
+  content TEXT NOT NULL,
+  parent_id INT,
+  status VARCHAR(20) DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_article_id (article_id),
+  INDEX idx_member_id (member_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 帖子表
+CREATE TABLE posts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  member_id INT NOT NULL,
+  title VARCHAR(200),
+  content TEXT NOT NULL,
+  images JSON,
+  like_count INT DEFAULT 0,
+  comment_count INT DEFAULT 0,
+  status VARCHAR(20) DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_member_id (member_id),
+  INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 消息表
+CREATE TABLE messages (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sender_id INT,
+  receiver_id INT,
+  content TEXT NOT NULL,
+  is_read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_sender (sender_id),
+  INDEX idx_receiver (receiver_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 通知表
+CREATE TABLE notifications (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  member_id INT,
+  title VARCHAR(200),
+  content TEXT,
+  type VARCHAR(50),
+  is_read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_member_id (member_id),
+  INDEX idx_is_read (is_read)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 交易表
+CREATE TABLE transactions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  member_id INT,
+  type VARCHAR(50),
+  amount DECIMAL(10,2),
+  status VARCHAR(20) DEFAULT 'pending',
+  description TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_member_id (member_id),
+  INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 项目表
+CREATE TABLE projects (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  cover_image VARCHAR(500),
+  status VARCHAR(20) DEFAULT 'draft',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 资源表
+CREATE TABLE resources (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  resource_type VARCHAR(50),
+  url VARCHAR(500),
+  status VARCHAR(20) DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_type (resource_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 商城商品表
+CREATE TABLE mall_products (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  description TEXT,
+  price DECIMAL(10,2),
+  points_price INT,
+  stock INT DEFAULT 0,
+  cover_image VARCHAR(500),
+  images JSON,
+  status VARCHAR(20) DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 积分兑换表
+CREATE TABLE points_exchanges (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  member_id INT NOT NULL,
+  product_id INT,
+  points INT NOT NULL,
+  status VARCHAR(20) DEFAULT 'pending',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_member_id (member_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 积分记录表
+CREATE TABLE points_records (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  member_id INT NOT NULL,
+  type VARCHAR(50),
+  points INT NOT NULL,
+  description TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_member_id (member_id),
+  INDEX idx_type (type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 融资表
+CREATE TABLE financing (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  amount DECIMAL(15,2),
+  status VARCHAR(20) DEFAULT 'draft',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 路演表
+CREATE TABLE roadshows (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  event_time DATETIME,
+  status VARCHAR(20) DEFAULT 'draft',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 会员组织表
+CREATE TABLE member_organizations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  member_id INT NOT NULL,
+  organization_name VARCHAR(200),
+  position VARCHAR(100),
+  joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_member_id (member_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 会员标签表
+CREATE TABLE member_tags (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  member_id INT NOT NULL,
+  tag VARCHAR(50) NOT NULL,
+  INDEX idx_member_id (member_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 插入默认角色
