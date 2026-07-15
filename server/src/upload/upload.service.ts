@@ -1,91 +1,272 @@
 import { Injectable, Logger } from '@nestjs/common';
+import * as fs from 'fs';
 import * as path from 'path';
-import { S3Storage } from 'coze-coding-dev-sdk';
+import * as os from 'os';
+import { Readable } from 'stream';
+
+// 微信云托管官方 SDK
+import cloudbase from '@cloudbase/node-sdk';
 
 @Injectable()
 export class UploadService {
   private readonly logger = new Logger(UploadService.name);
-  private readonly storage: S3Storage;
+  private app: any = null;
 
   constructor() {
-    // 初始化 S3Storage，使用微信云托管对象存储
-    this.storage = new S3Storage({
-      endpointUrl: process.env.COZE_BUCKET_ENDPOINT_URL || '',
-      accessKey: '',
-      secretKey: '',
-      bucketName: process.env.COZE_BUCKET_NAME || '7072-prod-d6g34e4cna470ab7e-1451142205',
-      region: process.env.COZE_BUCKET_REGION || 'ap-shanghai',
-    });
-    this.logger.log(`S3Storage initialized with bucket: ${process.env.COZE_BUCKET_NAME || '7072-prod-d6g34e4cna470ab7e-1451142205'}, region: ap-shanghai`);
+    this.initCloudBase();
   }
 
-  async uploadFile(file: Express.Multer.File, folder: string = 'general'): Promise<any> {
+  /**
+   * 初始化微信云托管
+   */
+  private initCloudBase() {
     try {
-      const ext = path.extname(file.originalname);
-      const filename = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}${ext}`;
+      // 使用环境变量中的环境 ID
+      const envId = process.env.TCB_ENV_ID || process.env.ENV_ID;
       
-      // 使用 S3Storage 上传文件到微信云托管对象存储
-      const fileContent = file.buffer || Buffer.from('');
-      const actualKey = await this.storage.uploadFile({
+      if (!envId) {
+        this.logger.warn('未配置 TCB_ENV_ID 或 ENV_ID，云存储功能将不可用');
+        return;
+      }
+
+      this.app = cloudbase.init({
+        env: envId,
+      });
+      
+      this.logger.log(`微信云托管初始化成功，环境ID: ${envId}`);
+    } catch (error) {
+      this.logger.error('微信云托管初始化失败:', error);
+    }
+  }
+
+  /**
+   * 上传文件到微信云存储
+   * @param file 文件对象（来自 multer）
+   * @param folder 存储文件夹
+   * @returns 文件信息
+   */
+  async uploadFile(file: Express.Multer.File, folder: string = 'uploads'): Promise<{
+    fileId: string;
+    url: string;
+    fileName: string;
+    size: number;
+    mimeType: string;
+  }> {
+    if (!this.app) {
+      throw new Error('微信云托管未初始化，请配置 TCB_ENV_ID 环境变量');
+    }
+
+    try {
+      // 生成唯一的云存储路径
+      const timestamp = Date.now();
+      const randomStr = Math.random().toString(36).substring(2, 8);
+      const originalName = file.originalname || 'file';
+      const cloudPath = `${folder}/${timestamp}_${randomStr}_${originalName}`;
+
+      // 获取文件内容
+      let fileContent: Buffer | Readable;
+      
+      if (file.buffer) {
+        // H5 环境：使用 buffer
+        fileContent = file.buffer;
+      } else if (file.path) {
+        // 小程序环境：读取文件
+        fileContent = fs.readFileSync(file.path);
+      } else {
+        throw new Error('无法获取文件内容');
+      }
+
+      // 上传到云存储
+      const result = await this.app.uploadFile({
+        cloudPath,
         fileContent,
-        fileName: filename,
-        contentType: file.mimetype,
       });
 
-      this.logger.log(`File uploaded successfully: ${actualKey}`);
+      this.logger.log(`文件上传成功: ${cloudPath}, fileID: ${result.fileID}`);
 
-      // 生成签名 URL（有效期 30 天）
-      const signedUrl = await this.storage.generatePresignedUrl({
-        key: actualKey,
-        expireTime: 2592000, // 30 天
-      });
+      // 获取文件的临时链接（有效期7天）
+      const fileUrl = await this.getFileUrl(result.fileID);
 
       return {
-        url: signedUrl,
-        key: actualKey,
-        filename: file.originalname,
+        fileId: result.fileID,
+        url: fileUrl,
+        fileName: originalName,
         size: file.size,
-        mimetype: file.mimetype,
+        mimeType: file.mimetype,
       };
     } catch (error) {
-      this.logger.error(`File upload error: ${(error as Error).message}`, (error as Error).stack);
-      throw new Error(`File upload error: ${(error as Error).message}`);
+      this.logger.error('文件上传失败:', error);
+      throw new Error(`文件上传失败: ${error.message}`);
     }
   }
 
-  async deleteFile(fileKey: string): Promise<boolean> {
-    try {
-      const ok = await this.storage.deleteFile({ fileKey });
-      this.logger.log(`File deleted: ${fileKey}, success: ${ok}`);
-      return ok;
-    } catch (error) {
-      this.logger.error(`File delete error: ${(error as Error).message}`);
-      throw new Error(`File delete error: ${(error as Error).message}`);
+  /**
+   * 获取文件的访问 URL
+   * @param fileId 文件 ID
+   * @param maxAge 链接有效期（秒），默认 7 天
+   * @returns 文件访问 URL
+   */
+  async getFileUrl(fileId: string, maxAge: number = 604800): Promise<string> {
+    if (!this.app) {
+      throw new Error('微信云托管未初始化');
     }
-  }
 
-  async listFiles(folder: string = 'general'): Promise<any[]> {
     try {
-      const result = await this.storage.listFiles({ prefix: folder, maxKeys: 100 });
-      return result.keys.map((key: string) => ({
-        key,
-        path: key,
-      }));
-    } catch (error) {
-      this.logger.error(`File list error: ${(error as Error).message}`);
-      throw new Error(`File list error: ${(error as Error).message}`);
-    }
-  }
-
-  async getFileUrl(fileKey: string, expireTime: number = 86400): Promise<string> {
-    try {
-      return await this.storage.generatePresignedUrl({
-        key: fileKey,
-        expireTime,
+      const result = await this.app.getTempFileURL({
+        fileList: [fileId],
+        maxAge,
       });
+
+      if (result.fileList && result.fileList.length > 0) {
+        return result.fileList[0].tempFileURL;
+      }
+
+      throw new Error('获取文件 URL 失败');
     } catch (error) {
-      this.logger.error(`Generate presigned URL error: ${(error as Error).message}`);
-      throw new Error(`Generate presigned URL error: ${(error as Error).message}`);
+      this.logger.error('获取文件 URL 失败:', error);
+      throw new Error(`获取文件 URL 失败: ${error.message}`);
     }
+  }
+
+  /**
+   * 批量获取文件 URL
+   * @param fileIds 文件 ID 列表
+   * @param maxAge 链接有效期（秒）
+   * @returns 文件 URL 列表
+   */
+  async getFileUrls(fileIds: string[], maxAge: number = 604800): Promise<Record<string, string>> {
+    if (!this.app) {
+      throw new Error('微信云托管未初始化');
+    }
+
+    try {
+      const result = await this.app.getTempFileURL({
+        fileList: fileIds,
+        maxAge,
+      });
+
+      const urlMap: Record<string, string> = {};
+      if (result.fileList) {
+        for (const file of result.fileList) {
+          urlMap[file.fileID] = file.tempFileURL;
+        }
+      }
+
+      return urlMap;
+    } catch (error) {
+      this.logger.error('批量获取文件 URL 失败:', error);
+      throw new Error(`批量获取文件 URL 失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 删除云存储中的文件
+   * @param fileIdList 文件 ID 列表
+   * @returns 删除结果
+   */
+  async deleteFiles(fileIdList: string[]): Promise<{ success: boolean; message: string }> {
+    if (!this.app) {
+      throw new Error('微信云托管未初始化');
+    }
+
+    try {
+      const result = await this.app.deleteFile({
+        fileList: fileIdList,
+      });
+
+      this.logger.log(`文件删除成功: ${fileIdList.join(', ')}`);
+
+      return {
+        success: true,
+        message: `成功删除 ${result.fileList?.length || 0} 个文件`,
+      };
+    } catch (error) {
+      this.logger.error('文件删除失败:', error);
+      throw new Error(`文件删除失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 上传图片（带压缩）
+   * @param file 文件对象
+   * @param folder 存储文件夹
+   * @returns 文件信息
+   */
+  async uploadImage(file: Express.Multer.File, folder: string = 'images'): Promise<{
+    fileId: string;
+    url: string;
+    fileName: string;
+    size: number;
+    mimeType: string;
+  }> {
+    // 验证文件类型
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw new Error('只支持 JPG、PNG、GIF、WebP 格式的图片');
+    }
+
+    // 验证文件大小（最大 10MB）
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new Error('图片大小不能超过 10MB');
+    }
+
+    return this.uploadFile(file, folder);
+  }
+
+  /**
+   * 上传头像
+   * @param file 文件对象
+   * @param userId 用户 ID
+   * @returns 文件信息
+   */
+  async uploadAvatar(file: Express.Multer.File, userId: string): Promise<{
+    fileId: string;
+    url: string;
+    fileName: string;
+    size: number;
+    mimeType: string;
+  }> {
+    return this.uploadImage(file, `avatars/${userId}`);
+  }
+
+  /**
+   * 上传文档
+   * @param file 文件对象
+   * @param folder 存储文件夹
+   * @returns 文件信息
+   */
+  async uploadDocument(file: Express.Multer.File, folder: string = 'documents'): Promise<{
+    fileId: string;
+    url: string;
+    fileName: string;
+    size: number;
+    mimeType: string;
+  }> {
+    // 验证文件大小（最大 50MB）
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new Error('文档大小不能超过 50MB');
+    }
+
+    return this.uploadFile(file, folder);
+  }
+
+  /**
+   * 检查云存储是否可用
+   */
+  isAvailable(): boolean {
+    return this.app !== null;
+  }
+
+  /**
+   * 获取环境信息
+   */
+  getEnvInfo(): { envId: string; available: boolean } {
+    const envId = process.env.TCB_ENV_ID || process.env.ENV_ID || '';
+    return {
+      envId,
+      available: this.isAvailable(),
+    };
   }
 }
