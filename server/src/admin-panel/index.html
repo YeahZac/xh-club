@@ -105,46 +105,50 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
         积分商城
       </a>
-      <!-- 系统管理分组 -->
-      <div class="px-5 py-2 mt-4">
-        <p class="text-xs text-navy-400 uppercase tracking-wider">系统管理</p>
+      <!-- 系统管理分组（可收起） -->
+      <div class="mt-4">
+        <div onclick="toggleSystemMenu()" class="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-navy-600 transition">
+          <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 text-navy-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <span class="text-sm font-medium text-navy-100">系统管理</span>
+          </div>
+          <svg id="systemMenuArrow" class="w-4 h-4 text-navy-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div id="systemSubMenu" class="space-y-1">
+          <a onclick="switchPage('admins')" class="sidebar-item flex items-center gap-3 px-5 py-2.5 pl-12 cursor-pointer text-sm text-navy-300 transition hover:text-white" data-nav="admins">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+            管理员管理
+          </a>
+          <a onclick="switchPage('roles')" class="sidebar-item flex items-center gap-3 px-5 py-2.5 pl-12 cursor-pointer text-sm text-navy-300 transition hover:text-white" data-nav="roles">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            角色权限
+          </a>
+          <a onclick="switchPage('memberLevels')" class="sidebar-item flex items-center gap-3 px-5 py-2.5 pl-12 cursor-pointer text-sm text-navy-300 transition hover:text-white" data-nav="memberLevels">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+            会员等级
+          </a>
+          <a onclick="switchPage('invitations')" class="sidebar-item flex items-center gap-3 px-5 py-2.5 pl-12 cursor-pointer text-sm text-navy-300 transition hover:text-white" data-nav="invitations">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+            邀请奖励
+          </a>
+          <a onclick="switchPage('pointsRules')" class="sidebar-item flex items-center gap-3 px-5 py-2.5 pl-12 cursor-pointer text-sm text-navy-300 transition hover:text-white" data-nav="pointsRules">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            积分规则
+          </a>
+          <a onclick="switchPage('contributions')" class="sidebar-item flex items-center gap-3 px-5 py-2.5 pl-12 cursor-pointer text-sm text-navy-300 transition hover:text-white" data-nav="contributions">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+            贡献值规则
+          </a>
+          <a onclick="switchPage('departments')" class="sidebar-item flex items-center gap-3 px-5 py-2.5 pl-12 cursor-pointer text-sm text-navy-300 transition hover:text-white" data-nav="departments">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+            部门管理
+          </a>
+          <a onclick="switchPage('config')" class="sidebar-item flex items-center gap-3 px-5 py-2.5 pl-12 cursor-pointer text-sm text-navy-300 transition hover:text-white" data-nav="config">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+            系统配置
+          </a>
+        </div>
       </div>
-      <a onclick="switchPage('admins')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="admins">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-        管理员管理
-      </a>
-      <a onclick="switchPage('roles')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="roles">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-        角色权限
-      </a>
-      <a onclick="switchPage('memberLevels')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="memberLevels">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
-        会员等级
-      </a>
-      <a onclick="switchPage('invitations')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="invitations">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
-        邀请奖励
-      </a>
-      <a onclick="switchPage('pointsRules')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="pointsRules">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        积分规则
-      </a>
-      <a onclick="switchPage('contributions')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="contributions">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
-        贡献值规则
-      </a>
-      <a onclick="switchPage('departments')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="departments">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-        部门管理
-      </a>
-      <a onclick="switchPage('org')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="org">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-        组织架构
-      </a>
-      <a onclick="switchPage('config')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="config">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-        系统配置
-      </a>
     </nav>
     <div class="p-4 border-t border-navy-600">
       <div class="flex items-center gap-3">
@@ -437,7 +441,7 @@
     <div data-page="roles" class="p-8 fade-in">
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <div class="flex justify-between items-center mb-6">
-          <h3 class="font-bold text-navy-800">角色列表</h3>
+          <h3 class="font-bold text-navy-800">角色权限管理</h3>
           <button onclick="showAddRoleModal()" class="px-4 py-2 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg text-sm hover:shadow-lg transition">+ 新增角色</button>
         </div>
         <div id="rolesList" class="space-y-3">
@@ -656,6 +660,19 @@ if (token) {
 }
 
 // ===== 页面切换 =====
+// 切换系统管理菜单收起/展开
+function toggleSystemMenu() {
+  const subMenu = document.getElementById('systemSubMenu');
+  const arrow = document.getElementById('systemMenuArrow');
+  if (subMenu.style.display === 'none') {
+    subMenu.style.display = 'block';
+    arrow.style.transform = 'rotate(0deg)';
+  } else {
+    subMenu.style.display = 'none';
+    arrow.style.transform = 'rotate(-90deg)';
+  }
+}
+
 function switchPage(page) {
   document.querySelectorAll('[data-page]').forEach(el => el.classList.remove('active'))
   document.querySelector(`[data-page="${page}"]`).classList.add('active')
@@ -1491,11 +1508,12 @@ async function loadAdmins() {
           <div class="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold">${a.name?.[0] || '管'}</div>
           <div>
             <p class="font-medium text-navy-800">${a.name}</p>
+            <p class="text-xs text-gray-400">${a.phone || '未设置手机号'}</p>
             <p class="text-xs text-gray-400">${a.role_name || '普通管理员'} · ${a.status === 'active' ? '正常' : '禁用'}</p>
           </div>
         </div>
         <div class="flex gap-2">
-          <button onclick="showEditAdminModal(${a.id})" class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑</button>
+          <button onclick='showEditAdminModal(${JSON.stringify(a).replace(/'/g, "\\'")})' class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑</button>
           <button onclick="resetAdminPassword(${a.id})" class="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg">重置密码</button>
           <button onclick="deleteAdmin(${a.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
         </div>
@@ -1506,7 +1524,12 @@ async function loadAdmins() {
   }
 }
 
-function showAddAdminModal() {
+async function showAddAdminModal() {
+  // 加载角色列表
+  const rolesRes = await api('/admin/roles')
+  const roles = rolesRes.code === 200 ? rolesRes.data : []
+  const rolesOptions = roles.map(r => `<option value="${r.id}">${r.display_name}</option>`).join('')
+  
   openModal(`
     <div class="p-6">
       <h3 class="text-lg font-bold text-navy-800 mb-4">新增管理员</h3>
@@ -1516,8 +1539,7 @@ function showAddAdminModal() {
         <div><label class="block text-sm font-medium text-gray-700 mb-1">密码</label><input id="adminPassword" type="password" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请输入密码"></div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">角色</label>
           <select id="adminRoleId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
-            <option value="1">超级管理员</option>
-            <option value="2" selected>普通管理员</option>
+            ${rolesOptions || '<option value="1">超级管理员</option><option value="2">普通管理员</option>'}
           </select>
         </div>
         <div class="flex justify-end gap-3 pt-4">
@@ -1527,6 +1549,57 @@ function showAddAdminModal() {
       </div>
     </div>
   `)
+}
+
+async function showEditAdminModal(admin) {
+  // 加载角色列表
+  const rolesRes = await api('/admin/roles')
+  const roles = rolesRes.code === 200 ? rolesRes.data : []
+  const rolesOptions = roles.map(r => `<option value="${r.id}" ${admin.role_id == r.id ? 'selected' : ''}>${r.display_name}</option>`).join('')
+  
+  openModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-4">编辑管理员</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">姓名</label><input id="editAdminName" value="${admin.name}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">手机号</label><input id="editAdminPhone" value="${admin.phone}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">角色</label>
+          <select id="editAdminRoleId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
+            ${rolesOptions || '<option value="1">超级管理员</option><option value="2">普通管理员</option>'}
+          </select>
+        </div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="updateAdmin(${admin.id})" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function updateAdmin(id) {
+  const body = {
+    name: document.getElementById('editAdminName').value,
+    phone: document.getElementById('editAdminPhone').value,
+    role_id: parseInt(document.getElementById('editAdminRoleId').value)
+  }
+  if (!body.name || !body.phone) return toast('请填写完整信息', 'error')
+  const res = await api(`/admin/admins/${id}`, { method: 'PUT', body })
+  if (res.code === 200) { toast('更新成功'); closeModal(); loadAdmins(); }
+  else toast(res.msg || '更新失败', 'error')
+}
+
+async function resetAdminPassword(id) {
+  const newPassword = prompt('请输入新密码（至少6位）:')
+  if (!newPassword) return
+  if (newPassword.length < 6) return toast('密码至少6位', 'error')
+  
+  const res = await api(`/admin/admins/${id}/reset-password`, { 
+    method: 'POST', 
+    body: { new_password: newPassword }
+  })
+  if (res.code === 200) { toast('密码重置成功') }
+  else toast(res.msg || '重置失败', 'error')
 }
 
 async function saveAdmin() {
@@ -1567,9 +1640,10 @@ async function loadRoles() {
         <div>
           <p class="font-medium text-navy-800">${r.display_name}</p>
           <p class="text-xs text-gray-400">${r.name} · ${r.description || '无描述'}</p>
+          <p class="text-xs text-gray-400 mt-1">权限: ${r.permissions ? Object.keys(r.permissions).length + ' 个页面' : '未配置'}</p>
         </div>
         <div class="flex gap-2">
-          <button onclick="showEditRoleModal(${r.id})" class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑</button>
+          <button onclick='showEditRoleModal(${JSON.stringify(r).replace(/'/g, "\\'")})' class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑权限</button>
           <button onclick="deleteRole(${r.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
         </div>
       </div>
@@ -1594,6 +1668,111 @@ function showAddRoleModal() {
       </div>
     </div>
   `)
+}
+
+function showEditRoleModal(role) {
+  const pages = [
+    { key: 'dashboard', name: '数据看板' },
+    { key: 'members', name: '会员管理' },
+    { key: 'events', name: '活动管理' },
+    { key: 'projects', name: '项目管理' },
+    { key: 'banners', name: 'Banner管理' },
+    { key: 'articles', name: '文章管理' },
+    { key: 'mall', name: '积分商城' },
+    { key: 'admins', name: '管理员管理' },
+    { key: 'roles', name: '角色权限' },
+    { key: 'memberLevels', name: '会员等级' },
+    { key: 'invitations', name: '邀请奖励' },
+    { key: 'pointsRules', name: '积分规则' },
+    { key: 'contributions', name: '贡献值规则' },
+    { key: 'departments', name: '部门管理' },
+    { key: 'config', name: '系统配置' }
+  ]
+  const buttons = ['create', 'edit', 'delete', 'view']
+  const perms = role.permissions || {}
+  
+  let pagesHtml = pages.map(p => `
+    <div class="border border-gray-100 rounded-lg p-3">
+      <div class="flex items-center justify-between mb-2">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" class="page-check rounded" data-page="${p.key}" ${perms[p.key]?.view ? 'checked' : ''} onchange="togglePagePerms('${p.key}', this.checked)">
+          <span class="text-sm font-medium text-gray-700">${p.name}</span>
+        </label>
+      </div>
+      <div id="perms-${p.key}" class="flex gap-4 pl-6 ${perms[p.key]?.view ? '' : 'hidden'}">
+        ${buttons.map(b => `
+          <label class="flex items-center gap-1 cursor-pointer">
+            <input type="checkbox" class="btn-check rounded text-xs" data-page="${p.key}" data-btn="${b}" ${perms[p.key]?.[b] ? 'checked' : ''}>
+            <span class="text-xs text-gray-500">${{create:'新增',edit:'编辑',delete:'删除',view:'查看'}[b]}</span>
+          </label>
+        `).join('')}
+      </div>
+    </div>
+  `).join('')
+  
+  openModal(`
+    <div class="p-6 max-h-[80vh] overflow-y-auto">
+      <h3 class="text-lg font-bold text-navy-800 mb-4">编辑角色 - ${role.display_name}</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">角色名称</label><input id="editRoleName" value="${role.name}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">显示名称</label><input id="editRoleDisplayName" value="${role.display_name}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">描述</label><textarea id="editRoleDesc" rows="2" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400 resize-none">${role.description || ''}</textarea></div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">权限配置</label>
+          <div class="space-y-2 max-h-64 overflow-y-auto border border-gray-100 rounded-lg p-3">
+            ${pagesHtml}
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="updateRole(${role.id})" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+function togglePagePerms(page, checked) {
+  const permsDiv = document.getElementById(`perms-${page}`)
+  if (checked) {
+    permsDiv.classList.remove('hidden')
+    // 默认勾选查看权限
+    const viewCheck = permsDiv.querySelector('[data-btn="view"]')
+    if (viewCheck) viewCheck.checked = true
+  } else {
+    permsDiv.classList.add('hidden')
+    // 取消所有按钮权限
+    permsDiv.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false)
+  }
+}
+
+async function updateRole(id) {
+  const pages = ['dashboard','members','events','projects','banners','articles','mall','admins','roles','memberLevels','invitations','pointsRules','contributions','departments','config']
+  const permissions = {}
+  
+  pages.forEach(page => {
+    const pageCheck = document.querySelector(`.page-check[data-page="${page}"]`)
+    if (pageCheck && pageCheck.checked) {
+      permissions[page] = { view: true }
+      const btnChecks = document.querySelectorAll(`.btn-check[data-page="${page}"]`)
+      btnChecks.forEach(btn => {
+        if (btn.checked) {
+          permissions[page][btn.dataset.btn] = true
+        }
+      })
+    }
+  })
+  
+  const body = {
+    name: document.getElementById('editRoleName').value,
+    display_name: document.getElementById('editRoleDisplayName').value,
+    description: document.getElementById('editRoleDesc').value,
+    permissions: permissions
+  }
+  if (!body.name || !body.display_name) return toast('请填写完整信息', 'error')
+  const res = await api(`/admin/roles/${id}`, { method: 'PUT', body })
+  if (res.code === 200) { toast('更新成功'); closeModal(); loadRoles(); }
+  else toast(res.msg || '更新失败', 'error')
 }
 
 async function saveRole() {
