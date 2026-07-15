@@ -489,16 +489,20 @@
           </div>
         </div>
         <div class="mb-6">
-          <h4 class="font-bold text-navy-800 mb-4">页面权限配置</h4>
-          <div class="border border-gray-200 rounded-xl overflow-hidden">
-            <table class="w-full">
-              <thead class="bg-gray-50">
+          <h4 class="font-bold text-navy-800 mb-3 flex items-center gap-2">
+            <svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            页面权限配置
+            <span class="text-xs font-normal text-gray-400">（勾选页面名称启用该页面，勾选操作列控制按钮权限）</span>
+          </h4>
+          <div class="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+            <table class="w-full text-sm">
+              <thead class="bg-gradient-to-r from-gray-50 to-gray-100">
                 <tr>
-                  <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">页面名称</th>
-                  <th class="px-4 py-3 text-center text-sm font-medium text-gray-600">查看</th>
-                  <th class="px-4 py-3 text-center text-sm font-medium text-gray-600">新增</th>
-                  <th class="px-4 py-3 text-center text-sm font-medium text-gray-600">编辑</th>
-                  <th class="px-4 py-3 text-center text-sm font-medium text-gray-600">删除</th>
+                  <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-[35%]">📄 页面名称</th>
+                  <th class="px-3 py-3 text-center text-sm font-semibold text-blue-600">✅ 查看</th>
+                  <th class="px-3 py-3 text-center text-sm font-semibold text-green-600">➕ 新增</th>
+                  <th class="px-3 py-3 text-center text-sm font-semibold text-yellow-600">✏️ 编辑</th>
+                  <th class="px-3 py-3 text-center text-sm font-semibold text-red-600">🗑️ 删除</th>
                 </tr>
               </thead>
               <tbody id="permissionTableBody" class="divide-y divide-gray-100">
@@ -506,9 +510,12 @@
             </table>
           </div>
         </div>
-        <div class="flex gap-3">
-          <button onclick="switchPage('roles')" class="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium">取消</button>
-          <button onclick="saveRolePermissions()" class="px-6 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg hover:shadow-lg transition font-medium">保存权限</button>
+        <div class="flex gap-4 pt-4 border-t border-gray-200">
+          <button onclick="switchPage('roles')" class="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition font-semibold">← 返回角色列表</button>
+          <button onclick="saveRolePermissions()" class="flex-1 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:shadow-lg transition font-bold text-lg flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            保存权限配置
+          </button>
         </div>
       </div>
     </div>
@@ -1951,6 +1958,8 @@ const BUTTON_LABELS = { create: '新增', edit: '编辑', delete: '删除', view
 
 // 编辑角色权限 - 跳转到二级页面
 function editRolePermissions(role) {
+  console.log('[RoleEdit] 开始编辑角色:', role)
+  
   currentEditRoleId = role.id
   
   // 解析 permissions
@@ -1961,6 +1970,8 @@ function editRolePermissions(role) {
   const isAllPerms = Array.isArray(perms) && perms.includes('*')
   if (Array.isArray(perms)) perms = {}
   
+  console.log('[RoleEdit] 解析后的权限:', perms, 'isAllPerms:', isAllPerms)
+  
   // 填充角色基本信息
   document.getElementById('editRoleName').value = role.name || ''
   document.getElementById('editRoleDisplayName').value = role.display_name || ''
@@ -1968,48 +1979,74 @@ function editRolePermissions(role) {
   
   // 渲染权限表格
   const tbody = document.getElementById('permissionTableBody')
+  if (!tbody) {
+    console.error('[RoleEdit] 找不到 permissionTableBody 元素!')
+    return toast('页面加载错误', 'error')
+  }
+  
   tbody.innerHTML = PERMISSION_PAGES.map(p => {
-    const hasView = isAllPerms || perms[p.key]?.view
-    const hasCreate = isAllPerms || perms[p.key]?.create
-    const hasEdit = isAllPerms || perms[p.key]?.edit
-    const hasDelete = isAllPerms || perms[p.key]?.delete
+    const hasView = isAllPerms || (perms[p.key] && perms[p.key].view)
+    const hasCreate = isAllPerms || (perms[p.key] && perms[p.key].create)
+    const hasEdit = isAllPerms || (perms[p.key] && perms[p.key].edit)
+    const hasDelete = isAllPerms || (perms[p.key] && perms[p.key].delete)
+    
     return `
-      <tr class="hover:bg-gray-50">
-        <td class="px-4 py-3">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" class="page-check rounded text-brand-500" data-page="${p.key}" ${hasView ? 'checked' : ''} onchange="togglePagePermission('${p.key}', this.checked)">
-            <span class="text-sm font-medium text-gray-700">${p.name}</span>
+      <tr class="hover:bg-gray-50 border-b border-gray-100">
+        <td class="px-4 py-3 w-1/3">
+          <label class="flex items-center gap-3 cursor-pointer" for="page-${p.key}">
+            <input type="checkbox" id="page-${p.key}" class="page-check w-5 h-5 rounded border-gray-300 text-brand-500 focus:ring-brand-400 cursor-pointer" data-page="${p.key}" ${hasView ? 'checked' : ''} onchange="togglePagePermission('${p.key}', this.checked)">
+            <span class="text-sm font-medium text-gray-800">${p.name}</span>
           </label>
         </td>
         <td class="px-4 py-3 text-center">
-          <input type="checkbox" class="btn-check rounded text-brand-500" data-page="${p.key}" data-btn="create" ${hasCreate ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
+          <label class="inline-flex items-center justify-center cursor-pointer" for="view-${p.key}">
+            <input type="checkbox" id="view-${p.key}" class="btn-check w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400 cursor-pointer" data-page="${p.key}" data-btn="view" ${hasView ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
+          </label>
         </td>
         <td class="px-4 py-3 text-center">
-          <input type="checkbox" class="btn-check rounded text-brand-500" data-page="${p.key}" data-btn="edit" ${hasEdit ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
+          <label class="inline-flex items-center justify-center cursor-pointer" for="create-${p.key}">
+            <input type="checkbox" id="create-${p.key}" class="btn-check w-4 h-4 rounded border-gray-300 text-green-500 focus:ring-green-400 cursor-pointer" data-page="${p.key}" data-btn="create" ${hasCreate ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
+          </label>
         </td>
         <td class="px-4 py-3 text-center">
-          <input type="checkbox" class="btn-check rounded text-brand-500" data-page="${p.key}" data-btn="delete" ${hasDelete ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
+          <label class="inline-flex items-center justify-center cursor-pointer" for="edit-${p.key}">
+            <input type="checkbox" id="edit-${p.key}" class="btn-check w-4 h-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400 cursor-pointer" data-page="${p.key}" data-btn="edit" ${hasEdit ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
+          </label>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <label class="inline-flex items-center justify-center cursor-pointer" for="delete-${p.key}">
+            <input type="checkbox" id="delete-${p.key}" class="btn-check w-4 h-4 rounded border-gray-300 text-red-500 focus:ring-red-400 cursor-pointer" data-page="${p.key}" data-btn="delete" ${hasDelete ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
+          </label>
         </td>
       </tr>
     `
   }).join('')
   
+  console.log('[RoleEdit] 权限表格渲染完成，行数:', PERMISSION_PAGES.length)
+  
   // 跳转到编辑页面
   switchPage('role-edit')
+  toast(`正在编辑角色：${role.display_name}`, 'success')
 }
 
 // 切换页面权限
 function togglePagePermission(pageKey, checked) {
+  console.log('[TogglePerm] 页面:', pageKey, '勾选:', checked)
   const btnChecks = document.querySelectorAll(`.btn-check[data-page="${pageKey}"]`)
   btnChecks.forEach(cb => {
     cb.disabled = !checked
     if (!checked) cb.checked = false
   })
+  // 同时更新查看复选框
+  const viewCheck = document.querySelector(`.btn-check[data-page="${pageKey}"][data-btn="view"]`)
+  if (viewCheck && checked) viewCheck.checked = true
 }
 
 // 保存角色权限
 async function saveRolePermissions() {
   if (!currentEditRoleId) return toast('未选择角色', 'error')
+  
+  console.log('[SaveRole] 开始保存权限，角色ID:', currentEditRoleId)
   
   const permissions = {}
   PERMISSION_PAGES.forEach(p => {
@@ -2025,23 +2062,30 @@ async function saveRolePermissions() {
     }
   })
   
+  console.log('[SaveRole] 保存的权限数据:', JSON.stringify(permissions, null, 2))
+  
   const body = {
     name: document.getElementById('editRoleName').value,
     display_name: document.getElementById('editRoleDisplayName').value,
     description: document.getElementById('editRoleDesc').value,
-    permissions: permissions
+    permissions: JSON.stringify(permissions)  // 确保序列化为JSON字符串
   }
   
   if (!body.name || !body.display_name) return toast('请填写角色名称和显示名称', 'error')
   
-  const res = await api(`/admin/roles/${currentEditRoleId}`, { method: 'PUT', body })
-  if (res.code === 200) {
-    toast('权限保存成功')
-    currentEditRoleId = null
-    switchPage('roles')
-    loadRoles()
-  } else {
-    toast(res.msg || '保存失败', 'error')
+  try {
+    const res = await api(`/admin/roles/${currentEditRoleId}`, { method: 'PUT', body })
+    if (res.code === 200) {
+      toast('✅ 权限保存成功！')
+      currentEditRoleId = null
+      switchPage('roles')
+      loadRoles()
+    } else {
+      toast(res.msg || '保存失败', 'error')
+    }
+  } catch(e) {
+    console.error('[SaveRole] 保存失败:', e)
+    toast('保存失败: ' + e.message, 'error')
   }
 }
 
