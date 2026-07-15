@@ -407,4 +407,422 @@ export class AdminService {
   getDbStatus() {
     return getConnectionStatus()
   }
+
+  /** ====== 管理员账号管理 ====== */
+  async getAdmins() {
+    try {
+      return await queryRows(`
+        SELECT a.*, u.phone, u.name, r.name as role_name, r.display_name as role_display_name
+        FROM admins a
+        JOIN users u ON a.user_id = u.id
+        JOIN roles r ON a.role_id = r.id
+        ORDER BY a.created_at DESC
+      `)
+    } catch (error) {
+      console.error('[AdminService] getAdmins error:', error)
+      throw new HttpException('获取管理员列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async createAdmin(dto: { phone: string; password: string; name: string; role_id: number; created_by?: number }) {
+    try {
+      // 检查手机号是否已存在
+      const existingUser = await queryOne('SELECT id FROM users WHERE phone = ?', [dto.phone])
+      let userId: number
+
+      if (existingUser) {
+        userId = (existingUser as any).id
+      } else {
+        // 创建新用户
+        const passwordHash = await bcrypt.hash(dto.password, 10)
+        const userResult = await queryExecute(
+          'INSERT INTO users (phone, password_hash, name, status) VALUES (?, ?, ?, "approved")',
+          [dto.phone, passwordHash, dto.name]
+        )
+        userId = userResult.insertId
+      }
+
+      // 创建管理员记录
+      const adminResult = await queryExecute(
+        'INSERT INTO admins (user_id, role_id, status, created_by) VALUES (?, ?, "active", ?)',
+        [userId, dto.role_id, dto.created_by || null]
+      )
+
+      return await queryOne(`
+        SELECT a.*, u.phone, u.name, r.display_name as role_name
+        FROM admins a
+        JOIN users u ON a.user_id = u.id
+        JOIN roles r ON a.role_id = r.id
+        WHERE a.id = ?
+      `, [adminResult.insertId])
+    } catch (error) {
+      console.error('[AdminService] createAdmin error:', error)
+      throw new HttpException('创建管理员失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async updateAdmin(id: string, dto: { name?: string; role_id?: number; status?: string }) {
+    try {
+      const updates: string[] = []
+      const values: any[] = []
+
+      if (dto.name !== undefined) {
+        updates.push('name = ?')
+        values.push(dto.name)
+        // 同时更新 users 表
+        const admin = await queryOne('SELECT user_id FROM admins WHERE id = ?', [id])
+        if (admin) {
+          await queryExecute('UPDATE users SET name = ? WHERE id = ?', [dto.name, (admin as any).user_id])
+        }
+      }
+      if (dto.role_id !== undefined) {
+        updates.push('role_id = ?')
+        values.push(dto.role_id)
+      }
+      if (dto.status !== undefined) {
+        updates.push('status = ?')
+        values.push(dto.status)
+      }
+
+      if (updates.length > 0) {
+        values.push(id)
+        await queryExecute(`UPDATE admins SET ${updates.join(', ')} WHERE id = ?`, values)
+      }
+
+      return await queryOne(`
+        SELECT a.*, u.phone, u.name, r.display_name as role_name
+        FROM admins a
+        JOIN users u ON a.user_id = u.id
+        JOIN roles r ON a.role_id = r.id
+        WHERE a.id = ?
+      `, [id])
+    } catch (error) {
+      console.error('[AdminService] updateAdmin error:', error)
+      throw new HttpException('更新管理员失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async deleteAdmin(id: string) {
+    try {
+      await queryExecute('DELETE FROM admins WHERE id = ?', [id])
+      return { success: true }
+    } catch (error) {
+      console.error('[AdminService] deleteAdmin error:', error)
+      throw new HttpException('删除管理员失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async changeAdminPassword(id: string, newPassword: string) {
+    try {
+      const admin = await queryOne('SELECT user_id FROM admins WHERE id = ?', [id])
+      if (!admin) {
+        throw new HttpException('管理员不存在', HttpStatus.NOT_FOUND)
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 10)
+      await queryExecute('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, (admin as any).user_id])
+      return { success: true }
+    } catch (error) {
+      console.error('[AdminService] changeAdminPassword error:', error)
+      if (error instanceof HttpException) throw error
+      throw new HttpException('修改密码失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  /** ====== 角色管理 ====== */
+  async getRoles() {
+    try {
+      return await queryRows('SELECT * FROM roles ORDER BY id ASC')
+    } catch (error) {
+      console.error('[AdminService] getRoles error:', error)
+      throw new HttpException('获取角色列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async createRole(dto: { name: string; display_name: string; description?: string; permissions?: string[] }) {
+    try {
+      const result = await queryExecute(
+        'INSERT INTO roles (name, display_name, description, permissions) VALUES (?, ?, ?, ?)',
+        [dto.name, dto.display_name, dto.description || null, dto.permissions ? JSON.stringify(dto.permissions) : null]
+      )
+      return await queryOne('SELECT * FROM roles WHERE id = ?', [result.insertId])
+    } catch (error) {
+      console.error('[AdminService] createRole error:', error)
+      throw new HttpException('创建角色失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async updateRole(id: string, dto: { display_name?: string; description?: string; permissions?: string[] }) {
+    try {
+      const updates: string[] = []
+      const values: any[] = []
+
+      if (dto.display_name !== undefined) {
+        updates.push('display_name = ?')
+        values.push(dto.display_name)
+      }
+      if (dto.description !== undefined) {
+        updates.push('description = ?')
+        values.push(dto.description)
+      }
+      if (dto.permissions !== undefined) {
+        updates.push('permissions = ?')
+        values.push(JSON.stringify(dto.permissions))
+      }
+
+      if (updates.length > 0) {
+        values.push(id)
+        await queryExecute(`UPDATE roles SET ${updates.join(', ')} WHERE id = ?`, values)
+      }
+
+      return await queryOne('SELECT * FROM roles WHERE id = ?', [id])
+    } catch (error) {
+      console.error('[AdminService] updateRole error:', error)
+      throw new HttpException('更新角色失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  /** ====== 会员等级管理 ====== */
+  async getMemberLevels() {
+    try {
+      return await queryRows('SELECT * FROM member_levels ORDER BY sort_order ASC')
+    } catch (error) {
+      console.error('[AdminService] getMemberLevels error:', error)
+      throw new HttpException('获取会员等级列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async createMemberLevel(dto: any) {
+    try {
+      const result = await queryExecute(
+        `INSERT INTO member_levels (level_code, level_name, level_icon, min_contribution, min_points, discount_rate, points_multiplier, benefits, sort_order, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [dto.level_code, dto.level_name, dto.level_icon || null, dto.min_contribution || 0,
+         dto.min_points || 0, dto.discount_rate || 1.00, dto.points_multiplier || 1.00,
+         dto.benefits ? JSON.stringify(dto.benefits) : null, dto.sort_order || 0, dto.is_active !== false]
+      )
+      return await queryOne('SELECT * FROM member_levels WHERE id = ?', [result.insertId])
+    } catch (error) {
+      console.error('[AdminService] createMemberLevel error:', error)
+      throw new HttpException('创建会员等级失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async updateMemberLevel(id: string, dto: any) {
+    try {
+      await queryExecute('UPDATE member_levels SET ? WHERE id = ?', [dto, id])
+      return await queryOne('SELECT * FROM member_levels WHERE id = ?', [id])
+    } catch (error) {
+      console.error('[AdminService] updateMemberLevel error:', error)
+      throw new HttpException('更新会员等级失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async deleteMemberLevel(id: string) {
+    try {
+      await queryExecute('DELETE FROM member_levels WHERE id = ?', [id])
+      return { success: true }
+    } catch (error) {
+      console.error('[AdminService] deleteMemberLevel error:', error)
+      throw new HttpException('删除会员等级失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  /** ====== 邀请奖励规则管理 ====== */
+  async getInvitationRewardRules() {
+    try {
+      return await queryRows('SELECT * FROM invitation_reward_rules ORDER BY created_at DESC')
+    } catch (error) {
+      console.error('[AdminService] getInvitationRewardRules error:', error)
+      throw new HttpException('获取邀请奖励规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async createInvitationRewardRule(dto: any) {
+    try {
+      const result = await queryExecute(
+        `INSERT INTO invitation_reward_rules (rule_name, rule_type, reward_type, reward_value, conditions, max_rewards, is_active, start_date, end_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [dto.rule_name, dto.rule_type, dto.reward_type, dto.reward_value,
+         dto.conditions ? JSON.stringify(dto.conditions) : null,
+         dto.max_rewards || -1, dto.is_active !== false,
+         dto.start_date || null, dto.end_date || null]
+      )
+      return await queryOne('SELECT * FROM invitation_reward_rules WHERE id = ?', [result.insertId])
+    } catch (error) {
+      console.error('[AdminService] createInvitationRewardRule error:', error)
+      throw new HttpException('创建邀请奖励规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async updateInvitationRewardRule(id: string, dto: any) {
+    try {
+      await queryExecute('UPDATE invitation_reward_rules SET ? WHERE id = ?', [dto, id])
+      return await queryOne('SELECT * FROM invitation_reward_rules WHERE id = ?', [id])
+    } catch (error) {
+      console.error('[AdminService] updateInvitationRewardRule error:', error)
+      throw new HttpException('更新邀请奖励规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  /** ====== 积分规则管理 ====== */
+  async getPointsRules() {
+    try {
+      return await queryRows('SELECT * FROM points_rules ORDER BY priority DESC, created_at DESC')
+    } catch (error) {
+      console.error('[AdminService] getPointsRules error:', error)
+      throw new HttpException('获取积分规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async createPointsRule(dto: any) {
+    try {
+      const result = await queryExecute(
+        `INSERT INTO points_rules (rule_name, action_type, points_value, conditions, daily_limit, total_limit, is_active, priority, start_date, end_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [dto.rule_name, dto.action_type, dto.points_value,
+         dto.conditions ? JSON.stringify(dto.conditions) : null,
+         dto.daily_limit || -1, dto.total_limit || -1,
+         dto.is_active !== false, dto.priority || 0,
+         dto.start_date || null, dto.end_date || null]
+      )
+      return await queryOne('SELECT * FROM points_rules WHERE id = ?', [result.insertId])
+    } catch (error) {
+      console.error('[AdminService] createPointsRule error:', error)
+      throw new HttpException('创建积分规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async updatePointsRule(id: string, dto: any) {
+    try {
+      await queryExecute('UPDATE points_rules SET ? WHERE id = ?', [dto, id])
+      return await queryOne('SELECT * FROM points_rules WHERE id = ?', [id])
+    } catch (error) {
+      console.error('[AdminService] updatePointsRule error:', error)
+      throw new HttpException('更新积分规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  /** ====== 贡献值规则管理 ====== */
+  async getContributionRules() {
+    try {
+      return await queryRows('SELECT * FROM contribution_rules ORDER BY priority DESC, created_at DESC')
+    } catch (error) {
+      console.error('[AdminService] getContributionRules error:', error)
+      throw new HttpException('获取贡献值规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async createContributionRule(dto: any) {
+    try {
+      const result = await queryExecute(
+        `INSERT INTO contribution_rules (rule_name, action_type, contribution_value, conditions, calculation_method, formula, is_active, priority)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [dto.rule_name, dto.action_type, dto.contribution_value,
+         dto.conditions ? JSON.stringify(dto.conditions) : null,
+         dto.calculation_method || 'fixed', dto.formula || null,
+         dto.is_active !== false, dto.priority || 0]
+      )
+      return await queryOne('SELECT * FROM contribution_rules WHERE id = ?', [result.insertId])
+    } catch (error) {
+      console.error('[AdminService] createContributionRule error:', error)
+      throw new HttpException('创建贡献值规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async updateContributionRule(id: string, dto: any) {
+    try {
+      await queryExecute('UPDATE contribution_rules SET ? WHERE id = ?', [dto, id])
+      return await queryOne('SELECT * FROM contribution_rules WHERE id = ?', [id])
+    } catch (error) {
+      console.error('[AdminService] updateContributionRule error:', error)
+      throw new HttpException('更新贡献值规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  /** ====== 部门管理 ====== */
+  async getDepartments() {
+    try {
+      return await queryRows(`
+        SELECT d.*, u.name as manager_name
+        FROM departments d
+        LEFT JOIN users u ON d.manager_id = u.id
+        ORDER BY d.sort_order ASC, d.id ASC
+      `)
+    } catch (error) {
+      console.error('[AdminService] getDepartments error:', error)
+      throw new HttpException('获取部门列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async createDepartment(dto: { name: string; parent_id?: number; manager_id?: number; sort_order?: number; description?: string }) {
+    try {
+      // 计算层级和路径
+      let level = 1
+      let path = '/'
+
+      if (dto.parent_id) {
+        const parent = await queryOne('SELECT level, path FROM departments WHERE id = ?', [dto.parent_id])
+        if (parent) {
+          level = (parent as any).level + 1
+          path = `${(parent as any).path}${dto.parent_id}/`
+        }
+      } else {
+        path = '/'
+      }
+
+      const result = await queryExecute(
+        `INSERT INTO departments (name, parent_id, level, path, manager_id, sort_order, description)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [dto.name, dto.parent_id || null, level, path, dto.manager_id || null, dto.sort_order || 0, dto.description || null]
+      )
+
+      // 更新路径包含自身ID
+      const newId = result.insertId
+      await queryExecute('UPDATE departments SET path = CONCAT(path, ?, "/") WHERE id = ?', [newId, newId])
+
+      return await queryOne('SELECT * FROM departments WHERE id = ?', [newId])
+    } catch (error) {
+      console.error('[AdminService] createDepartment error:', error)
+      throw new HttpException('创建部门失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async updateDepartment(id: string, dto: { name?: string; manager_id?: number; sort_order?: number; status?: string; description?: string }) {
+    try {
+      await queryExecute('UPDATE departments SET ? WHERE id = ?', [dto, id])
+      return await queryOne(`
+        SELECT d.*, u.name as manager_name
+        FROM departments d
+        LEFT JOIN users u ON d.manager_id = u.id
+        WHERE d.id = ?
+      `, [id])
+    } catch (error) {
+      console.error('[AdminService] updateDepartment error:', error)
+      throw new HttpException('更新部门失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async deleteDepartment(id: string) {
+    try {
+      // 检查是否有子部门
+      const children = await queryRows('SELECT id FROM departments WHERE parent_id = ?', [id])
+      if (children.length > 0) {
+        throw new HttpException('该部门下有子部门，无法删除', HttpStatus.BAD_REQUEST)
+      }
+
+      // 检查是否有成员
+      const members = await queryRows('SELECT id FROM member_departments WHERE department_id = ?', [id])
+      if (members.length > 0) {
+        throw new HttpException('该部门下有成员，无法删除', HttpStatus.BAD_REQUEST)
+      }
+
+      await queryExecute('DELETE FROM departments WHERE id = ?', [id])
+      return { success: true }
+    } catch (error) {
+      console.error('[AdminService] deleteDepartment error:', error)
+      if (error instanceof HttpException) throw error
+      throw new HttpException('删除部门失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
 }

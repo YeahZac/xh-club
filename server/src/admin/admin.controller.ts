@@ -242,4 +242,186 @@ export class AdminController {
     return { code: 200, msg: '发布成功', data: result }
   }
 
+  /** ====== 管理员账号管理 ====== */
+  @Get('admins')
+  async getAdmins() {
+    console.log('[AdminController] GET /api/admin/admins')
+    const result = await this.adminService.getAdmins()
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post('admins')
+  async createAdmin(@Body() dto: { phone: string; password: string; name: string; role_id: number; created_by?: number }) {
+    console.log('[AdminController] POST /api/admin/admins')
+    const result = await this.adminService.createAdmin(dto)
+    return { code: 200, msg: '创建成功', data: result }
+  }
+
+  @Put('admins/:id')
+  async updateAdmin(@Param('id') id: string, @Body() dto: { name?: string; role_id?: number; status?: string }) {
+    console.log('[AdminController] PUT /api/admin/admins/:id')
+    const result = await this.adminService.updateAdmin(id, dto)
+    return { code: 200, msg: '更新成功', data: result }
+  }
+
+  @Delete('admins/:id')
+  async deleteAdmin(@Param('id') id: string) {
+    console.log('[AdminController] DELETE /api/admin/admins/:id')
+    const result = await this.adminService.deleteAdmin(id)
+    return { code: 200, msg: '删除成功', data: result }
+  }
+
+  @Post('admins/:id/change-password')
+  async changeAdminPassword(@Param('id') id: string, @Body() body: { new_password: string }) {
+    console.log('[AdminController] POST /api/admin/admins/:id/change-password')
+    const result = await this.adminService.changeAdminPassword(id, body.new_password)
+    return { code: 200, msg: '密码修改成功', data: result }
+  }
+
+  /** ====== 角色管理 ====== */
+  @Get('roles')
+  async getRoles() {
+    console.log('[AdminController] GET /api/admin/roles')
+    const result = await this.adminService.getRoles()
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post('roles')
+  async createRole(@Body() dto: { name: string; display_name: string; description?: string; permissions?: string[] }) {
+    console.log('[AdminController] POST /api/admin/roles')
+    const result = await this.adminService.createRole(dto)
+    return { code: 200, msg: '创建成功', data: result }
+  }
+
+  @Put('roles/:id')
+  async updateRole(@Param('id') id: string, @Body() dto: { display_name?: string; description?: string; permissions?: string[] }) {
+    console.log('[AdminController] PUT /api/admin/roles/:id')
+    const result = await this.adminService.updateRole(id, dto)
+    return { code: 200, msg: '更新成功', data: result }
+  }
+
+  /** ====== 会员等级管理 ====== */
+  @Get('member-levels')
+  async getMemberLevels() {
+    console.log('[AdminController] GET /api/admin/member-levels')
+    const result = await this.adminService.getMemberLevels()
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post('member-levels')
+  async createMemberLevel(@Body() dto: any) {
+    console.log('[AdminController] POST /api/admin/member-levels')
+    const result = await this.adminService.createMemberLevel(dto)
+    return { code: 200, msg: '创建成功', data: result }
+  }
+
+  @Put('member-levels/:id')
+  async updateMemberLevel(@Param('id') id: string, @Body() dto: any) {
+    console.log('[AdminController] PUT /api/admin/member-levels/:id')
+    const result = await this.adminService.updateMemberLevel(id, dto)
+    return { code: 200, msg: '更新成功', data: result }
+  }
+
+  @Delete('member-levels/:id')
+  async deleteMemberLevel(@Param('id') id: string) {
+    console.log('[AdminController] DELETE /api/admin/member-levels/:id')
+    const result = await this.adminService.deleteMemberLevel(id)
+    return { code: 200, msg: '删除成功', data: result }
+  }
+
+  /** ====== 邀请奖励规则管理 ====== */
+  @Get('invitation-rules')
+  async getInvitationRewardRules() {
+    console.log('[AdminController] GET /api/admin/invitation-rules')
+    const result = await this.adminService.getInvitationRewardRules()
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post('invitation-rules')
+  async createInvitationRewardRule(@Body() dto: any) {
+    console.log('[AdminController] POST /api/admin/invitation-rules')
+    const result = await this.adminService.createInvitationRewardRule(dto)
+    return { code: 200, msg: '创建成功', data: result }
+  }
+
+  @Put('invitation-rules/:id')
+  async updateInvitationRewardRule(@Param('id') id: string, @Body() dto: any) {
+    console.log('[AdminController] PUT /api/admin/invitation-rules/:id')
+    const result = await this.adminService.updateInvitationRewardRule(id, dto)
+    return { code: 200, msg: '更新成功', data: result }
+  }
+
+  /** ====== 积分规则管理 ====== */
+  @Get('points-rules')
+  async getPointsRules() {
+    console.log('[AdminController] GET /api/admin/points-rules')
+    const result = await this.adminService.getPointsRules()
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post('points-rules')
+  async createPointsRule(@Body() dto: any) {
+    console.log('[AdminController] POST /api/admin/points-rules')
+    const result = await this.adminService.createPointsRule(dto)
+    return { code: 200, msg: '创建成功', data: result }
+  }
+
+  @Put('points-rules/:id')
+  async updatePointsRule(@Param('id') id: string, @Body() dto: any) {
+    console.log('[AdminController] PUT /api/admin/points-rules/:id')
+    const result = await this.adminService.updatePointsRule(id, dto)
+    return { code: 200, msg: '更新成功', data: result }
+  }
+
+  /** ====== 贡献值规则管理 ====== */
+  @Get('contribution-rules')
+  async getContributionRules() {
+    console.log('[AdminController] GET /api/admin/contribution-rules')
+    const result = await this.adminService.getContributionRules()
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post('contribution-rules')
+  async createContributionRule(@Body() dto: any) {
+    console.log('[AdminController] POST /api/admin/contribution-rules')
+    const result = await this.adminService.createContributionRule(dto)
+    return { code: 200, msg: '创建成功', data: result }
+  }
+
+  @Put('contribution-rules/:id')
+  async updateContributionRule(@Param('id') id: string, @Body() dto: any) {
+    console.log('[AdminController] PUT /api/admin/contribution-rules/:id')
+    const result = await this.adminService.updateContributionRule(id, dto)
+    return { code: 200, msg: '更新成功', data: result }
+  }
+
+  /** ====== 部门管理 ====== */
+  @Get('departments')
+  async getDepartments() {
+    console.log('[AdminController] GET /api/admin/departments')
+    const result = await this.adminService.getDepartments()
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post('departments')
+  async createDepartment(@Body() dto: { name: string; parent_id?: number; manager_id?: number; sort_order?: number; description?: string }) {
+    console.log('[AdminController] POST /api/admin/departments')
+    const result = await this.adminService.createDepartment(dto)
+    return { code: 200, msg: '创建成功', data: result }
+  }
+
+  @Put('departments/:id')
+  async updateDepartment(@Param('id') id: string, @Body() dto: { name?: string; manager_id?: number; sort_order?: number; status?: string; description?: string }) {
+    console.log('[AdminController] PUT /api/admin/departments/:id')
+    const result = await this.adminService.updateDepartment(id, dto)
+    return { code: 200, msg: '更新成功', data: result }
+  }
+
+  @Delete('departments/:id')
+  async deleteDepartment(@Param('id') id: string) {
+    console.log('[AdminController] DELETE /api/admin/departments/:id')
+    const result = await this.adminService.deleteDepartment(id)
+    return { code: 200, msg: '删除成功', data: result }
+  }
+
 }
