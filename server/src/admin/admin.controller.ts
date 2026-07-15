@@ -4,8 +4,25 @@ import * as bcrypt from 'bcryptjs'
 
 // 数据库初始化 SQL（直接嵌入代码，避免文件路径问题）
 const INIT_SQL = `
+-- 先删除旧表（按依赖顺序）
+DROP TABLE IF EXISTS admin_operation_logs;
+DROP TABLE IF EXISTS admins;
+DROP TABLE IF EXISTS roles;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS member_levels;
+DROP TABLE IF EXISTS member_level_logs;
+DROP TABLE IF EXISTS invitation_reward_rules;
+DROP TABLE IF EXISTS invitation_records;
+DROP TABLE IF EXISTS invitation_rewards;
+DROP TABLE IF EXISTS points_rules;
+DROP TABLE IF EXISTS points_grants;
+DROP TABLE IF EXISTS contribution_rules;
+DROP TABLE IF EXISTS contribution_logs;
+DROP TABLE IF EXISTS departments;
+DROP TABLE IF EXISTS member_departments;
+
 -- 用户表（管理员账号）
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   phone VARCHAR(20) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
@@ -18,7 +35,7 @@ CREATE TABLE IF NOT EXISTS users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 角色表
-CREATE TABLE IF NOT EXISTS roles (
+CREATE TABLE roles (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(50) NOT NULL UNIQUE,
   display_name VARCHAR(100) NOT NULL,
@@ -29,7 +46,7 @@ CREATE TABLE IF NOT EXISTS roles (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 管理员表
-CREATE TABLE IF NOT EXISTS admins (
+CREATE TABLE admins (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
   role_id INT NOT NULL DEFAULT 2,
@@ -44,7 +61,7 @@ CREATE TABLE IF NOT EXISTS admins (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 操作日志表
-CREATE TABLE IF NOT EXISTS admin_operation_logs (
+CREATE TABLE admin_operation_logs (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   admin_id INT NOT NULL,
   action VARCHAR(100) NOT NULL,
@@ -60,7 +77,8 @@ CREATE TABLE IF NOT EXISTS admin_operation_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 会员等级配置表
-CREATE TABLE IF NOT EXISTS member_levels (
+DROP TABLE IF EXISTS member_levels;
+CREATE TABLE member_levels (
   id INT AUTO_INCREMENT PRIMARY KEY,
   level_code VARCHAR(20) NOT NULL UNIQUE,
   level_name VARCHAR(50) NOT NULL,
@@ -77,7 +95,7 @@ CREATE TABLE IF NOT EXISTS member_levels (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 会员等级变更记录
-CREATE TABLE IF NOT EXISTS member_level_logs (
+CREATE TABLE member_level_logs (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   member_id INT NOT NULL,
   old_level VARCHAR(20),
@@ -90,7 +108,7 @@ CREATE TABLE IF NOT EXISTS member_level_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 邀请奖励规则表
-CREATE TABLE IF NOT EXISTS invitation_reward_rules (
+CREATE TABLE invitation_reward_rules (
   id INT AUTO_INCREMENT PRIMARY KEY,
   rule_name VARCHAR(100) NOT NULL,
   rule_type ENUM('direct', 'indirect', 'level_up', 'purchase') NOT NULL,
@@ -106,7 +124,7 @@ CREATE TABLE IF NOT EXISTS invitation_reward_rules (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 邀请记录表
-CREATE TABLE IF NOT EXISTS invitation_records (
+CREATE TABLE invitation_records (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   inviter_id INT NOT NULL,
   invitee_id INT NOT NULL,
@@ -123,7 +141,7 @@ CREATE TABLE IF NOT EXISTS invitation_records (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 邀请奖励发放记录
-CREATE TABLE IF NOT EXISTS invitation_rewards (
+CREATE TABLE invitation_rewards (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   record_id BIGINT NOT NULL,
   member_id INT NOT NULL,
@@ -137,7 +155,7 @@ CREATE TABLE IF NOT EXISTS invitation_rewards (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 积分规则表
-CREATE TABLE IF NOT EXISTS points_rules (
+CREATE TABLE points_rules (
   id INT AUTO_INCREMENT PRIMARY KEY,
   rule_name VARCHAR(100) NOT NULL,
   action_type VARCHAR(50) NOT NULL,
@@ -154,7 +172,7 @@ CREATE TABLE IF NOT EXISTS points_rules (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 积分发放记录
-CREATE TABLE IF NOT EXISTS points_grants (
+CREATE TABLE points_grants (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   member_id INT NOT NULL,
   rule_id INT,
@@ -172,7 +190,7 @@ CREATE TABLE IF NOT EXISTS points_grants (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 贡献值规则表
-CREATE TABLE IF NOT EXISTS contribution_rules (
+CREATE TABLE contribution_rules (
   id INT AUTO_INCREMENT PRIMARY KEY,
   rule_name VARCHAR(100) NOT NULL,
   action_type VARCHAR(50) NOT NULL,
@@ -187,7 +205,7 @@ CREATE TABLE IF NOT EXISTS contribution_rules (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 贡献值变更记录
-CREATE TABLE IF NOT EXISTS contribution_logs (
+CREATE TABLE contribution_logs (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   member_id INT NOT NULL,
   rule_id INT,
@@ -205,7 +223,7 @@ CREATE TABLE IF NOT EXISTS contribution_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 部门表
-CREATE TABLE IF NOT EXISTS departments (
+CREATE TABLE departments (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
   parent_id INT DEFAULT NULL,
@@ -219,7 +237,7 @@ CREATE TABLE IF NOT EXISTS departments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 会员部门关联表
-CREATE TABLE IF NOT EXISTS member_departments (
+CREATE TABLE member_departments (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   member_id INT NOT NULL,
   department_id INT NOT NULL,
