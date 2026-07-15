@@ -39,20 +39,42 @@ export class UploadService {
 
       const data = await response.json() as any;
       
-      this.logger.log(`临时密钥 API 响应: ${JSON.stringify(Object.keys(data))}`);
+      this.logger.log(`临时密钥 API 完整响应: ${JSON.stringify(data)}`);
       
       if (data.errcode) {
         throw new Error(`获取临时密钥失败: ${data.errmsg}`);
       }
 
-      const {
-        TmpSecretId,
-        TmpSecretKey,
-        SecurityToken,
-        Bucket,
-        Region,
-        ExpiredTime,
-      } = data;
+      // 处理多种可能的响应格式
+      // 格式1: 嵌套格式 { credentials: { tmpSecretId, tmpSecretKey, sessionToken }, expiredTime, bucket, region }
+      // 格式2: STS格式 { TmpSecretId, TmpSecretKey, Token, ExpiredTime, Bucket, Region }
+      // 格式3: 小写格式 { tmpSecretId, tmpSecretKey, securityToken, expiredTime, bucket, region }
+      let TmpSecretId: string;
+      let TmpSecretKey: string;
+      let SecurityToken: string;
+      let Bucket: string;
+      let Region: string;
+      let ExpiredTime: number;
+
+      if (data.credentials) {
+        // 嵌套格式
+        TmpSecretId = data.credentials.tmpSecretId || data.credentials.TmpSecretId;
+        TmpSecretKey = data.credentials.tmpSecretKey || data.credentials.TmpSecretKey;
+        SecurityToken = data.credentials.sessionToken || data.credentials.SecurityToken || data.credentials.token;
+        Bucket = data.bucket || data.Bucket;
+        Region = data.region || data.Region;
+        ExpiredTime = data.expiredTime || data.ExpiredTime;
+      } else if (data.TmpSecretId || data.tmpSecretId) {
+        // STS格式或小写格式
+        TmpSecretId = data.TmpSecretId || data.tmpSecretId;
+        TmpSecretKey = data.TmpSecretKey || data.tmpSecretKey;
+        SecurityToken = data.Token || data.SecurityToken || data.sessionToken || data.securityToken;
+        Bucket = data.Bucket || data.bucket;
+        Region = data.Region || data.region;
+        ExpiredTime = data.ExpiredTime || data.expiredTime;
+      } else {
+        throw new Error(`无法解析临时密钥响应格式，请检查日志中的完整响应`);
+      }
 
       this.logger.log(`临时密钥: TmpSecretId=${TmpSecretId?.substring(0, 10)}..., Bucket=${Bucket}, Region=${Region}`);
 
