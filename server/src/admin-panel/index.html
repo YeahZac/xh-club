@@ -634,7 +634,7 @@ async function doLogin() {
     if (res.code === 200) {
       token = 'admin_session';
       localStorage.setItem('admin_token', token);
-      document.getElementById('newAdminName').textContent = res.data.name;
+      document.getElementById('adminName').textContent = res.data.name;
       document.getElementById('adminRole').textContent = res.data.role === 'super_admin' ? '超级管理员' : '管理员';
       document.getElementById('loginPage').classList.add('hidden');
       document.getElementById('mainApp').classList.remove('hidden');

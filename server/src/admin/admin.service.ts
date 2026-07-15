@@ -514,9 +514,7 @@ export class AdminService {
       const values: any[] = []
 
       if (dto.name !== undefined) {
-        updates.push('name = ?')
-        values.push(dto.name)
-        // 同时更新 users 表
+        // 只更新 users 表的 name
         const admin = await queryOne('SELECT user_id FROM admins WHERE id = ?', [id])
         if (admin) {
           await queryExecute('UPDATE users SET name = ? WHERE id = ?', [dto.name, (admin as any).user_id])
