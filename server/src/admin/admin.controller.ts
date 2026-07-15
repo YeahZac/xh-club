@@ -45,9 +45,10 @@ DROP TABLE IF EXISTS mall_orders;
 -- 用户表（管理员账号）
 CREATE TABLE users (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  phone VARCHAR(20) UNIQUE,
+  login_account VARCHAR(50) NOT NULL UNIQUE COMMENT '登录账号',
+  phone VARCHAR(20) UNIQUE COMMENT '手机号（选填）',
   password_hash VARCHAR(255) NOT NULL,
-  name VARCHAR(50),
+  name VARCHAR(50) NOT NULL COMMENT '姓名',
   avatar VARCHAR(255),
   industry VARCHAR(50),
   bio TEXT,
@@ -882,14 +883,14 @@ export class AdminController {
   }
 
   @Post('admins')
-  async createAdmin(@Body() dto: { phone: string; password: string; name: string; role_id: number; created_by?: number }) {
+  async createAdmin(@Body() dto: { login_account: string; phone?: string; password: string; name: string; remark?: string; role_id: number; status?: string; created_by?: number }) {
     console.log('[AdminController] POST /api/admin/admins')
     const result = await this.adminService.createAdmin(dto)
     return { code: 200, msg: '创建成功', data: result }
   }
 
   @Put('admins/:id')
-  async updateAdmin(@Param('id') id: string, @Body() dto: { name?: string; role_id?: number; status?: string }) {
+  async updateAdmin(@Param('id') id: string, @Body() dto: { login_account?: string; phone?: string; name?: string; remark?: string; role_id?: number; status?: string; password?: string }) {
     console.log('[AdminController] PUT /api/admin/admins/:id')
     const result = await this.adminService.updateAdmin(id, dto)
     return { code: 200, msg: '更新成功', data: result }

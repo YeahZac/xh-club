@@ -39,7 +39,7 @@ export class AdminService {
     
     try {
       const rows = await queryRows<UserRow>(
-        'SELECT * FROM users WHERE phone = ? LIMIT 1',
+        'SELECT * FROM users WHERE login_account = ? LIMIT 1',
         [username]
       )
 
@@ -456,7 +456,7 @@ export class AdminService {
     try {
       console.log('[AdminService] getAdmins - querying admins table')
       const admins = await queryRows(`
-        SELECT a.*, a.name as admin_name, a.remark, u.phone, r.name as role_name, r.display_name as role_display_name
+        SELECT a.*, a.name as admin_name, a.remark, u.login_account, u.phone, u.name as user_name, r.name as role_name, r.display_name as role_display_name
         FROM admins a
         LEFT JOIN users u ON a.user_id = u.id
         LEFT JOIN roles r ON a.role_id = r.id
@@ -471,33 +471,21 @@ export class AdminService {
     }
   }
 
-  async createAdmin(dto: { phone?: string; password: string; name: string; remark?: string; role_id: number; status?: string; created_by?: number }) {
+  async createAdmin(dto: { login_account: string; phone?: string; password: string; name: string; remark?: string; role_id: number; status?: string; created_by?: number }) {
     try {
-      // 检查手机号是否已存在（如果提供了手机号）
-      let userId: number
-
-      if (dto.phone) {
-        const existingUser = await queryOne('SELECT id FROM users WHERE phone = ?', [dto.phone])
-        if (existingUser) {
-          userId = (existingUser as any).id
-        } else {
-          // 创建新用户
-          const passwordHash = await bcrypt.hash(dto.password, 10)
-          const userResult = await queryExecute(
-            'INSERT INTO users (phone, password_hash, name, status) VALUES (?, ?, ?, "approved")',
-            [dto.phone, passwordHash, dto.name]
-          )
-          userId = userResult.insertId
-        }
-      } else {
-        // 没有手机号，创建用户只用于登录
-        const passwordHash = await bcrypt.hash(dto.password, 10)
-        const userResult = await queryExecute(
-          'INSERT INTO users (password_hash, name, status) VALUES (?, ?, "approved")',
-          [passwordHash, dto.name]
-        )
-        userId = userResult.insertId
+      // 检查登录账号是否已存在
+      const existingUser = await queryOne('SELECT id FROM users WHERE login_account = ?', [dto.login_account])
+      if (existingUser) {
+        throw new HttpException('登录账号已存在', HttpStatus.BAD_REQUEST)
       }
+
+      // 创建新用户
+      const passwordHash = await bcrypt.hash(dto.password, 10)
+      const userResult = await queryExecute(
+        'INSERT INTO users (login_account, phone, password_hash, name, status) VALUES (?, ?, ?, ?, "approved")',
+        [dto.login_account, dto.phone || null, passwordHash, dto.name]
+      )
+      const userId = userResult.insertId
 
       // 创建管理员记录
       const adminStatus = dto.status === 'disabled' ? 'disabled' : 'enabled'
@@ -507,7 +495,7 @@ export class AdminService {
       )
 
       return await queryOne(`
-        SELECT a.*, u.phone, r.display_name as role_name
+        SELECT a.*, u.login_account, u.phone, r.display_name as role_name
         FROM admins a
         JOIN users u ON a.user_id = u.id
         JOIN roles r ON a.role_id = r.id
@@ -515,42 +503,77 @@ export class AdminService {
       `, [adminResult.insertId])
     } catch (error) {
       console.error('[AdminService] createAdmin error:', error)
+      if (error instanceof HttpException) throw error
       throw new HttpException('创建管理员失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 
-  async updateAdmin(id: string, dto: { name?: string; remark?: string; role_id?: number; status?: string }) {
+  async updateAdmin(id: string, dto: { login_account?: string; phone?: string; name?: string; remark?: string; role_id?: number; status?: string }) {
     try {
-      const updates: string[] = []
-      const values: any[] = []
+      // 获取管理员信息
+      const admin = await queryOne(`
+        SELECT a.*, u.id as user_id FROM admins a WHERE a.id = ?
+      `, [id])
+      if (!admin) {
+        throw new HttpException('管理员不存在', HttpStatus.NOT_FOUND)
+      }
+
+      // 更新 admins 表
+      const adminUpdates: string[] = []
+      const adminValues: any[] = []
 
       if (dto.name !== undefined) {
-        // 更新 admins 表的 name
-        updates.push('name = ?')
-        values.push(dto.name)
+        adminUpdates.push('name = ?')
+        adminValues.push(dto.name)
       }
       if (dto.remark !== undefined) {
-        updates.push('remark = ?')
-        values.push(dto.remark)
+        adminUpdates.push('remark = ?')
+        adminValues.push(dto.remark)
       }
       if (dto.role_id !== undefined) {
-        updates.push('role_id = ?')
-        values.push(dto.role_id)
+        adminUpdates.push('role_id = ?')
+        adminValues.push(dto.role_id)
       }
       if (dto.status !== undefined) {
-        // 转换状态值
         const adminStatus = dto.status === 'disabled' ? 'disabled' : 'enabled'
-        updates.push('status = ?')
-        values.push(adminStatus)
+        adminUpdates.push('status = ?')
+        adminValues.push(adminStatus)
       }
 
-      if (updates.length > 0) {
-        values.push(id)
-        await queryExecute(`UPDATE admins SET ${updates.join(', ')} WHERE id = ?`, values)
+      if (adminUpdates.length > 0) {
+        adminValues.push(id)
+        await queryExecute(`UPDATE admins SET ${adminUpdates.join(', ')} WHERE id = ?`, adminValues)
+      }
+
+      // 更新 users 表
+      const userUpdates: string[] = []
+      const userValues: any[] = []
+
+      if (dto.login_account !== undefined) {
+        // 检查登录账号是否已被使用
+        const existingUser = await queryOne('SELECT id FROM users WHERE login_account = ? AND id != ?', [dto.login_account, (admin as any).user_id])
+        if (existingUser) {
+          throw new HttpException('登录账号已存在', HttpStatus.BAD_REQUEST)
+        }
+        userUpdates.push('login_account = ?')
+        userValues.push(dto.login_account)
+      }
+      if (dto.phone !== undefined) {
+        userUpdates.push('phone = ?')
+        userValues.push(dto.phone || null)
+      }
+      if (dto.name !== undefined) {
+        userUpdates.push('name = ?')
+        userValues.push(dto.name)
+      }
+
+      if (userUpdates.length > 0) {
+        userValues.push((admin as any).user_id)
+        await queryExecute(`UPDATE users SET ${userUpdates.join(', ')} WHERE id = ?`, userValues)
       }
 
       return await queryOne(`
-        SELECT a.*, u.phone, u.name, r.display_name as role_name
+        SELECT a.*, u.login_account, u.phone, u.name, r.display_name as role_name
         FROM admins a
         JOIN users u ON a.user_id = u.id
         JOIN roles r ON a.role_id = r.id
@@ -558,6 +581,7 @@ export class AdminService {
       `, [id])
     } catch (error) {
       console.error('[AdminService] updateAdmin error:', error)
+      if (error instanceof HttpException) throw error
       throw new HttpException('更新管理员失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
