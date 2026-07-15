@@ -304,6 +304,32 @@ export class AdminController {
     }
   }
 
+  /** 检查数据库状态 */
+  @Get('db-status')
+  async checkDbStatus() {
+    console.log('[AdminController] GET /api/admin/db-status')
+    try {
+      const { queryRows } = await import('@/storage/database/mysql-client')
+      
+      // 检查各个表是否存在
+      const tables = ['users', 'roles', 'admins', 'members', 'events', 'mall_orders']
+      const tableStatus: any = {}
+      
+      for (const table of tables) {
+        try {
+          const result = await queryRows(`SELECT COUNT(*) as count FROM ${table}`)
+          tableStatus[table] = { exists: true, count: result[0]?.count || 0 }
+        } catch (e: any) {
+          tableStatus[table] = { exists: false, error: e.message }
+        }
+      }
+      
+      return { code: 200, msg: '数据库状态', data: tableStatus }
+    } catch (err: any) {
+      return { code: 500, msg: '检查失败: ' + err.message }
+    }
+  }
+
   /** 登录 */
   @Post('login')
   async login(@Body() body: { username: string; password: string }) {
