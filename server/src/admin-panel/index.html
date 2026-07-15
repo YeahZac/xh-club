@@ -1603,13 +1603,26 @@ async function resetAdminPassword(id) {
 }
 
 async function saveAdmin() {
+  const nameEl = document.getElementById('adminName')
+  const phoneEl = document.getElementById('adminPhone')
+  const passwordEl = document.getElementById('adminPassword')
+  const roleIdEl = document.getElementById('adminRoleId')
+  
+  console.log('saveAdmin - elements:', { nameEl, phoneEl, passwordEl, roleIdEl })
+  
   const body = {
-    name: document.getElementById('adminName').value,
-    phone: document.getElementById('adminPhone').value,
-    password: document.getElementById('adminPassword').value,
-    role_id: parseInt(document.getElementById('adminRoleId').value)
+    name: nameEl ? nameEl.value : '',
+    phone: phoneEl ? phoneEl.value : '',
+    password: passwordEl ? passwordEl.value : '',
+    role_id: roleIdEl ? parseInt(roleIdEl.value) : 0
   }
-  if (!body.name || !body.phone || !body.password) return toast('请填写完整信息', 'error')
+  
+  console.log('saveAdmin - body:', body)
+  
+  if (!body.name || !body.phone || !body.password) {
+    console.log('saveAdmin - validation failed:', { name: body.name, phone: body.phone, password: body.password })
+    return toast('请填写完整信息', 'error')
+  }
   const res = await api('/admin/admins', { method: 'POST', body })
   if (res.code === 200) { toast('创建成功'); closeModal(); loadAdmins(); }
   else toast(res.msg || '创建失败', 'error')
