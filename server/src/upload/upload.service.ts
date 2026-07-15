@@ -18,16 +18,12 @@ export class UploadService {
 
   /**
    * 初始化微信云托管
+   * 在微信云托管环境中，SDK 会自动检测环境，无需手动传入 env
    */
   private initCloudBase() {
     try {
-      // 使用环境变量中的环境 ID
-      const envId = process.env.TCB_ENV_ID || process.env.ENV_ID;
-      
-      if (!envId) {
-        this.logger.warn('未配置 TCB_ENV_ID 或 ENV_ID，云存储功能将不可用');
-        return;
-      }
+      // 微信云托管环境中，可以使用 'default' 或让 SDK 自动检测
+      const envId = process.env.TCB_ENV_ID || process.env.ENV_ID || 'default';
 
       this.app = cloudbase.init({
         env: envId,
@@ -36,6 +32,13 @@ export class UploadService {
       this.logger.log(`微信云托管初始化成功，环境ID: ${envId}`);
     } catch (error) {
       this.logger.error('微信云托管初始化失败:', error);
+      // 尝试不带参数初始化（自动检测环境）
+      try {
+        this.app = cloudbase.init({});
+        this.logger.log('微信云托管自动检测环境初始化成功');
+      } catch (e2) {
+        this.logger.error('微信云托管自动检测也失败:', e2);
+      }
     }
   }
 
