@@ -156,7 +156,12 @@ export class AdminService {
   /** ====== Banner 管理 ====== */
   async getBanners() {
     try {
-      return await queryRows('SELECT * FROM banners ORDER BY sort_order ASC')
+      const rows = await queryRows('SELECT * FROM banners ORDER BY sort_order ASC')
+      // 解析 JSON 字段
+      return rows.map((row: any) => ({
+        ...row,
+        link_config: row.link_config ? JSON.parse(row.link_config) : null,
+      }))
     } catch (error) {
       console.error('[AdminService] getBanners error:', error)
       throw new HttpException('获取 Banner 列表失败', HttpStatus.INTERNAL_SERVER_ERROR)

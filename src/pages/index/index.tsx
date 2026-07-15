@@ -129,7 +129,15 @@ const IndexPage = () => {
       console.log('[首页] resources:', resourcesRes?.data)
       console.log('[首页] posts:', postsRes?.data)
 
-      if (bannersRes?.data?.data) setBanners(bannersRes.data.data.slice(0, 5))
+      if (bannersRes?.data?.data) {
+        const list = Array.isArray(bannersRes.data.data) ? bannersRes.data.data : []
+        // 兼容 link_config 可能是 JSON 字符串的情况
+        const parsed = list.map((b: any) => ({
+          ...b,
+          link_config: typeof b.link_config === 'string' ? JSON.parse(b.link_config) : (b.link_config || {})
+        }))
+        setBanners(parsed.slice(0, 5))
+      }
       if (projectsRes?.data?.data) setRoadshows(projectsRes.data.data.slice(0, 6))
       if (resourcesRes?.data?.data) setResources(resourcesRes.data.data.slice(0, 5))
       if (postsRes?.data?.data) setFeeds(postsRes.data.data.slice(0, 5))
@@ -227,19 +235,20 @@ const IndexPage = () => {
           <Carousel
             opts={{ autoplay: true, interval: 4000, duration: 500, loop: true }}
             className="rounded-2xl overflow-hidden"
+            style={{ height: '140px' }}
           >
             <CarouselContent>
               {banners.map((banner) => (
                 <CarouselItem key={banner.id}>
                   {banner.image_url ? (
-                    <View className="rounded-2xl overflow-hidden relative" style={{ height: '140px' }} onClick={() => handleBannerClick(banner)}>
+                    <View className="rounded-2xl overflow-hidden relative h-full" onClick={() => handleBannerClick(banner)}>
                       <Image src={banner.image_url} mode="aspectFill" className="w-full h-full" />
                       <View className="absolute left-0 bottom-0 right-0 p-4" style={{ background: 'linear-gradient(transparent, rgba(27,42,74,0.85))' }}>
                         <Text className="block text-white text-base font-bold">{banner.title}</Text>
                       </View>
                     </View>
                   ) : (
-                    <View className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] rounded-2xl p-5 relative overflow-hidden" onClick={() => handleBannerClick(banner)}>
+                    <View className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] rounded-2xl p-5 relative overflow-hidden h-full" onClick={() => handleBannerClick(banner)}>
                       <View className="absolute -right-6 -top-6 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
                       <View className="absolute left-0 bottom-0 right-0 h-1 bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8] rounded-full" />
                       <Text className="block text-white text-lg font-bold mb-1">{banner.title}</Text>

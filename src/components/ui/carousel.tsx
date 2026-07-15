@@ -15,6 +15,7 @@ type CarouselProps = {
   orientation?: "horizontal" | "vertical"
   setApi?: (api: CarouselApi) => void
   className?: string
+  style?: React.CSSProperties
   children?: React.ReactNode
 }
 
@@ -53,7 +54,7 @@ function useCarousel() {
 const Carousel = React.forwardRef<
   React.ElementRef<typeof View>,
   CarouselProps
->(({ opts, orientation = "horizontal", setApi, className, children, ...props }, ref) => {
+>(({ opts, orientation = "horizontal", setApi, className, style, children, ...props }, ref) => {
   const [current, setCurrent] = React.useState(0)
   const [count, setCount] = React.useState(0)
 
@@ -105,6 +106,7 @@ const Carousel = React.forwardRef<
       <View
         ref={ref}
         className={cn("relative w-full", className)}
+        style={style}
         {...props}
       >
         {children}
@@ -126,7 +128,7 @@ const CarouselContent = React.forwardRef<
   }, [children, setCount])
 
   return (
-    <View className={cn("overflow-hidden", className)}>
+    <View className={cn("overflow-hidden h-full", className)}>
       <Swiper
         ref={ref}
         className="h-full w-full"
