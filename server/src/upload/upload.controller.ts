@@ -133,7 +133,8 @@ export class UploadController {
       msg: 'success',
       data: {
         available: envInfo.available,
-        envId: envInfo.envId,
+        bucket: envInfo.bucket,
+        region: envInfo.region,
       },
     };
   }
