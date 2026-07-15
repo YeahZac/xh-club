@@ -80,20 +80,55 @@ export class AdminService {
   async getDashboardStats() {
     console.log('[AdminService] getDashboardStats')
     try {
-      const members = await queryOne('SELECT COUNT(*) as count FROM users')
-      const events = await queryOne('SELECT COUNT(*) as count FROM event_registrations')
-      const projects = await queryOne('SELECT COUNT(*) as count FROM business_opportunities')
-      const orders = await queryOne('SELECT COALESCE(SUM(total_amount), 0) as total FROM mall_orders WHERE status = "completed"')
+      // 使用 try-catch 处理可能不存在的表
+      let membersCount = 0
+      let eventsCount = 0
+      let projectsCount = 0
+      let ordersTotal = 0
+
+      try {
+        const members = await queryOne('SELECT COUNT(*) as count FROM users')
+        membersCount = (members as any)?.count || 0
+      } catch (e) {
+        console.log('[AdminService] users table not found or empty')
+      }
+
+      try {
+        const events = await queryOne('SELECT COUNT(*) as count FROM event_registrations')
+        eventsCount = (events as any)?.count || 0
+      } catch (e) {
+        console.log('[AdminService] event_registrations table not found or empty')
+      }
+
+      try {
+        const projects = await queryOne('SELECT COUNT(*) as count FROM business_opportunities')
+        projectsCount = (projects as any)?.count || 0
+      } catch (e) {
+        console.log('[AdminService] business_opportunities table not found or empty')
+      }
+
+      try {
+        const orders = await queryOne('SELECT COALESCE(SUM(total_amount), 0) as total FROM mall_orders WHERE status = "completed"')
+        ordersTotal = (orders as any)?.total || 0
+      } catch (e) {
+        console.log('[AdminService] mall_orders table not found or empty')
+      }
 
       return {
-        totalMembers: (members as any)?.count || 0,
-        totalEvents: (events as any)?.count || 0,
-        totalProjects: (projects as any)?.count || 0,
-        totalAmount: (orders as any)?.total || 0
+        totalMembers: membersCount,
+        totalEvents: eventsCount,
+        totalProjects: projectsCount,
+        totalAmount: ordersTotal
       }
     } catch (error) {
       console.error('[AdminService] getDashboardStats error:', error)
-      throw new HttpException('获取统计数据失败', HttpStatus.INTERNAL_SERVER_ERROR)
+      // 返回默认值而不是抛出错误
+      return {
+        totalMembers: 0,
+        totalEvents: 0,
+        totalProjects: 0,
+        totalAmount: 0
+      }
     }
   }
 
@@ -419,16 +454,20 @@ export class AdminService {
   /** ====== 管理员账号管理 ====== */
   async getAdmins() {
     try {
-      return await queryRows(`
+      console.log('[AdminService] getAdmins - querying admins table')
+      const admins = await queryRows(`
         SELECT a.*, u.phone, u.name, r.name as role_name, r.display_name as role_display_name
         FROM admins a
-        JOIN users u ON a.user_id = u.id
-        JOIN roles r ON a.role_id = r.id
+        LEFT JOIN users u ON a.user_id = u.id
+        LEFT JOIN roles r ON a.role_id = r.id
         ORDER BY a.created_at DESC
       `)
+      console.log('[AdminService] getAdmins - found', admins.length, 'admins')
+      return admins
     } catch (error) {
       console.error('[AdminService] getAdmins error:', error)
-      throw new HttpException('获取管理员列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
+      console.error('[AdminService] getAdmins error details:', (error as Error).message)
+      throw new HttpException(`获取管理员列表失败: ${(error as Error).message}`, HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 
@@ -540,10 +579,14 @@ export class AdminService {
   /** ====== 角色管理 ====== */
   async getRoles() {
     try {
-      return await queryRows('SELECT * FROM roles ORDER BY id ASC')
+      console.log('[AdminService] getRoles - querying roles table')
+      const roles = await queryRows('SELECT * FROM roles ORDER BY id ASC')
+      console.log('[AdminService] getRoles - found', roles.length, 'roles')
+      return roles
     } catch (error) {
       console.error('[AdminService] getRoles error:', error)
-      throw new HttpException('获取角色列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
+      console.error('[AdminService] getRoles error details:', (error as Error).message)
+      throw new HttpException(`获取角色列表失败: ${(error as Error).message}`, HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 
