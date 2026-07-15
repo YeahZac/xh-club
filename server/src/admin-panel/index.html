@@ -1541,14 +1541,16 @@ async function loadAdmins() {
     list.innerHTML = res.data.map(a => `
       <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
         <div class="flex items-center gap-4">
-          <div class="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold">${a.name?.[0] || '管'}</div>
+          <div class="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold">${(a.admin_name || a.phone || '管')?.[0] || '管'}</div>
           <div>
-            <p class="font-medium text-navy-800">${a.name}</p>
-            <p class="text-xs text-gray-400">${a.phone || '未设置手机号'}</p>
-            <p class="text-xs text-gray-400">${a.role_name || '普通管理员'} · ${a.status === 'active' ? '正常' : '禁用'}</p>
+            <p class="font-medium text-navy-800">${a.admin_name || '未设置姓名'}</p>
+            <p class="text-xs text-gray-400">账号: ${a.phone || '未设置'}</p>
+            <p class="text-xs text-gray-400">${a.role_display_name || '普通管理员'} · ${a.status === 'active' ? '启用' : '停用'}</p>
+            ${a.remark ? `<p class="text-xs text-gray-400">备注: ${a.remark}</p>` : ''}
           </div>
         </div>
         <div class="flex gap-2">
+          <button onclick='toggleAdminStatus(${a.id}, "${a.status === 'active' ? 'inactive' : 'active'}")' class="px-3 py-1.5 text-sm ${a.status === 'active' ? 'text-orange-600 hover:bg-orange-50' : 'text-green-600 hover:bg-green-50'} rounded-lg">${a.status === 'active' ? '停用' : '启用'}</button>
           <button onclick='showEditAdminModal(${JSON.stringify(a).replace(/'/g, "\\'")})' class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑</button>
           <button onclick="resetAdminPassword(${a.id})" class="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg">重置密码</button>
           <button onclick="deleteAdmin(${a.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
@@ -1571,15 +1573,15 @@ async function showAddAdminModal() {
       <h3 class="text-lg font-bold text-navy-800 mb-4">新增管理员</h3>
       <div class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">姓名</label>
-          <input type="text" id="newAdminName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请输入姓名">
+          <label class="block text-sm font-medium text-gray-700 mb-1">姓名 <span class="text-red-500">*</span></label>
+          <input type="text" id="newAdminName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请输入管理员姓名">
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">手机号</label>
-          <input type="text" id="newAdminPhone" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请输入手机号">
+          <label class="block text-sm font-medium text-gray-700 mb-1">登录账号（手机号）</label>
+          <input type="text" id="newAdminPhone" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请输入手机号（可选）">
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">密码 <span class="text-red-500">*</span></label>
           <input type="password" id="newAdminPassword" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请输入密码">
         </div>
         <div>
@@ -1587,6 +1589,17 @@ async function showAddAdminModal() {
           <select id="newAdminRoleId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
             ${rolesOptions || '<option value="1">超级管理员</option><option value="2">普通管理员</option>'}
           </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">状态</label>
+          <select id="newAdminStatus" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
+            <option value="active">启用</option>
+            <option value="inactive">停用</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">备注</label>
+          <textarea id="newAdminRemark" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" rows="2" placeholder="请输入备注信息"></textarea>
         </div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
@@ -1608,12 +1621,23 @@ async function showEditAdminModal(admin) {
     <div class="p-6">
       <h3 class="text-lg font-bold text-navy-800 mb-4">编辑管理员</h3>
       <div class="space-y-4">
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">姓名</label><input id="editAdminName" value="${admin.name}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">手机号</label><input id="editAdminPhone" value="${admin.phone}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">姓名</label><input id="editAdminName" value="${admin.admin_name || ''}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">登录账号（手机号）</label><input id="editAdminPhone" value="${admin.phone || ''}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="可选"></div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">角色</label>
           <select id="editAdminRoleId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
             ${rolesOptions || '<option value="1">超级管理员</option><option value="2">普通管理员</option>'}
           </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">状态</label>
+          <select id="editAdminStatus" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
+            <option value="active" ${admin.status === 'active' ? 'selected' : ''}>启用</option>
+            <option value="inactive" ${admin.status === 'inactive' ? 'selected' : ''}>停用</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">备注</label>
+          <textarea id="editAdminRemark" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" rows="2">${admin.remark || ''}</textarea>
         </div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
@@ -1626,11 +1650,13 @@ async function showEditAdminModal(admin) {
 
 async function updateAdmin(id) {
   const body = {
-    name: document.getElementById('editAdminName').value,
+    admin_name: document.getElementById('editAdminName').value,
     phone: document.getElementById('editAdminPhone').value,
-    role_id: parseInt(document.getElementById('editAdminRoleId').value)
+    role_id: parseInt(document.getElementById('editAdminRoleId').value),
+    status: document.getElementById('editAdminStatus').value,
+    remark: document.getElementById('editAdminRemark').value
   }
-  if (!body.name || !body.phone) return toast('请填写完整信息', 'error')
+  if (!body.admin_name) return toast('请填写姓名', 'error')
   const res = await api(`/admin/admins/${id}`, { method: 'PUT', body })
   if (res.code === 200) { toast('更新成功'); closeModal(); loadAdmins(); }
   else toast(res.msg || '更新失败', 'error')
@@ -1654,21 +1680,20 @@ async function saveAdmin() {
   const phoneEl = document.getElementById('newAdminPhone')
   const passwordEl = document.getElementById('newAdminPassword')
   const roleIdEl = document.getElementById('newAdminRoleId')
-  
-  console.log('saveAdmin - elements:', { nameEl, phoneEl, passwordEl, roleIdEl })
+  const statusEl = document.getElementById('newAdminStatus')
+  const remarkEl = document.getElementById('newAdminRemark')
   
   const body = {
-    name: nameEl ? nameEl.value : '',
-    phone: phoneEl ? phoneEl.value : '',
+    admin_name: nameEl ? nameEl.value.trim() : '',
+    phone: phoneEl ? phoneEl.value.trim() : '',
     password: passwordEl ? passwordEl.value : '',
-    role_id: roleIdEl ? parseInt(roleIdEl.value) : 0
+    role_id: roleIdEl ? parseInt(roleIdEl.value) : 0,
+    status: statusEl ? statusEl.value : 'active',
+    remark: remarkEl ? remarkEl.value.trim() : ''
   }
   
-  console.log('saveAdmin - body:', body)
-  
-  if (!body.name || !body.phone || !body.password) {
-    console.log('saveAdmin - validation failed:', { name: body.name, phone: body.phone, password: body.password })
-    return toast('请填写完整信息', 'error')
+  if (!body.admin_name || !body.password) {
+    return toast('请填写姓名和密码', 'error')
   }
   const res = await api('/admin/admins', { method: 'POST', body })
   if (res.code === 200) { toast('创建成功'); closeModal(); loadAdmins(); }

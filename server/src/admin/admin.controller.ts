@@ -45,7 +45,7 @@ DROP TABLE IF EXISTS mall_orders;
 -- 用户表（管理员账号）
 CREATE TABLE users (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  phone VARCHAR(20) NOT NULL UNIQUE,
+  phone VARCHAR(20) UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   name VARCHAR(50),
   avatar VARCHAR(255),
@@ -72,7 +72,9 @@ CREATE TABLE admins (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
   role_id INT NOT NULL DEFAULT 2,
-  status ENUM('active', 'inactive', 'locked') DEFAULT 'active',
+  name VARCHAR(50) COMMENT '管理员姓名',
+  remark TEXT COMMENT '备注',
+  status ENUM('enabled', 'disabled') DEFAULT 'enabled' COMMENT '状态：enabled-启用，disabled-停用',
   last_login_at TIMESTAMP NULL,
   last_login_ip VARCHAR(45),
   login_attempts INT DEFAULT 0,

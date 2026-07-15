@@ -456,7 +456,7 @@ export class AdminService {
     try {
       console.log('[AdminService] getAdmins - querying admins table')
       const admins = await queryRows(`
-        SELECT a.*, u.phone, u.name, r.name as role_name, r.display_name as role_display_name
+        SELECT a.*, a.name as admin_name, a.remark, u.phone, r.name as role_name, r.display_name as role_display_name
         FROM admins a
         LEFT JOIN users u ON a.user_id = u.id
         LEFT JOIN roles r ON a.role_id = r.id
@@ -471,32 +471,43 @@ export class AdminService {
     }
   }
 
-  async createAdmin(dto: { phone: string; password: string; name: string; role_id: number; created_by?: number }) {
+  async createAdmin(dto: { phone?: string; password: string; name: string; remark?: string; role_id: number; status?: string; created_by?: number }) {
     try {
-      // 检查手机号是否已存在
-      const existingUser = await queryOne('SELECT id FROM users WHERE phone = ?', [dto.phone])
+      // 检查手机号是否已存在（如果提供了手机号）
       let userId: number
 
-      if (existingUser) {
-        userId = (existingUser as any).id
+      if (dto.phone) {
+        const existingUser = await queryOne('SELECT id FROM users WHERE phone = ?', [dto.phone])
+        if (existingUser) {
+          userId = (existingUser as any).id
+        } else {
+          // 创建新用户
+          const passwordHash = await bcrypt.hash(dto.password, 10)
+          const userResult = await queryExecute(
+            'INSERT INTO users (phone, password_hash, name, status) VALUES (?, ?, ?, "approved")',
+            [dto.phone, passwordHash, dto.name]
+          )
+          userId = userResult.insertId
+        }
       } else {
-        // 创建新用户
+        // 没有手机号，创建用户只用于登录
         const passwordHash = await bcrypt.hash(dto.password, 10)
         const userResult = await queryExecute(
-          'INSERT INTO users (phone, password_hash, name, status) VALUES (?, ?, ?, "approved")',
-          [dto.phone, passwordHash, dto.name]
+          'INSERT INTO users (password_hash, name, status) VALUES (?, ?, "approved")',
+          [passwordHash, dto.name]
         )
         userId = userResult.insertId
       }
 
       // 创建管理员记录
+      const adminStatus = dto.status === 'disabled' ? 'disabled' : 'enabled'
       const adminResult = await queryExecute(
-        'INSERT INTO admins (user_id, role_id, status, created_by) VALUES (?, ?, "active", ?)',
-        [userId, dto.role_id, dto.created_by || null]
+        'INSERT INTO admins (user_id, role_id, name, remark, status, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+        [userId, dto.role_id, dto.name, dto.remark || null, adminStatus, dto.created_by || null]
       )
 
       return await queryOne(`
-        SELECT a.*, u.phone, u.name, r.display_name as role_name
+        SELECT a.*, u.phone, r.display_name as role_name
         FROM admins a
         JOIN users u ON a.user_id = u.id
         JOIN roles r ON a.role_id = r.id
@@ -508,25 +519,29 @@ export class AdminService {
     }
   }
 
-  async updateAdmin(id: string, dto: { name?: string; role_id?: number; status?: string }) {
+  async updateAdmin(id: string, dto: { name?: string; remark?: string; role_id?: number; status?: string }) {
     try {
       const updates: string[] = []
       const values: any[] = []
 
       if (dto.name !== undefined) {
-        // 只更新 users 表的 name
-        const admin = await queryOne('SELECT user_id FROM admins WHERE id = ?', [id])
-        if (admin) {
-          await queryExecute('UPDATE users SET name = ? WHERE id = ?', [dto.name, (admin as any).user_id])
-        }
+        // 更新 admins 表的 name
+        updates.push('name = ?')
+        values.push(dto.name)
+      }
+      if (dto.remark !== undefined) {
+        updates.push('remark = ?')
+        values.push(dto.remark)
       }
       if (dto.role_id !== undefined) {
         updates.push('role_id = ?')
         values.push(dto.role_id)
       }
       if (dto.status !== undefined) {
+        // 转换状态值
+        const adminStatus = dto.status === 'disabled' ? 'disabled' : 'enabled'
         updates.push('status = ?')
-        values.push(dto.status)
+        values.push(adminStatus)
       }
 
       if (updates.length > 0) {
