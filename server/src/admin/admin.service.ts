@@ -5,11 +5,14 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2'
 
 interface UserRow extends RowDataPacket {
   id: number
-  phone: string
+  login_account: string
+  phone: string | null
   password_hash: string
   name: string | null
+  avatar: string | null
   industry: string | null
   bio: string | null
+  status: string
   created_at: Date
 }
 

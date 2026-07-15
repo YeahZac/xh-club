@@ -64,6 +64,7 @@ CREATE TABLE roles (
   display_name VARCHAR(100) NOT NULL,
   description TEXT,
   permissions JSON,
+  is_system TINYINT(1) DEFAULT 0 COMMENT '是否系统内置角色：1-是，0-否',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -563,9 +564,9 @@ CREATE TABLE mall_orders (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 插入默认角色
-INSERT IGNORE INTO roles (name, display_name, description, permissions) VALUES 
-('super_admin', '超级管理员', '拥有所有权限', '["*"]'),
-('admin', '普通管理员', '基础管理权限', '["dashboard","members","articles","banners"]');
+INSERT IGNORE INTO roles (name, display_name, description, permissions, is_system) VALUES 
+('super_admin', '超级管理员', '拥有所有权限', '["*"]', 1),
+('admin', '普通管理员', '基础管理权限', '["dashboard","members","articles","banners"]', 1);
 
 -- 插入默认会员等级
 INSERT IGNORE INTO member_levels (level_code, level_name, min_contribution, discount_rate, points_multiplier, sort_order) VALUES
@@ -598,14 +599,14 @@ export class AdminController {
       // 创建默认管理员账号（密码: a123123）
       const passwordHash = await bcrypt.hash('a123123', 10)
       await this.adminService.executeRaw(
-        `INSERT IGNORE INTO users (phone, password_hash, name) VALUES ('admin', '${passwordHash}', '系统管理员')`
+        `INSERT IGNORE INTO users (login_account, password_hash, name) VALUES ('admin', '${passwordHash}', '系统管理员')`
       )
       // 获取用户ID
-      const users = await this.adminService.executeRaw(`SELECT id FROM users WHERE phone = 'admin'`)
+      const users = await this.adminService.executeRaw(`SELECT id FROM users WHERE login_account = 'admin'`)
       const userId = users[0]?.id || 1
       // 创建管理员记录（关联到超级管理员角色）
       await this.adminService.executeRaw(
-        `INSERT IGNORE INTO admins (user_id, role_id, status) VALUES (${userId}, 1, 'active')`
+        `INSERT IGNORE INTO admins (user_id, role_id, status) VALUES (${userId}, 1, 'enabled')`
       )
       
       return { 
