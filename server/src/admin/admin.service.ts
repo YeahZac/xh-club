@@ -512,7 +512,7 @@ export class AdminService {
     try {
       // 获取管理员信息
       const admin = await queryOne(`
-        SELECT a.*, u.id as user_id FROM admins a WHERE a.id = ?
+        SELECT a.*, a.user_id FROM admins a WHERE a.id = ?
       `, [id])
       if (!admin) {
         throw new HttpException('管理员不存在', HttpStatus.NOT_FOUND)
