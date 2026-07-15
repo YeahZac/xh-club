@@ -1,8 +1,22 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common'
 import { AdminService } from './admin.service'
+import * as bcrypt from 'bcryptjs'
 
 // 数据库初始化 SQL（直接嵌入代码，避免文件路径问题）
 const INIT_SQL = `
+-- 用户表（管理员账号）
+CREATE TABLE IF NOT EXISTS users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  phone VARCHAR(20) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  name VARCHAR(50),
+  avatar VARCHAR(255),
+  industry VARCHAR(50),
+  bio TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 角色表
 CREATE TABLE IF NOT EXISTS roles (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -261,6 +275,23 @@ export class AdminController {
         } catch (err: any) {
           errors.push({ statement: statement.substring(0, 50), error: err.message })
         }
+      }
+      
+      // 创建默认管理员账号（密码: a123123）
+      try {
+        const passwordHash = await bcrypt.hash('a123123', 10)
+        await this.adminService.executeRaw(
+          `INSERT IGNORE INTO users (phone, password_hash, name) VALUES ('admin', '${passwordHash}', '系统管理员')`
+        )
+        // 获取刚插入的用户ID
+        const users = await this.adminService.executeRaw(`SELECT id FROM users WHERE phone = 'admin'`)
+        const userId = users[0]?.id || 1
+        // 创建管理员记录（关联到超级管理员角色）
+        await this.adminService.executeRaw(
+          `INSERT IGNORE INTO admins (user_id, role_id, status) VALUES (${userId}, 1, 'active')`
+        )
+      } catch (err: any) {
+        errors.push({ statement: '创建默认管理员', error: err.message })
       }
       
       return { 
