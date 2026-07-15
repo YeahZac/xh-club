@@ -30,12 +30,17 @@
     @keyframes fadeOut { from { opacity:1; } to { opacity:0; } }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-thumb { background: #c9a96e33; border-radius: 3px; }
-    /* 复选框样式 - 使用原生样式确保可见 */
+    /* 强制恢复复选框原生显示 - 抵消全局 border-width:0 */
     .perm-checkbox, .page-checkbox {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-      margin: 0;
+      -webkit-appearance: checkbox !important;
+      appearance: auto !important;
+      width: 16px !important;
+      height: 16px !important;
+      min-width: 16px !important;
+      min-height: 16px !important;
+      border-width: initial !important;
+      opacity: 1 !important;
+      display: inline-block !important;
       accent-color: #e74c3c;
     }
   </style>
