@@ -112,6 +112,7 @@ const IndexPage = () => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    console.log('[首页] PROJECT_DOMAIN:', PROJECT_DOMAIN)
     loadHomeData()
   }, [])
 
