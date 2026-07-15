@@ -1963,6 +1963,9 @@ const BUTTON_LABELS = { create: '新增', edit: '编辑', delete: '删除', view
 function editRolePermissions(role) {
   console.log('[RoleEdit] 开始编辑角色:', role)
   
+  // 先切换到编辑页面
+  switchPage('role-edit')
+  
   currentEditRoleId = role.id
   
   // 解析 permissions
@@ -2027,8 +2030,6 @@ function editRolePermissions(role) {
   
   console.log('[RoleEdit] 权限表格渲染完成，行数:', PERMISSION_PAGES.length)
   
-  // 跳转到编辑页面
-  switchPage('role-edit')
   toast(`正在编辑角色：${role.display_name}`, 'success')
 }
 
