@@ -620,6 +620,101 @@ export class AdminController {
     }
   }
 
+  /** 增量迁移：修复现有表结构（不删除数据） */
+  @Post('migrate')
+  async migrateDatabase() {
+    console.log('[AdminController] POST /api/admin/migrate')
+    const results: string[] = []
+    try {
+      // 1. roles 表添加 is_system 列
+      try {
+        await this.adminService.executeRaw(
+          `ALTER TABLE roles ADD COLUMN is_system TINYINT(1) DEFAULT 0 COMMENT '是否系统内置角色：1-是，0-否'`
+        )
+        results.push('roles.is_system 列已添加')
+      } catch (e: any) {
+        if (e.message?.includes('Duplicate column')) {
+          results.push('roles.is_system 列已存在，跳过')
+        } else {
+          results.push('roles.is_system 添加失败: ' + e.message)
+        }
+      }
+
+      // 2. 更新 super_admin 角色的 is_system 和 permissions
+      try {
+        await this.adminService.executeRaw(
+          `UPDATE roles SET is_system = 1, permissions = '["*"]' WHERE name = 'super_admin'`
+        )
+        results.push('super_admin 角色已更新为系统角色')
+      } catch (e: any) {
+        results.push('super_admin 更新失败: ' + e.message)
+      }
+
+      // 3. 更新 admin 角色的 is_system
+      try {
+        await this.adminService.executeRaw(
+          `UPDATE roles SET is_system = 1 WHERE name = 'admin'`
+        )
+        results.push('admin 角色已更新为系统角色')
+      } catch (e: any) {
+        results.push('admin 更新失败: ' + e.message)
+      }
+
+      // 4. users 表添加 login_account 列（如果不存在）
+      try {
+        await this.adminService.executeRaw(
+          `ALTER TABLE users ADD COLUMN login_account VARCHAR(50) NOT NULL DEFAULT '' COMMENT '登录账号'`
+        )
+        results.push('users.login_account 列已添加')
+        // 将现有 phone 值复制到 login_account
+        await this.adminService.executeRaw(
+          `UPDATE users SET login_account = phone WHERE login_account = '' AND phone IS NOT NULL`
+        )
+        results.push('已将 phone 值复制到 login_account')
+      } catch (e: any) {
+        if (e.message?.includes('Duplicate column')) {
+          results.push('users.login_account 列已存在，跳过')
+        } else {
+          results.push('users.login_account 添加失败: ' + e.message)
+        }
+      }
+
+      // 5. 确保 admin 账号存在
+      try {
+        const existing = await this.adminService.executeRaw(
+          `SELECT id FROM users WHERE login_account = 'admin' LIMIT 1`
+        )
+        if (!existing || existing.length === 0) {
+          const passwordHash = await bcrypt.hash('a123123', 10)
+          await this.adminService.executeRaw(
+            `INSERT INTO users (login_account, password_hash, name) VALUES ('admin', '${passwordHash}', '系统管理员')`
+          )
+          const newUsers = await this.adminService.executeRaw(`SELECT id FROM users WHERE login_account = 'admin'`)
+          const userId = newUsers[0]?.id
+          if (userId) {
+            await this.adminService.executeRaw(
+              `INSERT IGNORE INTO admins (user_id, role_id, status) VALUES (${userId}, 1, 'enabled')`
+            )
+          }
+          results.push('admin 账号已创建（密码: a123123）')
+        } else {
+          results.push('admin 账号已存在')
+        }
+      } catch (e: any) {
+        results.push('admin 账号检查失败: ' + e.message)
+      }
+
+      return {
+        code: 200,
+        msg: '迁移完成',
+        data: { success: true, results }
+      }
+    } catch (err: any) {
+      console.error('[AdminController] migrate error:', err)
+      return { code: 500, msg: '迁移失败: ' + err.message, data: { results } }
+    }
+  }
+
   /** 检查数据库状态 */
   @Get('db-status')
   async checkDbStatus() {
