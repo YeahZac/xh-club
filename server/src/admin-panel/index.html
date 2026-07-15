@@ -527,7 +527,12 @@
             <table class="w-full text-sm">
               <thead class="bg-gradient-to-r from-gray-50 to-gray-100">
                 <tr>
-                  <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-[35%]">📄 页面名称</th>
+                  <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-[35%]">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" id="selectAllPerm" class="page-checkbox" onchange="toggleAllPermissions(this.checked)">
+                      <span>📄 页面名称（全选）</span>
+                    </label>
+                  </th>
                   <th class="px-3 py-3 text-center text-sm font-semibold text-blue-600">✅ 查看</th>
                   <th class="px-3 py-3 text-center text-sm font-semibold text-green-600">➕ 新增</th>
                   <th class="px-3 py-3 text-center text-sm font-semibold text-yellow-600">✏️ 编辑</th>
@@ -2065,6 +2070,34 @@ function togglePagePermission(pageKey, checked) {
   // 同时更新查看复选框
   const viewCheck = document.querySelector(`.perm-checkbox[data-page="${pageKey}"][data-btn="view"]`)
   if (viewCheck && checked) viewCheck.checked = true
+  // 同步全选状态
+  updateSelectAllState()
+}
+
+// 全选/取消全部
+function toggleAllPermissions(checked) {
+  console.log('[ToggleAll] 全选:', checked)
+  PERMISSION_PAGES.forEach(p => {
+    const pageCheck = document.getElementById(`page-${p.key}`)
+    if (pageCheck) pageCheck.checked = checked
+    const btnChecks = document.querySelectorAll(`.perm-checkbox[data-page="${p.key}"]`)
+    btnChecks.forEach(cb => {
+      cb.disabled = !checked
+      cb.checked = checked
+    })
+  })
+}
+
+// 更新全选复选框状态
+function updateSelectAllState() {
+  const selectAll = document.getElementById('selectAllPerm')
+  if (!selectAll) return
+  const pageChecks = document.querySelectorAll('.page-checkbox[data-page]')
+  let allChecked = pageChecks.length > 0
+  pageChecks.forEach(cb => {
+    if (!cb.checked) allChecked = false
+  })
+  selectAll.checked = allChecked
 }
 
 // 保存角色权限
