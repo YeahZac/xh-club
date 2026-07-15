@@ -965,6 +965,13 @@ function showEventModal() {
       <h3 class="text-lg font-bold text-navy-800 mb-6">创建活动</h3>
       <div class="space-y-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">活动名称</label><input id="evTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动名称"></div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">封面图片</label>
+          <div class="flex items-center gap-3">
+            <input id="evCover" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入图片URL或上传">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'evCover')"></label>
+          </div>
+        </div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">活动类型</label><select id="evType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="salon">专题沙龙</option><option value="roadshow">路演日</option><option value="annual">年度大会</option><option value="training">培训</option><option value="meeting">定期例会</option></select></div>
         <div class="grid grid-cols-2 gap-4">
           <div><label class="block text-sm font-medium text-gray-700 mb-1">开始时间</label><input id="evStart" type="datetime-local" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
@@ -1034,6 +1041,7 @@ async function createEvent() {
 
   const body = {
     title: document.getElementById('evTitle').value,
+    cover_image: document.getElementById('evCover').value,
     event_type: document.getElementById('evType').value,
     start_time: document.getElementById('evStart').value,
     end_time: document.getElementById('evEnd').value,
@@ -1084,6 +1092,13 @@ function showProjectModal() {
       <h3 class="text-lg font-bold text-navy-800 mb-6">创建项目</h3>
       <div class="space-y-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">项目名称</label><input id="pjTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">封面图片</label>
+          <div class="flex items-center gap-3">
+            <input id="pjCover" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入图片URL或上传">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'pjCover')"></label>
+          </div>
+        </div>
         <div class="grid grid-cols-2 gap-4">
           <div><label class="block text-sm font-medium text-gray-700 mb-1">行业</label><select id="pjIndustry" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${Object.entries(INDUSTRY_MAP).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">融资阶段</label><select id="pjStage" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${Object.entries(STAGE_MAP).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
@@ -1105,6 +1120,7 @@ function showProjectModal() {
 async function createProject() {
   const body = {
     title: document.getElementById('pjTitle').value,
+    cover_image: document.getElementById('pjCover').value,
     industry: document.getElementById('pjIndustry').value,
     stage: document.getElementById('pjStage').value,
     amount_max: parseInt(document.getElementById('pjAmount').value) * 10000,
@@ -1298,12 +1314,18 @@ function showMallModal() {
       <h3 class="text-lg font-bold text-navy-800 mb-6">添加商品</h3>
       <div class="space-y-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">商品名称</label><input id="mlName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">商品图片</label>
+          <div class="flex items-center gap-3">
+            <input id="mlCover" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入图片URL或上传">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'mlCover')"></label>
+          </div>
+        </div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">描述</label><input id="mlDesc" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
         <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">分类</label><select id="mlCat" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${Object.entries(CATEGORY_MAP).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">积分价格</label><input id="mlPoints" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">库存</label><input id="mlStock" type="number" value="100" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         </div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">库存</label><input id="mlStock" type="number" value="100" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
           <button onclick="createMallProduct()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
@@ -1316,12 +1338,11 @@ function showMallModal() {
 async function createMallProduct() {
   const body = {
     name: document.getElementById('mlName').value,
+    cover_image: document.getElementById('mlCover').value,
     description: document.getElementById('mlDesc').value,
-    category: document.getElementById('mlCat').value,
     points_price: parseInt(document.getElementById('mlPoints').value) || 100,
     stock: parseInt(document.getElementById('mlStock').value) || 100,
-    status: 'active',
-    sort_order: 99
+    status: 'active'
   }
   const res = await api('/admin/mall-products', { method: 'POST', body })
   if (res.code === 200) { toast('商品创建成功'); closeModal(); loadMallProducts(); }

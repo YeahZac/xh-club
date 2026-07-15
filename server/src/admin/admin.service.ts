@@ -241,16 +241,26 @@ export class AdminService {
 
   async createEvent(dto: any) {
     try {
-      return { id: Date.now(), ...dto }
+      const result = await queryExecute(
+        `INSERT INTO events (title, description, cover_image, event_type, status, start_time, end_time, location, address, max_participants, fee)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [dto.title, dto.description || null, dto.cover_image || null, dto.event_type || 'salon',
+         dto.status || 'draft', dto.start_time || null, dto.end_time || null,
+         dto.location || null, dto.address || null, dto.max_participants || 100, dto.fee || 0]
+      )
+      return await queryOne('SELECT * FROM events WHERE id = ?', [result.insertId])
     } catch (error) {
+      console.error('[AdminService] createEvent error:', error)
       throw new HttpException('创建活动失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 
   async deleteEvent(id: string) {
     try {
+      await queryExecute('DELETE FROM events WHERE id = ?', [id])
       return { success: true }
     } catch (error) {
+      console.error('[AdminService] deleteEvent error:', error)
       throw new HttpException('删除活动失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
@@ -267,16 +277,24 @@ export class AdminService {
 
   async createProject(dto: any) {
     try {
-      return { id: Date.now(), ...dto }
+      const result = await queryExecute(
+        `INSERT INTO projects (title, description, cover_image, status)
+         VALUES (?, ?, ?, ?)`,
+        [dto.title, dto.description || null, dto.cover_image || null, dto.status || 'draft']
+      )
+      return await queryOne('SELECT * FROM projects WHERE id = ?', [result.insertId])
     } catch (error) {
+      console.error('[AdminService] createProject error:', error)
       throw new HttpException('创建项目失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 
   async deleteProject(id: string) {
     try {
+      await queryExecute('DELETE FROM projects WHERE id = ?', [id])
       return { success: true }
     } catch (error) {
+      console.error('[AdminService] deleteProject error:', error)
       throw new HttpException('删除项目失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
@@ -382,11 +400,10 @@ export class AdminService {
   async createMallProduct(dto: any) {
     try {
       const result = await queryExecute(
-        `INSERT INTO mall_products (name, description, points_price, cash_price, stock, category, image_url, enable_distribution, distribution_rate)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [dto.name, dto.description || null, dto.points_price || 0, dto.cash_price || 0,
-         dto.stock || 0, dto.category || 'gift', dto.image_url || null,
-         dto.enable_distribution || false, dto.distribution_rate || 0]
+        `INSERT INTO mall_products (name, description, points_price, stock, cover_image, status)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [dto.name, dto.description || null, dto.points_price || 0,
+         dto.stock || 0, dto.cover_image || null, dto.status || 'active']
       )
       return await queryOne('SELECT * FROM mall_products WHERE id = ?', [result.insertId])
     } catch (error) {

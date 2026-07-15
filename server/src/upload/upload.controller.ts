@@ -76,16 +76,30 @@ export class UploadController {
   }
 
   @Delete()
-  async deleteFile(@Body('path') filePath: string) {
-    if (!filePath) {
-      throw new Error('File path is required');
+  async deleteFile(@Body('key') fileKey: string) {
+    if (!fileKey) {
+      throw new Error('File key is required');
     }
 
-    await this.uploadService.deleteFile(filePath);
+    await this.uploadService.deleteFile(fileKey);
     return {
       code: 200,
       msg: 'Delete successful',
       data: null,
+    };
+  }
+
+  @Get('url')
+  async getFileUrl(@Query('key') key: string, @Query('expire') expire?: string) {
+    if (!key) {
+      throw new Error('File key is required');
+    }
+    const expireTime = expire ? parseInt(expire) : 86400;
+    const url = await this.uploadService.getFileUrl(key, expireTime);
+    return {
+      code: 200,
+      msg: 'success',
+      data: { url },
     };
   }
 }
