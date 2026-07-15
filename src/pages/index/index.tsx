@@ -119,7 +119,7 @@ const IndexPage = () => {
     try {
       setLoading(true)
       const [bannersRes, projectsRes, resourcesRes, postsRes] = await Promise.all([
-        Network.request({ url: '/api/admin/banners' }),
+        Network.request({ url: '/api/banners' }),
         Network.request({ url: '/api/events' }),
         Network.request({ url: '/api/community/resources' }),
         Network.request({ url: '/api/community/posts' }),

@@ -11,6 +11,7 @@ import { MallModule } from './mall/mall.module'
 import { UploadModule } from './upload/upload.module'
 import { ArticlesModule } from './articles/articles.module'
 import { AuthModule } from './auth/auth.module'
+import { BannersModule } from './banners/banners.module'
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AuthModule } from './auth/auth.module'
     UploadModule,
     ArticlesModule,
     AuthModule,
+    BannersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

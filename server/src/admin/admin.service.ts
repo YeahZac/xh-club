@@ -157,10 +157,12 @@ export class AdminService {
   async getBanners() {
     try {
       const rows = await queryRows('SELECT * FROM banners ORDER BY sort_order ASC')
-      // 解析 JSON 字段
+      // 解析 JSON 字段（MySQL JSON 类型可能已自动解析为对象）
       return rows.map((row: any) => ({
         ...row,
-        link_config: row.link_config ? JSON.parse(row.link_config) : null,
+        link_config: row.link_config
+          ? (typeof row.link_config === 'string' ? JSON.parse(row.link_config) : row.link_config)
+          : null,
       }))
     } catch (error) {
       console.error('[AdminService] getBanners error:', error)
