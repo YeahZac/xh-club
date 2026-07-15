@@ -30,54 +30,13 @@
     @keyframes fadeOut { from { opacity:1; } to { opacity:0; } }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-thumb { background: #c9a96e33; border-radius: 3px; }
-    /* 自定义复选框样式 */
-    .perm-checkbox {
-      width: 20px;
-      height: 20px;
-      border: 2px solid #e74c3c;
-      border-radius: 3px;
+    /* 复选框样式 - 使用原生样式确保可见 */
+    .perm-checkbox, .page-checkbox {
+      width: 18px;
+      height: 18px;
       cursor: pointer;
-      appearance: none;
-      -webkit-appearance: none;
-      background: white;
-      position: relative;
-    }
-    .perm-checkbox:checked {
-      background: #e74c3c;
-    }
-    .perm-checkbox:checked::after {
-      content: '✓';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: white;
-      font-size: 14px;
-      font-weight: bold;
-    }
-    .page-checkbox {
-      width: 20px;
-      height: 20px;
-      border: 2px solid #e74c3c;
-      border-radius: 3px;
-      cursor: pointer;
-      appearance: none;
-      -webkit-appearance: none;
-      background: white;
-      position: relative;
-    }
-    .page-checkbox:checked {
-      background: #e74c3c;
-    }
-    .page-checkbox:checked::after {
-      content: '✓';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: white;
-      font-size: 14px;
-      font-weight: bold;
+      margin: 0;
+      accent-color: #e74c3c;
     }
   </style>
 </head>
