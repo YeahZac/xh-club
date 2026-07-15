@@ -1999,30 +1999,22 @@ function editRolePermissions(role) {
     return `
       <tr class="hover:bg-gray-50 border-b border-gray-100">
         <td class="px-4 py-3 w-1/3">
-          <label class="flex items-center gap-3 cursor-pointer" for="page-${p.key}">
-            <input type="checkbox" id="page-${p.key}" class="page-check w-5 h-5 rounded border-gray-300 text-brand-500 focus:ring-brand-400 cursor-pointer" data-page="${p.key}" ${hasView ? 'checked' : ''} onchange="togglePagePermission('${p.key}', this.checked)">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="page-${p.key}" class="page-check" style="width:20px;height:20px;cursor:pointer;" data-page="${p.key}" ${hasView ? 'checked' : ''} onchange="togglePagePermission('${p.key}', this.checked)">
             <span class="text-sm font-medium text-gray-800">${p.name}</span>
           </label>
         </td>
         <td class="px-4 py-3 text-center">
-          <label class="inline-flex items-center justify-center cursor-pointer" for="view-${p.key}">
-            <input type="checkbox" id="view-${p.key}" class="btn-check w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400 cursor-pointer" data-page="${p.key}" data-btn="view" ${hasView ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
-          </label>
+          <input type="checkbox" id="view-${p.key}" class="btn-check" style="width:18px;height:18px;cursor:pointer;" data-page="${p.key}" data-btn="view" ${hasView ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
         </td>
         <td class="px-4 py-3 text-center">
-          <label class="inline-flex items-center justify-center cursor-pointer" for="create-${p.key}">
-            <input type="checkbox" id="create-${p.key}" class="btn-check w-4 h-4 rounded border-gray-300 text-green-500 focus:ring-green-400 cursor-pointer" data-page="${p.key}" data-btn="create" ${hasCreate ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
-          </label>
+          <input type="checkbox" id="create-${p.key}" class="btn-check" style="width:18px;height:18px;cursor:pointer;" data-page="${p.key}" data-btn="create" ${hasCreate ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
         </td>
         <td class="px-4 py-3 text-center">
-          <label class="inline-flex items-center justify-center cursor-pointer" for="edit-${p.key}">
-            <input type="checkbox" id="edit-${p.key}" class="btn-check w-4 h-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400 cursor-pointer" data-page="${p.key}" data-btn="edit" ${hasEdit ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
-          </label>
+          <input type="checkbox" id="edit-${p.key}" class="btn-check" style="width:18px;height:18px;cursor:pointer;" data-page="${p.key}" data-btn="edit" ${hasEdit ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
         </td>
         <td class="px-4 py-3 text-center">
-          <label class="inline-flex items-center justify-center cursor-pointer" for="delete-${p.key}">
-            <input type="checkbox" id="delete-${p.key}" class="btn-check w-4 h-4 rounded border-gray-300 text-red-500 focus:ring-red-400 cursor-pointer" data-page="${p.key}" data-btn="delete" ${hasDelete ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
-          </label>
+          <input type="checkbox" id="delete-${p.key}" class="btn-check" style="width:18px;height:18px;cursor:pointer;" data-page="${p.key}" data-btn="delete" ${hasDelete ? 'checked' : ''} ${!hasView ? 'disabled' : ''}>
         </td>
       </tr>
     `
