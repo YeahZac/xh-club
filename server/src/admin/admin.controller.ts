@@ -41,6 +41,7 @@ DROP TABLE IF EXISTS transactions;
 DROP TABLE IF EXISTS organizations;
 DROP TABLE IF EXISTS configs;
 DROP TABLE IF EXISTS mall_orders;
+DROP TABLE IF EXISTS banners;
 
 -- 用户表（管理员账号）
 CREATE TABLE users (
@@ -563,6 +564,22 @@ CREATE TABLE mall_orders (
   INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Banner 表
+CREATE TABLE banners (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(100) NOT NULL,
+  image_url VARCHAR(500),
+  link_type VARCHAR(20) DEFAULT 'link' COMMENT '链接类型: article/event/link/miniapp',
+  link_id VARCHAR(100) COMMENT '关联ID',
+  link_config JSON COMMENT '链接配置',
+  sort_order INT DEFAULT 0,
+  is_active TINYINT(1) DEFAULT 1,
+  start_time TIMESTAMP NULL,
+  end_time TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 插入默认角色
 INSERT IGNORE INTO roles (name, display_name, description, permissions, is_system) VALUES 
 ('super_admin', '超级管理员', '拥有所有权限', '["*"]', 1),
@@ -702,6 +719,29 @@ export class AdminController {
         }
       } catch (e: any) {
         results.push('admin 账号检查失败: ' + e.message)
+      }
+
+      // 6. 创建 banners 表（如果不存在）
+      try {
+        await this.adminService.executeRaw(`
+          CREATE TABLE IF NOT EXISTS banners (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(100) NOT NULL,
+            image_url VARCHAR(500),
+            link_type VARCHAR(20) DEFAULT 'link' COMMENT '链接类型: article/event/link/miniapp',
+            link_id VARCHAR(100) COMMENT '关联ID',
+            link_config JSON COMMENT '链接配置',
+            sort_order INT DEFAULT 0,
+            is_active TINYINT(1) DEFAULT 1,
+            start_time TIMESTAMP NULL,
+            end_time TIMESTAMP NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `)
+        results.push('banners 表已创建')
+      } catch (e: any) {
+        results.push('banners 表创建失败: ' + e.message)
       }
 
       return {

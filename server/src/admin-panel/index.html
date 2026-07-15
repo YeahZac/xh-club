@@ -1816,18 +1816,20 @@ async function loadRoles() {
   const list = document.getElementById('rolesList')
   if (res.code === 200 && res.data?.length) {
     list.innerHTML = res.data.map(r => {
-      // 解析 permissions（可能是字符串或对象）
+      // 解析 permissions（可能是字符串、对象或数组）
       let perms = r.permissions || {}
       if (typeof perms === 'string') {
         try { perms = JSON.parse(perms) } catch(e) { perms = {} }
       }
-      const permCount = perms && typeof perms === 'object' ? Object.keys(perms).filter(k => perms[k]?.view).length : 0
+      // 检查是否是超级管理员权限
+      const isAllPerms = Array.isArray(perms) && perms.includes('*')
+      const permCount = isAllPerms ? '所有权限' : (perms && typeof perms === 'object' && !Array.isArray(perms) ? Object.keys(perms).filter(k => perms[k]?.view).length + ' 个页面' : '未配置')
       return `
       <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
         <div>
           <p class="font-medium text-navy-800">${r.display_name}</p>
           <p class="text-xs text-gray-400">${r.name} · ${r.description || '无描述'}</p>
-          <p class="text-xs text-gray-400 mt-1">权限: ${permCount > 0 ? permCount + ' 个页面' : '未配置'}</p>
+          <p class="text-xs text-gray-400 mt-1">权限: ${permCount}</p>
         </div>
         <div class="flex gap-2">
           <button onclick='showEditRoleModal(${JSON.stringify({...r, permissions: perms}).replace(/'/g, "\\'")})' class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑权限</button>
@@ -1876,24 +1878,34 @@ function showEditRoleModal(role) {
     { key: 'config', name: '系统配置' }
   ]
   const buttons = ['create', 'edit', 'delete', 'view']
-  // 解析 permissions（可能是字符串或对象）
+  // 解析 permissions（可能是字符串、对象或数组）
   let perms = role.permissions || {}
   if (typeof perms === 'string') {
     try { perms = JSON.parse(perms) } catch(e) { perms = {} }
   }
+  // 检查是否是超级管理员权限（["*"] 格式）
+  const isAllPerms = Array.isArray(perms) && perms.includes('*')
+  // 如果是数组但不是 ["*"]，转换为空对象
+  if (Array.isArray(perms)) {
+    perms = isAllPerms ? {} : {}
+  }
+  
+  // 辅助函数：检查权限
+  const hasPageView = (key) => isAllPerms || perms[key]?.view
+  const hasButtonPerm = (key, btn) => isAllPerms || perms[key]?.[btn]
   
   let pagesHtml = pages.map(p => `
     <div class="border border-gray-100 rounded-lg p-3">
       <div class="flex items-center justify-between mb-2">
         <label class="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" class="page-check rounded" data-page="${p.key}" ${perms[p.key]?.view ? 'checked' : ''} onchange="togglePagePerms('${p.key}', this.checked)">
+          <input type="checkbox" class="page-check rounded" data-page="${p.key}" ${hasPageView(p.key) ? 'checked' : ''} onchange="togglePagePerms('${p.key}', this.checked)">
           <span class="text-sm font-medium text-gray-700">${p.name}</span>
         </label>
       </div>
-      <div id="perms-${p.key}" class="flex gap-4 pl-6 ${perms[p.key]?.view ? '' : 'hidden'}">
+      <div id="perms-${p.key}" class="flex gap-4 pl-6 ${hasPageView(p.key) ? '' : 'hidden'}">
         ${buttons.map(b => `
           <label class="flex items-center gap-1 cursor-pointer">
-            <input type="checkbox" class="btn-check rounded text-xs" data-page="${p.key}" data-btn="${b}" ${perms[p.key]?.[b] ? 'checked' : ''}>
+            <input type="checkbox" class="btn-check rounded text-xs" data-page="${p.key}" data-btn="${b}" ${hasButtonPerm(p.key, b) ? 'checked' : ''}>
             <span class="text-xs text-gray-500">${{create:'新增',edit:'编辑',delete:'删除',view:'查看'}[b]}</span>
           </label>
         `).join('')}
