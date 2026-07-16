@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { View, Text, ScrollView } from "@tarojs/components"
+import { Image, View, Text, ScrollView } from "@tarojs/components"
 import Taro from "@tarojs/taro"
 import {
   Search, MapPin,
@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
+import { getResponseList } from "@/lib/api-response"
 import { Network } from "@/network"
 
 /* ── Types ── */
@@ -54,10 +55,13 @@ const industryMap: Record<string, string> = {
   service: '综合服务',
 }
 
+const isCloudStorageImageUrl = (url: string) =>
+  /^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)/i.test(url)
+
 const BusinessPage = () => {
   const [activeTab, setActiveTab] = useState("roadshow")
   const isMiniApp = ([Taro.ENV_TYPE.WEAPP, Taro.ENV_TYPE.TT] as string[]).includes(Taro.getEnv() as string)
-  const statusBarHeight = isMiniApp ? 22 : 8
+  const statusBarHeight = isMiniApp ? (Taro.getWindowInfo().statusBarHeight || 22) : 44
 
   const [projects, setProjects] = useState<ProjectItem[]>([])
   const [financing, setFinancing] = useState<ProjectItem[]>([])
@@ -72,17 +76,16 @@ const BusinessPage = () => {
     try {
       setLoading(true)
       const [projectsRes, resourcesRes] = await Promise.all([
-        Network.request({ url: '/api/events' }),
+        Network.request({ url: '/api/projects' }),
         Network.request({ url: '/api/community/resources' }),
       ])
       console.log('[商机页] projects:', projectsRes?.data)
       console.log('[商机页] resources:', resourcesRes?.data)
 
-      if (projectsRes?.data?.data) {
-        setProjects(projectsRes.data.data.slice(0, 20))
-        setFinancing(projectsRes.data.data.slice(0, 10))
-      }
-      if (resourcesRes?.data?.data) setResources(resourcesRes.data.data.slice(0, 20))
+      const projectList = getResponseList<ProjectItem>(projectsRes?.data?.data)
+      setProjects(projectList.slice(0, 20))
+      setFinancing(projectList.slice(0, 10))
+      setResources(getResponseList<ResourceItem>(resourcesRes?.data?.data).slice(0, 20))
     } catch (err) {
       console.error('[商机页] 加载失败:', err)
     } finally {
@@ -106,7 +109,7 @@ const BusinessPage = () => {
       {/* ── Header ── */}
       <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pb-4">
         <View style={{ height: `${statusBarHeight}px` }} />
-        <Text className="block text-xl font-bold text-white mb-3">商机</Text>
+        {isMiniApp && <Text className="block text-xl font-bold text-white mb-3">商机</Text>}
         <View className="flex flex-row items-center gap-2">
           <View className="flex-1 rounded-xl px-3 py-2 flex flex-row items-center gap-2" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
             <Search size={16} color="rgba(255,255,255,0.6)" />
@@ -139,6 +142,9 @@ const BusinessPage = () => {
               <View className="flex flex-col gap-4 pb-8">
                 {projects.map((item) => (
                   <Card key={item.id} className="shadow-sm border-0 overflow-hidden">
+                    {isCloudStorageImageUrl(item.cover_image) && (
+                      <Image src={item.cover_image} mode="aspectFill" className="w-full h-48" />
+                    )}
                     <View className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] p-5 relative overflow-hidden">
                       <View className="absolute -right-8 -top-8 w-28 h-28 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
                       <View className="absolute right-4 bottom-2 w-16 h-16 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
@@ -188,6 +194,9 @@ const BusinessPage = () => {
               <View className="flex flex-col gap-4 pb-8">
                 {financing.map((item) => (
                   <Card key={item.id} className="shadow-sm border-0 overflow-hidden">
+                    {isCloudStorageImageUrl(item.cover_image) && (
+                      <Image src={item.cover_image} mode="aspectFill" className="w-full h-48" />
+                    )}
                     <View className="bg-gradient-to-br from-[#2D4A7A] to-[#4A6FA5] p-5 relative overflow-hidden">
                       <View className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
                       <View className="flex flex-row items-center justify-between mb-2">

@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { getSupabaseClient } from '../storage/database/supabase-compat';
+import { isCloudStorageUrl } from '@/utils/media-url';
 
 @Injectable()
 export class ArticlesService {
@@ -27,6 +28,7 @@ export class ArticlesService {
   }
 
   async create(data: any) {
+    this.validateMedia(data, true);
     const { data: article, error } = await this.client()
       .from('articles')
       .insert([data])
@@ -38,6 +40,7 @@ export class ArticlesService {
   }
 
   async update(id: string, data: any) {
+    this.validateMedia(data, false);
     const { data: article, error } = await this.client()
       .from('articles')
       .update({ ...data, updated_at: new Date() })
@@ -65,5 +68,14 @@ export class ArticlesService {
 
   async unpublish(id: string) {
     return this.update(id, { status: 'draft', published_at: null });
+  }
+
+  private validateMedia(data: any, requireImage: boolean) {
+    if ((requireImage || data.cover_image !== undefined) && !isCloudStorageUrl(data.cover_image)) {
+      throw new BadRequestException('文章封面图片为必填项');
+    }
+    if (data.video_url && !isCloudStorageUrl(data.video_url)) {
+      throw new BadRequestException('文章视频必须使用微信云托管对象存储 URL');
+    }
   }
 }

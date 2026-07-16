@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common'
 import { TransactionsController, PointsController } from './transactions.controller'
 import { TransactionsService, PointsService } from './transactions.service'
+import { MemberAuthGuard } from '@/auth/auth.guard'
 
 @Module({
   controllers: [TransactionsController, PointsController],
-  providers: [TransactionsService, PointsService],
+  providers: [TransactionsService, PointsService, MemberAuthGuard],
 })
 export class TransactionsModule {}

@@ -16,7 +16,7 @@ export class EventRegistrationService {
   }) {
     const client = getSupabaseClient();
     const { data, error } = await client
-      .from('event_registrations')
+      .from('event_form_registrations')
       .insert({
         name: body.name,
         gender: body.gender,
@@ -38,7 +38,7 @@ export class EventRegistrationService {
   async findAll(keyword?: string) {
     const client = getSupabaseClient();
     let query = client
-      .from('event_registrations')
+      .from('event_form_registrations')
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -58,7 +58,7 @@ export class EventRegistrationService {
   async remove(id: string) {
     const client = getSupabaseClient();
     const { error } = await client
-      .from('event_registrations')
+      .from('event_form_registrations')
       .delete()
       .eq('id', id);
 

@@ -177,7 +177,7 @@ const ProductDetailPage = () => {
       <View className="relative">
         <Image
           src={product.image_url}
-          className="w-full h-80"
+          className="w-full aspect-square"
           mode="aspectFill"
         />
         <View

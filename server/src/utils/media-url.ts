@@ -6,6 +6,11 @@ function buildCosUrl(bucket: string, region: string, key: string): string {
   return `https://${bucket}.cos.${region}.myqcloud.com/${key}`;
 }
 
+export function isCloudStorageUrl(input: unknown): input is string {
+  return typeof input === 'string'
+    && /^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)\//i.test(input.trim());
+}
+
 /**
  * Normalize stored media path into a web-accessible URL.
  * Supports:

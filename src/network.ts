@@ -16,10 +16,16 @@ export namespace Network {
         return `${PROJECT_DOMAIN}${url}`
     }
 
+    const createAuthHeader = () => {
+        const token = Taro.getStorageSync('member_token')
+        return token ? { Authorization: `Bearer ${token}` } : {}
+    }
+
     export const request: typeof Taro.request = option => {
         return Taro.request({
             ...option,
             url: createUrl(option.url),
+            header: { ...createAuthHeader(), ...option.header },
         })
     }
 
@@ -27,6 +33,7 @@ export namespace Network {
         return Taro.uploadFile({
             ...option,
             url: createUrl(option.url),
+            header: { ...createAuthHeader(), ...option.header },
         })
     }
 
@@ -34,6 +41,7 @@ export namespace Network {
         return Taro.downloadFile({
             ...option,
             url: createUrl(option.url),
+            header: { ...createAuthHeader(), ...option.header },
         })
     }
 }

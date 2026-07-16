@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { getResponseList } from "@/lib/api-response"
 import { Network } from "@/network"
 
 interface ChatItem {
@@ -18,6 +19,17 @@ interface ChatItem {
   time: string
   unread: number
   avatar: string
+}
+
+interface MessageRecord {
+  id: string
+  sender_id: string
+  receiver_id: string
+  content: string
+  is_read: boolean
+  created_at: string
+  sender?: { id: string; name: string; avatar: string }
+  receiver?: { id: string; name: string; avatar: string }
 }
 
 interface NotificationItem {
@@ -42,32 +54,49 @@ const notifIconMap: Record<string, any> = {
 const MessagePage = () => {
   const [activeTab, setActiveTab] = useState("chat")
   const isMiniApp = ([Taro.ENV_TYPE.WEAPP, Taro.ENV_TYPE.TT] as string[]).includes(Taro.getEnv() as string)
-  const statusBarHeight = isMiniApp ? 22 : 8
+  const statusBarHeight = isMiniApp ? (Taro.getWindowInfo().statusBarHeight || 22) : 44
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
+  const [chats, setChats] = useState<ChatItem[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
-  const mockChats: ChatItem[] = [
-    { id: '1', name: '张伟', lastMessage: '您好，关于项目合作想和您聊聊', time: '10:30', unread: 2, avatar: '' },
-    { id: '2', name: '广州分会群', lastMessage: '本周六沙龙活动报名中...', time: '09:15', unread: 5, avatar: '' },
-    { id: '3', name: '李明', lastMessage: 'BP已发送到您邮箱，请查收', time: '昨天', unread: 0, avatar: '' },
-    { id: '4', name: '科技部群', lastMessage: '下月路演项目征集', time: '昨天', unread: 0, avatar: '' },
-  ]
-
   useEffect(() => {
-    loadNotifications()
+    loadMessageData()
   }, [])
 
-  const loadNotifications = async () => {
+  const loadMessageData = async () => {
     try {
       setLoading(true)
-      const res = await Network.request({ url: '/api/messages/notifications' })
-      console.log('[消息页] notifications:', res?.data)
-      if (res?.data?.data) {
-        setNotifications(res.data.data)
-        setUnreadCount(res.data.data.filter((n: NotificationItem) => !n.is_read).length)
+      const memberId = Taro.getStorageSync('member_id')
+      if (!memberId) {
+        setNotifications([])
+        setChats([])
+        setUnreadCount(0)
+        return
       }
+      const [notificationsRes, messagesRes, unreadRes] = await Promise.all([
+        Network.request({ url: '/api/notifications' }),
+        Network.request({ url: '/api/messages' }),
+        Network.request({ url: '/api/notifications/unread-count' }),
+      ])
+      console.log('[消息页] notifications:', notificationsRes?.data)
+      const notificationList = getResponseList<NotificationItem>(notificationsRes?.data?.data)
+      const messageList = getResponseList<MessageRecord>(messagesRes?.data?.data)
+      setNotifications(notificationList)
+      setChats(messageList.map(message => {
+        const isIncoming = String(message.receiver_id) === String(memberId)
+        const counterpart = isIncoming ? message.sender : message.receiver
+        return {
+          id: message.id,
+          name: counterpart?.name || '会员',
+          lastMessage: message.content,
+          time: formatTime(message.created_at),
+          unread: isIncoming && !message.is_read ? 1 : 0,
+          avatar: counterpart?.avatar || '',
+        }
+      }))
+      setUnreadCount(unreadRes?.data?.data?.notifications || 0)
     } catch (err) {
       console.error('[消息页] 加载失败:', err)
     } finally {
@@ -90,7 +119,7 @@ const MessagePage = () => {
       {/* Header */}
       <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pb-4">
         <View style={{ height: `${statusBarHeight}px` }} />
-        <Text className="block text-xl font-bold text-white">消息</Text>
+        {isMiniApp && <Text className="block text-xl font-bold text-white">消息</Text>}
       </View>
 
       {/* Tabs */}
@@ -112,7 +141,7 @@ const MessagePage = () => {
           <TabsContent value="chat">
             <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 180px)' }}>
               <View className="flex flex-col gap-2 pb-8">
-                {mockChats.map((item) => (
+                {chats.map((item) => (
                   <Card key={item.id} className="shadow-sm border-0">
                     <CardContent className="p-4">
                       <View className="flex flex-row items-center gap-3">
@@ -136,6 +165,9 @@ const MessagePage = () => {
                     </CardContent>
                   </Card>
                 ))}
+                {!loading && chats.length === 0 && (
+                  <Text className="block py-12 text-center text-sm text-gray-400">暂无聊天消息</Text>
+                )}
               </View>
             </ScrollView>
           </TabsContent>

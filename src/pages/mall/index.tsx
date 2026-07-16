@@ -145,7 +145,7 @@ const MallPage = () => {
                 <View className="relative">
                   <Image
                     src={product.image_url}
-                    className="w-full h-40 object-cover"
+                    className="w-full aspect-square object-cover"
                     mode="aspectFill"
                   />
                   {product.enable_distribution && (

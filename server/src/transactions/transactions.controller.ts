@@ -1,28 +1,30 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common'
+import { Controller, Get, Post, Body, Param, Query, Req, UseGuards } from '@nestjs/common'
 import { TransactionsService, PointsService } from './transactions.service'
+import { MemberAuthGuard } from '@/auth/auth.guard'
 
 @Controller('transactions')
+@UseGuards(MemberAuthGuard)
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
   @Get()
-  async findAll(@Query() query: any) {
+  async findAll(@Query() query: any, @Req() request: any) {
     console.log('[TransactionsController] GET /api/transactions')
-    const result = await this.transactionsService.findAll(query)
+    const result = await this.transactionsService.findAll({ ...query, member_id: request.user.sub })
     return { code: 200, msg: 'success', data: result }
   }
 
   @Post()
-  async create(@Body() dto: any) {
+  async create(@Body() dto: any, @Req() request: any) {
     console.log('[TransactionsController] POST /api/transactions')
-    const result = await this.transactionsService.create(dto)
+    const result = await this.transactionsService.create({ ...dto, member_id: request.user.sub })
     return { code: 200, msg: '创建成功', data: result }
   }
 
   @Post(':id/confirm')
-  async confirm(@Param('id') id: string, @Body() body: { member_id: string }) {
+  async confirm(@Param('id') id: string, @Req() request: any) {
     console.log('[TransactionsController] POST /api/transactions/:id/confirm')
-    const result = await this.transactionsService.confirm(id, body.member_id)
+    const result = await this.transactionsService.confirm(id, request.user.sub)
     return { code: 200, msg: '确认成功', data: result }
   }
 }
@@ -32,11 +34,10 @@ export class PointsController {
   constructor(private readonly pointsService: PointsService) {}
 
   @Get('records')
-  async getRecords(@Query() query: any) {
+  @UseGuards(MemberAuthGuard)
+  async getRecords(@Query() query: any, @Req() request: any) {
     console.log('[PointsController] GET /api/points/records')
-    const memberId = query.member_id
-    if (!memberId) return { code: 400, msg: '缺少member_id', data: null }
-    const result = await this.pointsService.getRecords(memberId, query)
+    const result = await this.pointsService.getRecords(request.user.sub, query)
     return { code: 200, msg: 'success', data: result }
   }
 
@@ -48,10 +49,11 @@ export class PointsController {
   }
 
   @Post('exchange')
-  async exchange(@Body() body: { member_id: string; product_id: string }) {
+  @UseGuards(MemberAuthGuard)
+  async exchange(@Body() body: { product_id: string }, @Req() request: any) {
     console.log('[PointsController] POST /api/points/exchange')
-    if (!body.member_id || !body.product_id) return { code: 400, msg: '参数缺失', data: null }
-    const result = await this.pointsService.exchange(body.member_id, body.product_id)
+    if (!body.product_id) return { code: 400, msg: '参数缺失', data: null }
+    const result = await this.pointsService.exchange(request.user.sub, body.product_id)
     return { code: 200, msg: '兑换成功', data: result }
   }
 }

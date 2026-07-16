@@ -132,3 +132,23 @@ export async function queryExecute(sql: string, params?: any[]): Promise<ResultS
   const [result] = await p.query(sql, params) as [ResultSetHeader, any];
   return result;
 }
+
+export async function withTransaction<T>(
+  handler: (connection: mysql.PoolConnection) => Promise<T>,
+): Promise<T> {
+  const p = getPool();
+  if (!p) throw new Error('数据库未连接');
+
+  const connection = await p.getConnection();
+  try {
+    await connection.beginTransaction();
+    const result = await handler(connection);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}

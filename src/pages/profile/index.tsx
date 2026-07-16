@@ -102,7 +102,7 @@ const ProfilePage = () => {
     try {
       const memberId = Taro.getStorageSync('member_id')
       if (!memberId) return
-      const res = await Network.request({ url: `/api/distribution/stats/${memberId}` })
+      const res = await Network.request({ url: `/api/mall/distribution/stats/${memberId}` })
       console.log('[我的页] distribution stats:', res?.data)
       if (res?.data?.data) {
         setDistStats(res.data.data)
@@ -116,7 +116,7 @@ const ProfilePage = () => {
     try {
       const memberId = Taro.getStorageSync('member_id')
       if (!memberId) return
-      const res = await Network.request({ url: `/api/distribution/subordinates/${memberId}` })
+      const res = await Network.request({ url: `/api/mall/distribution/subordinates/${memberId}` })
       console.log('[我的页] subordinates:', res?.data)
       if (res?.data?.data) {
         setSubordinates(res.data.data)
@@ -157,7 +157,6 @@ const ProfilePage = () => {
       const loginRes = await Taro.login()
       console.log('[我的页] wx.login code:', loginRes.code)
 
-      const memberId = Taro.getStorageSync('member_id')
       const res = await Network.request({
         url: '/api/auth/wx-login',
         method: 'POST',
@@ -165,15 +164,15 @@ const ProfilePage = () => {
           code: loginRes.code,
           avatar: wxAvatar,
           nickname: wxNickname.trim(),
-          member_id: memberId || undefined,
         }
       })
       console.log('[我的页] wx-login response:', res?.data)
 
       if (res?.data?.code === 200 && res?.data?.data) {
-        const { member_id, openid } = res.data.data
+        const { member_id, openid, token } = res.data.data
         Taro.setStorageSync('member_id', member_id)
         if (openid) Taro.setStorageSync('openid', openid)
+        if (token) Taro.setStorageSync('member_token', token)
         Taro.showToast({ title: '登录成功', icon: 'success' })
         setShowLoginModal(false)
         setWxAvatar('')

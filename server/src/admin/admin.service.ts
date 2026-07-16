@@ -3,6 +3,7 @@ import { queryRows, queryOne, queryExecute, getConnectionStatus, testConnection,
 import * as bcrypt from 'bcryptjs'
 import { RowDataPacket, ResultSetHeader } from 'mysql2'
 import { normalizeMediaUrl } from '@/utils/media-url'
+import { signAuthToken } from '@/auth/jwt'
 
 interface UserRow extends RowDataPacket {
   id: number
@@ -15,6 +16,56 @@ interface UserRow extends RowDataPacket {
   bio: string | null
   status: string
   created_at: Date
+}
+
+const BANNER_UPDATE_FIELDS = [
+  'title',
+  'image_url',
+  'link_type',
+  'link_id',
+  'link_config',
+  'sort_order',
+  'is_active',
+  'start_time',
+  'end_time',
+] as const
+
+function parseJsonObject(value: unknown): Record<string, unknown> {
+  if (!value) return {}
+  if (typeof value === 'object') return value as Record<string, unknown>
+  if (typeof value !== 'string') return {}
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function normalizeBannerRow(row: any) {
+  if (!row) return row
+  return {
+    ...row,
+    image_url: normalizeMediaUrl(row.image_url),
+    link_config: parseJsonObject(row.link_config),
+  }
+}
+
+function assertCloudStorageImageUrl(value: unknown): string {
+  const url = typeof value === 'string' ? value.trim() : ''
+  if (!/^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)\//i.test(url)) {
+    throw new HttpException('封面图片为必填项，且必须使用微信云托管对象存储 URL', HttpStatus.BAD_REQUEST)
+  }
+  return url
+}
+
+function normalizeOptionalVideoUrl(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null
+  const url = typeof value === 'string' ? value.trim() : ''
+  if (!/^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)\//i.test(url)) {
+    throw new HttpException('视频必须使用微信云托管对象存储 URL', HttpStatus.BAD_REQUEST)
+  }
+  return url
 }
 
 @Injectable()
@@ -69,9 +120,13 @@ export class AdminService {
         [user.id]
       )
 
-      const token = Buffer.from(`${user.id}:${Date.now()}`).toString('base64')
       const admin = adminRows[0]
       const isSuperAdmin = admin?.role_name === 'super_admin' || admin?.role_is_system
+      const token = signAuthToken({
+        sub: String(user.id),
+        type: 'admin',
+        role: admin?.role_name || 'admin',
+      })
 
       console.log('[AdminService] login success:', username, 'role:', admin?.role_name, 'isSuperAdmin:', isSuperAdmin)
       
@@ -158,14 +213,7 @@ export class AdminService {
   async getBanners() {
     try {
       const rows = await queryRows('SELECT * FROM banners ORDER BY sort_order ASC')
-      // 解析 JSON 字段（MySQL JSON 类型可能已自动解析为对象）
-      return rows.map((row: any) => ({
-        ...row,
-        image_url: normalizeMediaUrl(row.image_url),
-        link_config: row.link_config
-          ? (typeof row.link_config === 'string' ? JSON.parse(row.link_config) : row.link_config)
-          : null,
-      }))
+      return rows.map(normalizeBannerRow)
     } catch (error) {
       console.error('[AdminService] getBanners error:', error)
       throw new HttpException('获取 Banner 列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
@@ -174,26 +222,43 @@ export class AdminService {
 
   async createBanner(dto: any) {
     try {
+      const imageUrl = assertCloudStorageImageUrl(dto.image_url)
       const result = await queryExecute(
         `INSERT INTO banners (title, image_url, link_type, link_id, link_config, sort_order, is_active, start_time, end_time)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [dto.title, dto.image_url, dto.link_type || null, dto.link_id || null,
+        [dto.title, imageUrl, dto.link_type || null, dto.link_id || null,
          dto.link_config ? JSON.stringify(dto.link_config) : null,
          dto.sort_order || 0, dto.is_active !== false, dto.start_time || null, dto.end_time || null]
       )
-      return await queryOne('SELECT * FROM banners WHERE id = ?', [result.insertId])
+      return normalizeBannerRow(await queryOne('SELECT * FROM banners WHERE id = ?', [result.insertId]))
     } catch (error) {
       console.error('[AdminService] createBanner error:', error)
+      if (error instanceof HttpException) throw error
       throw new HttpException('创建 Banner 失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 
   async updateBanner(id: string, dto: any) {
     try {
-      await queryExecute('UPDATE banners SET ? WHERE id = ?', [dto, id])
-      return await queryOne('SELECT * FROM banners WHERE id = ?', [id])
+      const updates: Record<string, unknown> = {}
+      for (const field of BANNER_UPDATE_FIELDS) {
+        if (dto[field] === undefined) continue
+        if (field === 'image_url') {
+          updates[field] = assertCloudStorageImageUrl(dto[field])
+        } else if (field === 'link_config') {
+          updates[field] = dto[field] ? JSON.stringify(dto[field]) : null
+        } else {
+          updates[field] = dto[field]
+        }
+      }
+      if (Object.keys(updates).length === 0) {
+        throw new HttpException('没有可更新的 Banner 字段', HttpStatus.BAD_REQUEST)
+      }
+      await queryExecute('UPDATE banners SET ? WHERE id = ?', [updates, id])
+      return normalizeBannerRow(await queryOne('SELECT * FROM banners WHERE id = ?', [id]))
     } catch (error) {
       console.error('[AdminService] updateBanner error:', error)
+      if (error instanceof HttpException) throw error
       throw new HttpException('更新 Banner 失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
@@ -259,16 +324,19 @@ export class AdminService {
 
   async createEvent(dto: any) {
     try {
+      const coverImage = assertCloudStorageImageUrl(dto.cover_image)
+      const videoUrl = normalizeOptionalVideoUrl(dto.video_url)
       const result = await queryExecute(
-        `INSERT INTO events (title, description, cover_image, event_type, status, start_time, end_time, location, address, max_participants, fee)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [dto.title, dto.description || null, dto.cover_image || null, dto.event_type || 'salon',
+        `INSERT INTO events (title, description, cover_image, video_url, event_type, status, start_time, end_time, location, address, max_participants, fee)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [dto.title, dto.description || null, coverImage, videoUrl, dto.event_type || 'salon',
          dto.status || 'draft', dto.start_time || null, dto.end_time || null,
          dto.location || null, dto.address || null, dto.max_participants || 100, dto.fee || 0]
       )
       return await queryOne('SELECT * FROM events WHERE id = ?', [result.insertId])
     } catch (error) {
       console.error('[AdminService] createEvent error:', error)
+      if (error instanceof HttpException) throw error
       throw new HttpException('创建活动失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
@@ -295,14 +363,27 @@ export class AdminService {
 
   async createProject(dto: any) {
     try {
+      const coverImage = assertCloudStorageImageUrl(dto.cover_image)
+      const videoUrl = normalizeOptionalVideoUrl(dto.video_url)
       const result = await queryExecute(
-        `INSERT INTO projects (title, description, cover_image, status)
-         VALUES (?, ?, ?, ?)`,
-        [dto.title, dto.description || null, dto.cover_image || null, dto.status || 'draft']
+        `INSERT INTO projects
+           (title, description, cover_image, video_url, industry, stage, amount_max, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          dto.title,
+          dto.description || null,
+          coverImage,
+          videoUrl,
+          dto.industry || null,
+          dto.stage || 'seed',
+          dto.amount_max || null,
+          dto.status || 'draft',
+        ]
       )
       return await queryOne('SELECT * FROM projects WHERE id = ?', [result.insertId])
     } catch (error) {
       console.error('[AdminService] createProject error:', error)
+      if (error instanceof HttpException) throw error
       throw new HttpException('创建项目失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
@@ -367,21 +448,55 @@ export class AdminService {
 
   async createArticle(dto: any) {
     try {
+      const coverImage = assertCloudStorageImageUrl(dto.cover_image)
+      const videoUrl = normalizeOptionalVideoUrl(dto.video_url)
       const result = await queryExecute(
-        'INSERT INTO articles (title, content, author) VALUES (?, ?, ?)',
-        [dto.title, dto.content || null, dto.author || null]
+        `INSERT INTO articles
+           (title, subtitle, content, summary, cover_image, video_url, category, tags, author, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          dto.title,
+          dto.subtitle || null,
+          dto.content || null,
+          dto.summary || null,
+          coverImage,
+          videoUrl,
+          dto.category || 'news',
+          dto.tags ? JSON.stringify(dto.tags) : null,
+          dto.author || null,
+          dto.status || 'draft',
+        ]
       )
       return await queryOne('SELECT * FROM articles WHERE id = ?', [result.insertId])
     } catch (error) {
+      if (error instanceof HttpException) throw error
       throw new HttpException('创建文章失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 
   async updateArticle(id: string, dto: any) {
     try {
-      await queryExecute('UPDATE articles SET ? WHERE id = ?', [dto, id])
+      const allowedFields = [
+        'title', 'subtitle', 'content', 'summary', 'category', 'status', 'author',
+      ]
+      const updates: Record<string, unknown> = Object.fromEntries(
+        allowedFields
+          .filter(field => dto[field] !== undefined)
+          .map(field => [field, dto[field] || null]),
+      )
+      if (dto.cover_image !== undefined) {
+        updates.cover_image = assertCloudStorageImageUrl(dto.cover_image)
+      }
+      if (dto.video_url !== undefined) {
+        updates.video_url = normalizeOptionalVideoUrl(dto.video_url)
+      }
+      if (dto.tags !== undefined) {
+        updates.tags = dto.tags ? JSON.stringify(dto.tags) : null
+      }
+      await queryExecute('UPDATE articles SET ? WHERE id = ?', [updates, id])
       return { success: true }
     } catch (error) {
+      if (error instanceof HttpException) throw error
       throw new HttpException('更新文章失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
@@ -417,25 +532,37 @@ export class AdminService {
   /** ====== 商品管理 ====== */
   async createMallProduct(dto: any) {
     try {
+      const imageUrl = assertCloudStorageImageUrl(dto.image_url || dto.cover_image)
+      const videoUrl = normalizeOptionalVideoUrl(dto.video_url)
       const result = await queryExecute(
-        `INSERT INTO mall_products (name, description, points_price, stock, cover_image, status)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO mall_products (name, description, points_price, stock, image_url, video_url, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [dto.name, dto.description || null, dto.points_price || 0,
-         dto.stock || 0, dto.cover_image || null, dto.status || 'active']
+         dto.stock || 0, imageUrl, videoUrl, dto.status || 'active']
       )
       return await queryOne('SELECT * FROM mall_products WHERE id = ?', [result.insertId])
     } catch (error) {
       console.error('[AdminService] createMallProduct error:', error)
+      if (error instanceof HttpException) throw error
       throw new HttpException('创建商品失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 
   async updateMallProduct(id: string, dto: any) {
     try {
-      await queryExecute('UPDATE mall_products SET ? WHERE id = ?', [dto, id])
+      const updates = { ...dto }
+      if (dto.image_url !== undefined || dto.cover_image !== undefined) {
+        updates.image_url = assertCloudStorageImageUrl(dto.image_url || dto.cover_image)
+        delete updates.cover_image
+      }
+      if (dto.video_url !== undefined) {
+        updates.video_url = normalizeOptionalVideoUrl(dto.video_url)
+      }
+      await queryExecute('UPDATE mall_products SET ? WHERE id = ?', [updates, id])
       return await queryOne('SELECT * FROM mall_products WHERE id = ?', [id])
     } catch (error) {
       console.error('[AdminService] updateMallProduct error:', error)
+      if (error instanceof HttpException) throw error
       throw new HttpException('更新商品失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }

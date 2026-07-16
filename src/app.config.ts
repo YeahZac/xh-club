@@ -3,6 +3,7 @@ export default defineAppConfig({
     'pages/index/index',
     'pages/event-register/index',
     'pages/admin/index',
+    'pages/message/index',
     'pages/business/index',
     'pages/discover/index',
     'pages/mall/index',
@@ -12,7 +13,7 @@ export default defineAppConfig({
   window: {
     backgroundTextStyle: 'light',
     navigationBarBackgroundColor: '#1B2A4A',
-    navigationBarTitleText: '粤商汇',
+    navigationBarTitleText: '星河百谷',
     navigationBarTextStyle: 'white'
   },
   tabBar: {

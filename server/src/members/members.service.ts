@@ -1,9 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
 import * as bcrypt from 'bcryptjs'
-import * as jwt from 'jsonwebtoken'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'xinghe-baigu-secret-key-2024'
+import { signAuthToken } from '@/auth/jwt'
 
 @Injectable()
 export class MembersService {
@@ -12,6 +10,9 @@ export class MembersService {
   /** 会员注册 */
   async register(dto: any) {
     console.log('[MembersService] register - phone:', dto.phone)
+    if (typeof dto.password !== 'string' || dto.password.length < 8) {
+      throw new HttpException('密码至少需要 8 位', HttpStatus.BAD_REQUEST)
+    }
     // 检查手机号是否已注册
     const { data: existing } = await this.client()
       .from('members')
@@ -23,7 +24,7 @@ export class MembersService {
 
     const insertData: any = {
       phone: dto.phone,
-      password_hash: dto.password || 'default123',
+      password_hash: await bcrypt.hash(dto.password, 10),
       name: dto.name,
       avatar: dto.avatar || null,
       company_name: dto.company_name,
@@ -73,8 +74,8 @@ export class MembersService {
     return data
   }
 
-  /** 会员登录（手机号+验证码简易版） */
-  async login(phone: string) {
+  /** 会员登录（手机号+密码） */
+  async login(phone: string, password: string) {
     console.log('[MembersService] login - phone:', phone)
     const { data, error } = await this.client()
       .from('members')
@@ -83,12 +84,10 @@ export class MembersService {
       .single()
 
     if (error || !data) throw new HttpException('用户不存在', HttpStatus.NOT_FOUND)
+    const passwordValid = await bcrypt.compare(password, data.password_hash)
+    if (!passwordValid) throw new HttpException('手机号或密码错误', HttpStatus.UNAUTHORIZED)
 
-    const token = jwt.sign(
-      { id: data.id, phone: data.phone, member_type: data.member_type },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    )
+    const token = signAuthToken({ sub: String(data.id), type: 'member' })
 
     return { token, member: data }
   }
@@ -121,9 +120,38 @@ export class MembersService {
   /** 更新会员档案 */
   async updateProfile(id: string, dto: any) {
     console.log('[MembersService] updateProfile - id:', id)
+    const allowedFields = [
+      'name',
+      'avatar',
+      'gender',
+      'birthday',
+      'company_name',
+      'company_position',
+      'industry_primary',
+      'industry_secondary',
+      'company_scale',
+      'company_founded',
+      'company_address',
+      'company_website',
+      'business_description',
+      'core_advantage',
+      'resources_supply',
+      'resources_demand',
+      'city',
+      'wechat_id',
+      'bio',
+    ]
+    const updates = Object.fromEntries(
+      allowedFields
+        .filter(field => dto[field] !== undefined)
+        .map(field => [field, dto[field]]),
+    )
+    if (Object.keys(updates).length === 0) {
+      throw new HttpException('没有可更新的会员字段', HttpStatus.BAD_REQUEST)
+    }
     const { data, error } = await this.client()
       .from('members')
-      .update({ ...dto, updated_at: new Date().toISOString() })
+      .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single()

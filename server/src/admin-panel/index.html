@@ -93,6 +93,10 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
         数据看板
       </a>
+      <a onclick="switchPage('homepage')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="homepage">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10.5L12 3l9 7.5M5 9v11h14V9M9 20v-6h6v6"/></svg>
+        首页管理
+      </a>
       <a onclick="switchPage('members')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="members">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
         会员管理
@@ -193,11 +197,11 @@
       <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-sm font-bold text-yellow-800">数据库初始化</h3>
-            <p class="text-xs text-yellow-600 mt-1">首次使用或表结构更新时，请点击初始化按钮</p>
+            <h3 class="text-sm font-bold text-yellow-800">数据库安全迁移</h3>
+            <p class="text-xs text-yellow-600 mt-1">新增功能或表结构更新后执行，不会主动删除现有业务数据</p>
           </div>
           <button onclick="initDatabase()" class="px-4 py-2 bg-yellow-500 text-white text-sm font-bold rounded-lg hover:bg-yellow-600">
-            初始化数据库
+            执行迁移
           </button>
         </div>
         <div id="initResult" class="mt-3 text-xs text-yellow-700 hidden"></div>
@@ -254,6 +258,17 @@
           <h3 class="font-bold text-navy-800 mb-4">待审批会员</h3>
           <div id="pendingMembers" class="space-y-3"><p class="text-gray-400 text-sm">加载中...</p></div>
         </div>
+      </div>
+    </div>
+
+    <!-- ====== 首页管理 ====== -->
+    <div data-page="homepage" class="p-8 fade-in">
+      <div class="mb-6">
+        <h2 class="text-lg font-bold text-navy-800">首页列表内容</h2>
+        <p class="text-sm text-gray-500 mt-1">管理小程序首页的精选项目、资源大厅和商会动态，可设置展示状态、数量与顺序。</p>
+      </div>
+      <div id="homepageSections" class="space-y-6">
+        <div class="bg-white rounded-2xl p-8 text-center text-gray-400">加载中...</div>
       </div>
     </div>
 
@@ -655,6 +670,7 @@ async function api(path, options = {}) {
     console.log(`[API] 响应数据:`, data)
     
     if (!res.ok) {
+      if (res.status === 401 && path !== '/admin/login') doLogout()
       throw new Error(data.msg || data.message || `请求失败: ${res.status}`)
     }
     return data
@@ -673,6 +689,15 @@ function toast(msg, type = 'success') {
   div.textContent = msg
   document.getElementById('toastContainer').appendChild(div)
   setTimeout(() => div.remove(), 3000)
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
 }
 
 function showModal(html) {
@@ -723,7 +748,7 @@ async function doLogin() {
     console.log('[Login] 登录响应:', res);
     
     if (res.code === 200) {
-      token = 'admin_session';
+      token = res.data.token;
       localStorage.setItem('admin_token', token);
       // 存储权限信息
       const perms = res.data.permissions || {};
@@ -763,12 +788,19 @@ function doLogout() {
   document.getElementById('loginPage').classList.remove('hidden')
 }
 
-// 自动登录
-if (token) {
-  document.getElementById('loginPage').classList.add('hidden')
-  document.getElementById('mainApp').classList.remove('hidden')
-  loadDashboard()
+// 自动登录前先校验本地令牌
+async function restoreSession() {
+  if (!token) return
+  try {
+    await api('/admin/db-status')
+    document.getElementById('loginPage').classList.add('hidden')
+    document.getElementById('mainApp').classList.remove('hidden')
+    loadDashboard()
+  } catch {
+    doLogout()
+  }
 }
+restoreSession()
 
 // ===== 页面切换 =====
 // 切换系统管理菜单收起/展开
@@ -852,10 +884,10 @@ function switchPage(page) {
     const navItem = document.querySelector(`[data-nav="${page}"]`)
     if (navItem) navItem.classList.add('active')
   }
-  const titles = { dashboard: '数据看板', members: '会员管理', events: '活动管理', projects: '项目管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
+  const titles = { dashboard: '数据看板', homepage: '首页管理', members: '会员管理', events: '活动管理', projects: '项目管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
   document.getElementById('pageTitle').textContent = titles[page] || page
   // 加载数据（role-edit页面不加载数据）
-  const loaders = { dashboard: loadDashboard, members: loadMembers, events: loadEvents, projects: loadProjects, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, memberLevels: loadMemberLevels, invitations: loadInvitationRules, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
+  const loaders = { dashboard: loadDashboard, homepage: loadHomepage, members: loadMembers, events: loadEvents, projects: loadProjects, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, memberLevels: loadMemberLevels, invitations: loadInvitationRules, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
   if (loaders[page]) loaders[page]()
 }
 
@@ -864,14 +896,13 @@ function switchPage(page) {
 async function initDatabase() {
   const resultDiv = document.getElementById('initResult');
   resultDiv.classList.remove('hidden');
-  resultDiv.textContent = '正在初始化数据库...';
+  resultDiv.textContent = '正在执行安全迁移...';
   
   try {
-    const response = await fetch('/api/admin/init-database', { method: 'POST' });
-    const data = await response.json();
+    const data = await api('/admin/migrate', { method: 'POST' });
     
     if (data.code === 200) {
-      resultDiv.textContent = '✅ 数据库初始化成功！请刷新页面。';
+      resultDiv.textContent = '✅ 数据库迁移成功！请刷新页面。';
       resultDiv.className = 'mt-3 text-xs text-green-700';
     } else {
       resultDiv.textContent = '❌ 初始化失败: ' + data.msg;
@@ -933,6 +964,159 @@ async function loadDashboard() {
     `).join('')
   } else {
     document.getElementById('pendingMembers').innerHTML = '<p class="text-gray-400 text-sm">暂无待审批会员</p>'
+  }
+}
+
+// ===== 首页管理 =====
+let homepageCandidates = {}
+
+async function loadHomepage() {
+  const container = document.getElementById('homepageSections')
+  container.innerHTML = '<div class="bg-white rounded-2xl p-8 text-center text-gray-400">加载中...</div>'
+  try {
+    const configRes = await api('/admin/homepage')
+    if (configRes.code !== 200 || !configRes.data?.configured) {
+      container.innerHTML = '<div class="bg-yellow-50 border border-yellow-200 rounded-2xl p-6 text-yellow-800">请先在数据看板执行数据库迁移，再配置首页内容。</div>'
+      return
+    }
+
+    const sections = configRes.data.sections || []
+    const candidateResults = await Promise.all(
+      sections.map(section => api(`/admin/homepage/candidates/${section.section}`))
+    )
+    homepageCandidates = Object.fromEntries(
+      sections.map((section, index) => [
+        section.section,
+        candidateResults[index].code === 200 ? candidateResults[index].data || [] : [],
+      ])
+    )
+    container.innerHTML = sections.map(renderHomepageSection).join('')
+  } catch (error) {
+    container.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-2xl p-6 text-red-700">加载失败：${escapeHtml(error.message)}</div>`
+  }
+}
+
+function renderHomepageSection(section) {
+  const candidates = homepageCandidates[section.section] || []
+  const candidateMap = new Map(candidates.map(item => [String(item.id), item]))
+  const options = candidates.map(item =>
+    `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title || `内容 #${item.id}`)}</option>`
+  ).join('')
+  const rows = (section.items || []).map(item => {
+    const content = candidateMap.get(String(item.item_id))
+    return `
+      <tr class="border-t border-gray-100">
+        <td class="px-4 py-3">
+          <p class="text-sm font-medium text-navy-800">${escapeHtml(content?.title || `已失效内容 #${item.item_id}`)}</p>
+          <p class="text-xs text-gray-400">ID: ${escapeHtml(item.item_id)}</p>
+        </td>
+        <td class="px-4 py-3 w-32">
+          <input id="home-order-${item.id}" type="number" value="${Number(item.sort_order) || 0}" class="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm">
+        </td>
+        <td class="px-4 py-3 w-28 text-center">
+          <input id="home-active-${item.id}" type="checkbox" ${item.is_active ? 'checked' : ''} class="w-4 h-4 accent-brand-500">
+        </td>
+        <td class="px-4 py-3 w-40 text-right">
+          <button onclick="saveHomepageItem('${item.id}')" class="text-brand-600 hover:text-brand-800 text-sm mr-4">保存</button>
+          <button onclick="removeHomepageItem('${item.id}')" class="text-red-500 hover:text-red-700 text-sm">移除</button>
+        </td>
+      </tr>
+    `
+  }).join('')
+
+  return `
+    <section class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+        <div>
+          <h3 class="font-bold text-navy-800">${escapeHtml(section.display_name)}</h3>
+          <p class="text-xs text-gray-400 mt-1">按排序值从小到大展示</p>
+        </div>
+        <div class="flex items-center gap-4">
+          <label class="flex items-center gap-2 text-sm text-gray-600">
+            <input id="home-enabled-${section.section}" type="checkbox" ${section.is_enabled ? 'checked' : ''} class="w-4 h-4 accent-brand-500">
+            启用栏目
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-600">
+            展示数量
+            <input id="home-limit-${section.section}" type="number" min="1" max="20" value="${Number(section.item_limit) || 5}" class="w-20 px-3 py-2 border border-gray-200 rounded-lg">
+          </label>
+          <button onclick="saveHomepageSection('${section.section}')" class="px-4 py-2 bg-navy-700 text-white text-sm rounded-lg hover:bg-navy-800">保存栏目</button>
+        </div>
+      </div>
+      <div class="p-4 bg-gray-50 flex items-center gap-3">
+        <select id="home-candidate-${section.section}" class="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+          <option value="">选择要加入的内容</option>
+          ${options}
+        </select>
+        <button onclick="addHomepageItem('${section.section}')" class="px-4 py-2 bg-brand-500 text-white text-sm rounded-lg hover:bg-brand-600">加入首页</button>
+      </div>
+      <table class="w-full">
+        <thead class="bg-gray-50 text-xs text-gray-500">
+          <tr><th class="px-4 py-3 text-left">内容</th><th class="px-4 py-3 text-left">排序</th><th class="px-4 py-3 text-center">显示</th><th class="px-4 py-3 text-right">操作</th></tr>
+        </thead>
+        <tbody>${rows || '<tr><td colspan="4" class="px-4 py-10 text-center text-gray-400">尚未配置内容</td></tr>'}</tbody>
+      </table>
+    </section>
+  `
+}
+
+async function saveHomepageSection(section) {
+  const itemLimit = Number(document.getElementById(`home-limit-${section}`).value)
+  const isEnabled = document.getElementById(`home-enabled-${section}`).checked
+  try {
+    await api(`/admin/homepage/sections/${section}`, {
+      method: 'PUT',
+      body: { item_limit: itemLimit, is_enabled: isEnabled }
+    })
+    toast('栏目设置已保存')
+    loadHomepage()
+  } catch (error) {
+    toast(error.message, 'error')
+  }
+}
+
+async function addHomepageItem(section) {
+  const select = document.getElementById(`home-candidate-${section}`)
+  if (!select.value) {
+    toast('请先选择内容', 'error')
+    return
+  }
+  try {
+    await api('/admin/homepage/items', {
+      method: 'POST',
+      body: { section, item_id: select.value }
+    })
+    toast('已加入首页')
+    loadHomepage()
+  } catch (error) {
+    toast(error.message, 'error')
+  }
+}
+
+async function saveHomepageItem(id) {
+  try {
+    await api(`/admin/homepage/items/${id}`, {
+      method: 'PUT',
+      body: {
+        sort_order: Number(document.getElementById(`home-order-${id}`).value),
+        is_active: document.getElementById(`home-active-${id}`).checked,
+      }
+    })
+    toast('内容设置已保存')
+    loadHomepage()
+  } catch (error) {
+    toast(error.message, 'error')
+  }
+}
+
+async function removeHomepageItem(id) {
+  if (!confirm('确认从首页移除此内容？原业务数据不会被删除。')) return
+  try {
+    await api(`/admin/homepage/items/${id}`, { method: 'DELETE' })
+    toast('已从首页移除')
+    loadHomepage()
+  } catch (error) {
+    toast(error.message, 'error')
   }
 }
 
@@ -1061,10 +1245,19 @@ function showEventModal() {
       <div class="space-y-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">活动名称</label><input id="evTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动名称"></div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">封面图片</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">封面图片 <span class="text-red-500">*</span></label>
+          <p class="text-xs text-gray-400 mb-2">推荐尺寸 1200×500，前端活动卡片按相同比例展示</p>
           <div class="flex items-center gap-3">
-            <input id="evCover" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入图片URL或上传">
-            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'evCover')"></label>
+            <input id="evCover" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传封面图片">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'evCover', 1200, 500)"></label>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">活动视频（选填）</label>
+          <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，最大 100MB</p>
+          <div class="flex items-center gap-3">
+            <input id="evVideo" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传活动宣传视频">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" onchange="uploadFile(this, 'evVideo')"></label>
           </div>
         </div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">活动类型</label><select id="evType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="salon">专题沙龙</option><option value="roadshow">路演日</option><option value="annual">年度大会</option><option value="training">培训</option><option value="meeting">定期例会</option></select></div>
@@ -1137,6 +1330,7 @@ async function createEvent() {
   const body = {
     title: document.getElementById('evTitle').value,
     cover_image: document.getElementById('evCover').value,
+    video_url: document.getElementById('evVideo').value || null,
     event_type: document.getElementById('evType').value,
     start_time: document.getElementById('evStart').value,
     end_time: document.getElementById('evEnd').value,
@@ -1148,6 +1342,8 @@ async function createEvent() {
     form_fields: formFields.length > 0 ? formFields : null,
     current_participants: 0
   }
+  if (!body.title.trim()) return toast('请输入活动名称', 'error')
+  if (!body.cover_image.trim()) return toast('活动封面图片为必填项', 'error')
   const res = await api('/admin/events', { method: 'POST', body })
   if (res.code === 200) { toast('活动创建成功'); closeModal(); loadEvents(); }
   else toast(res.msg || '创建失败', 'error')
@@ -1188,10 +1384,19 @@ function showProjectModal() {
       <div class="space-y-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">项目名称</label><input id="pjTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">封面图片</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">封面图片 <span class="text-red-500">*</span></label>
+          <p class="text-xs text-gray-400 mb-2">推荐尺寸 1200×675（16:9），与前端项目卡片一致</p>
           <div class="flex items-center gap-3">
-            <input id="pjCover" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入图片URL或上传">
-            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'pjCover')"></label>
+            <input id="pjCover" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传项目封面">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'pjCover', 1200, 675)"></label>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">项目视频（选填）</label>
+          <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，最大 100MB</p>
+          <div class="flex items-center gap-3">
+            <input id="pjVideo" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传项目路演视频">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" onchange="uploadFile(this, 'pjVideo')"></label>
           </div>
         </div>
         <div class="grid grid-cols-2 gap-4">
@@ -1216,13 +1421,16 @@ async function createProject() {
   const body = {
     title: document.getElementById('pjTitle').value,
     cover_image: document.getElementById('pjCover').value,
+    video_url: document.getElementById('pjVideo').value || null,
     industry: document.getElementById('pjIndustry').value,
     stage: document.getElementById('pjStage').value,
     amount_max: parseInt(document.getElementById('pjAmount').value) * 10000,
     description: document.getElementById('pjDesc').value,
     status: 'active'
   }
-  const res = await api('/projects', { method: 'POST', body })
+  if (!body.title.trim()) return toast('请输入项目名称', 'error')
+  if (!body.cover_image.trim()) return toast('项目封面图片为必填项', 'error')
+  const res = await api('/admin/projects', { method: 'POST', body })
   if (res.code === 200) { toast('项目创建成功'); closeModal(); loadProjects(); }
   else toast(res.msg || '创建失败', 'error')
 }
@@ -1272,11 +1480,12 @@ function showBannerModal() {
       <div class="space-y-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">标题</label><input id="bnTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">封面图片</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">封面图片 <span class="text-red-500">*</span></label>
+          <p class="text-xs text-gray-400 mb-2">推荐尺寸 1200×490，与前端首页 Banner 的 343×140 展示比例一致</p>
           <div class="flex items-center gap-3">
-            <input id="bnImage" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入图片URL或上传文件">
+            <input id="bnImage" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传 Banner 图片">
             <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">
-              上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'bnImage')">
+              上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'bnImage', 1200, 490)">
             </label>
           </div>
         </div>
@@ -1359,6 +1568,8 @@ async function createBanner() {
     sort_order: parseInt(document.getElementById('bnSort').value) || 1,
     is_active: true
   }
+  if (!body.title.trim()) return toast('请输入 Banner 标题', 'error')
+  if (!body.image_url.trim()) return toast('Banner 图片为必填项', 'error')
   const res = await api('/admin/banners', { method: 'POST', body })
   if (res.code === 200) { toast('Banner创建成功'); closeModal(); loadBanners(); }
   else toast(res.msg || '创建失败', 'error')
@@ -1410,10 +1621,19 @@ function showMallModal() {
       <div class="space-y-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">商品名称</label><input id="mlName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">商品图片</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">商品图片 <span class="text-red-500">*</span></label>
+          <p class="text-xs text-gray-400 mb-2">推荐尺寸 800×800（1:1），与前端商品卡片和详情主图一致</p>
           <div class="flex items-center gap-3">
-            <input id="mlCover" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入图片URL或上传">
-            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'mlCover')"></label>
+            <input id="mlCover" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传商品图片">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'mlCover', 800, 800)"></label>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">商品视频（选填）</label>
+          <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，最大 100MB</p>
+          <div class="flex items-center gap-3">
+            <input id="mlVideo" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传商品演示视频">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" onchange="uploadFile(this, 'mlVideo')"></label>
           </div>
         </div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">描述</label><input id="mlDesc" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
@@ -1433,12 +1653,15 @@ function showMallModal() {
 async function createMallProduct() {
   const body = {
     name: document.getElementById('mlName').value,
-    cover_image: document.getElementById('mlCover').value,
+    image_url: document.getElementById('mlCover').value,
+    video_url: document.getElementById('mlVideo').value || null,
     description: document.getElementById('mlDesc').value,
     points_price: parseInt(document.getElementById('mlPoints').value) || 100,
     stock: parseInt(document.getElementById('mlStock').value) || 100,
     status: 'active'
   }
+  if (!body.name.trim()) return toast('请输入商品名称', 'error')
+  if (!body.image_url.trim()) return toast('商品图片为必填项', 'error')
   const res = await api('/admin/mall-products', { method: 'POST', body })
   if (res.code === 200) { toast('商品创建成功'); closeModal(); loadMallProducts(); }
   else toast(res.msg || '创建失败', 'error')
@@ -1563,14 +1786,35 @@ setInterval(() => {
 }, 1000)
 
 // ===== 文件上传 =====
-async function uploadFile(input, targetId) {
+async function uploadFile(input, targetId, expectedWidth, expectedHeight) {
   const file = input.files[0]
   if (!file) return
+  const isImage = file.type.startsWith('image/')
+  const isVideo = file.type.startsWith('video/')
+  if (isImage && expectedWidth && expectedHeight) {
+    const objectUrl = URL.createObjectURL(file)
+    try {
+      const dimensions = await new Promise((resolve, reject) => {
+        const image = new Image()
+        image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight })
+        image.onerror = reject
+        image.src = objectUrl
+      })
+      const expectedRatio = expectedWidth / expectedHeight
+      const actualRatio = dimensions.width / dimensions.height
+      if (Math.abs(actualRatio - expectedRatio) / expectedRatio > 0.03) {
+        toast(`图片比例不符，请上传 ${expectedWidth}×${expectedHeight} 或相同比例图片`, 'error')
+        input.value = ''
+        return
+      }
+    } finally {
+      URL.revokeObjectURL(objectUrl)
+    }
+  }
   const formData = new FormData()
   formData.append('file', file)
   try {
-    const isImage = file.type.startsWith('image/')
-    const endpoint = isImage ? '/upload/image' : '/upload/file'
+    const endpoint = isImage ? '/upload/image' : isVideo ? '/upload/video' : '/upload'
     const res = await fetch(`/api${endpoint}`, {
       method: 'POST',
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -1664,10 +1908,19 @@ async function showArticleModal(editId) {
           </div>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">封面图</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">封面图 <span class="text-red-500">*</span></label>
+          <p class="text-xs text-gray-400 mb-2">推荐尺寸 1200×675（16:9），用于文章列表和详情封面</p>
           <div class="flex items-center gap-3">
-            <input id="artCover" value="${article?.cover_image || ''}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入URL或上传">
-            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'artCover')"></label>
+            <input id="artCover" required value="${article?.cover_image || ''}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传文章封面">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'artCover', 1200, 675)"></label>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">文章视频（选填）</label>
+          <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，最大 100MB</p>
+          <div class="flex items-center gap-3">
+            <input id="artVideo" value="${article?.video_url || ''}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传文章配套视频">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" onchange="uploadFile(this, 'artVideo')"></label>
           </div>
         </div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">摘要</label><textarea id="artSummary" rows="2" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400 resize-none">${article?.summary || ''}</textarea></div>
@@ -1690,11 +1943,13 @@ async function saveArticle(editId) {
     category: document.getElementById('artCategory').value,
     status: document.getElementById('artStatus').value,
     cover_image: document.getElementById('artCover').value,
+    video_url: document.getElementById('artVideo').value || null,
     summary: document.getElementById('artSummary').value,
     content: document.getElementById('artContent').value,
     tags: tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : []
   }
   if (!body.title) return toast('请输入标题', 'error')
+  if (!body.cover_image.trim()) return toast('文章封面图片为必填项', 'error')
   const url = editId ? `/admin/articles/${editId}` : '/admin/articles'
   const method = editId ? 'PUT' : 'POST'
   const res = await api(url, { method, body })
@@ -1974,6 +2229,7 @@ let currentEditRoleId = null
 // 页面权限配置列表
 const PERMISSION_PAGES = [
   { key: 'dashboard', name: '数据看板' },
+  { key: 'homepage', name: '首页管理' },
   { key: 'members', name: '会员管理' },
   { key: 'events', name: '活动管理' },
   { key: 'projects', name: '项目管理' },

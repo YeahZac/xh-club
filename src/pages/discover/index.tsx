@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { View, Text, ScrollView } from "@tarojs/components"
+import { View, Text, ScrollView, Image } from "@tarojs/components"
 import Taro from "@tarojs/taro"
 import {
   Search, Clock, MapPin, Users,
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { getResponseList } from "@/lib/api-response"
 import { Network } from "@/network"
 
 interface EventItem {
@@ -61,10 +62,13 @@ const levelMap: Record<string, { label: string; color: string }> = {
   diamond: { label: '钻石', color: 'bg-sky-50 text-sky-600' },
 }
 
+const isCloudStorageImageUrl = (url: string) =>
+  /^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)/i.test(url)
+
 const DiscoverPage = () => {
   const [activeTab, setActiveTab] = useState("events")
   const isMiniApp = ([Taro.ENV_TYPE.WEAPP, Taro.ENV_TYPE.TT] as string[]).includes(Taro.getEnv() as string)
-  const statusBarHeight = isMiniApp ? 22 : 8
+  const statusBarHeight = isMiniApp ? (Taro.getWindowInfo().statusBarHeight || 22) : 44
 
   const [events, setEvents] = useState<EventItem[]>([])
   const [members, setMembers] = useState<MemberItem[]>([])
@@ -79,15 +83,15 @@ const DiscoverPage = () => {
       const [eventsRes, membersRes, productsRes] = await Promise.all([
         Network.request({ url: '/api/events' }),
         Network.request({ url: '/api/members' }),
-        Network.request({ url: '/api/admin/mall-products' }),
+        Network.request({ url: '/api/mall/products' }),
       ])
       console.log('[发现页] events:', eventsRes?.data)
       console.log('[发现页] members:', membersRes?.data)
       console.log('[发现页] products:', productsRes?.data)
 
-      if (eventsRes?.data?.data) setEvents(eventsRes.data.data)
-      if (membersRes?.data?.data) setMembers(membersRes.data.data)
-      if (productsRes?.data?.data) setProducts(productsRes.data.data)
+      setEvents(getResponseList<EventItem>(eventsRes?.data?.data))
+      setMembers(getResponseList<MemberItem>(membersRes?.data?.data))
+      setProducts(getResponseList<ProductItem>(productsRes?.data?.data))
     } catch (err) {
       console.error('[发现页] 加载失败:', err)
     } finally {
@@ -101,12 +105,35 @@ const DiscoverPage = () => {
     return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
   }
 
+  const handleEventRegistration = async (eventId: string) => {
+    const memberId = Taro.getStorageSync('member_id')
+    if (!memberId) {
+      Taro.showToast({ title: '请先登录后报名', icon: 'none' })
+      return
+    }
+
+    try {
+      const response = await Network.request({
+        url: `/api/events/${eventId}/register`,
+        method: 'POST',
+        data: { member_id: memberId },
+      })
+      Taro.showToast({
+        title: response.data?.code === 200 ? '报名成功' : (response.data?.msg || '报名失败'),
+        icon: response.data?.code === 200 ? 'success' : 'none',
+      })
+    } catch (error) {
+      console.error('[发现页] 活动报名失败:', error)
+      Taro.showToast({ title: '报名失败，请稍后重试', icon: 'none' })
+    }
+  }
+
   return (
     <View className="flex flex-col h-full bg-[#F5F6FA]">
       {/* Header */}
       <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pb-4">
         <View style={{ height: `${statusBarHeight}px` }} />
-        <Text className="block text-xl font-bold text-white mb-3">发现</Text>
+        {isMiniApp && <Text className="block text-xl font-bold text-white mb-3">发现</Text>}
         <View className="rounded-xl px-3 py-2 flex flex-row items-center gap-2" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
           <Search size={16} color="rgba(255,255,255,0.6)" />
           <Text className="block text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>搜索活动、人才、商品...</Text>
@@ -134,9 +161,9 @@ const DiscoverPage = () => {
               <View className="flex flex-col gap-4 pb-8">
                 {events.map((item) => (
                   <Card key={item.id} className="shadow-sm border-0 overflow-hidden">
-                    {item.cover_image ? (
+                    {isCloudStorageImageUrl(item.cover_image) ? (
                       <View className="relative">
-                        <img src={item.cover_image} style={{ width: '100%', height: '140px', objectFit: 'cover' }} />
+                        <Image src={item.cover_image} mode="aspectFill" className="w-full h-36" />
                         <View className="absolute left-0 top-0 right-0 p-3" style={{ background: 'linear-gradient(rgba(0,0,0,0.5), transparent)' }}>
                           <Badge className="bg-[#C9A96E] text-white text-[10px] px-2 py-0">{eventTypeMap[item.event_type] || item.event_type}</Badge>
                         </View>
@@ -166,7 +193,13 @@ const DiscoverPage = () => {
                       </View>
                       <View className="flex flex-row items-center justify-between">
                         <Text className="block text-sm font-bold text-[#C9A96E]">{item.fee > 0 ? `¥${item.fee}` : '免费'}</Text>
-                        <Button size="sm" className="bg-[#1B2A4A] text-white text-xs h-8 rounded-lg">立即报名</Button>
+                        <Button
+                          size="sm"
+                          className="bg-[#1B2A4A] text-white text-xs h-8 rounded-lg"
+                          onClick={() => handleEventRegistration(item.id)}
+                        >
+                          立即报名
+                        </Button>
                       </View>
                     </CardContent>
                   </Card>
@@ -228,9 +261,9 @@ const DiscoverPage = () => {
               <View className="grid grid-cols-2 gap-3 pb-8">
                 {products.map((item) => (
                   <Card key={item.id} className="shadow-sm border-0">
-                    <View className="bg-gradient-to-br from-[#FAF6F1] to-[#F5F0E8] h-28 flex items-center justify-center">
-                      {item.image_url ? (
-                        <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <View className="bg-gradient-to-br from-[#FAF6F1] to-[#F5F0E8] aspect-square flex items-center justify-center">
+                      {isCloudStorageImageUrl(item.image_url) ? (
+                        <Image src={item.image_url} mode="aspectFill" className="w-full h-full" />
                       ) : (
                         <ShoppingBag size={32} color="#C9A96E" />
                       )}

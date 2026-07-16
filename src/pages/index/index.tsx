@@ -16,6 +16,8 @@ import {
   CarouselItem,
   useCarousel,
 } from "@/components/ui/carousel"
+import { Button } from "@/components/ui/button"
+import { getResponseList } from "@/lib/api-response"
 import { Network } from "@/network"
 
 /* ── Types ── */
@@ -41,6 +43,7 @@ interface BannerItem {
 interface RoadshowItem {
   id: string
   title: string
+  cover_image: string
   company_name: string
   amount_min: number
   amount_max: number
@@ -75,6 +78,45 @@ interface PostItem {
   is_featured: boolean
 }
 
+type HomepageSectionKey = 'projects' | 'resources' | 'posts'
+
+interface HomepageConfig {
+  configured: boolean
+  sections: Array<{
+    section: HomepageSectionKey
+    is_enabled: boolean
+    item_limit: number
+    items: Array<{
+      item_id: string
+      sort_order: number
+      is_active: boolean
+    }>
+  }>
+}
+
+const selectHomepageItems = <T extends { id: string }>(
+  list: T[],
+  config: HomepageConfig | null,
+  sectionKey: HomepageSectionKey,
+  fallbackLimit: number,
+): T[] => {
+  if (!config?.configured) return list.slice(0, fallbackLimit)
+  const section = config.sections.find(item => item.section === sectionKey)
+  if (!section?.is_enabled) return []
+
+  const activeItems = section.items.filter(item => item.is_active)
+  if (activeItems.length === 0) {
+    return list.slice(0, section.item_limit || fallbackLimit)
+  }
+
+  const itemsById = new Map(list.map(item => [String(item.id), item]))
+  return activeItems
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map(item => itemsById.get(String(item.item_id)))
+    .filter((item): item is T => Boolean(item))
+    .slice(0, section.item_limit)
+}
+
 /* ── Carousel Dots ── */
 const CarouselDots = ({ total }: { total: number }) => {
   const { current } = useCarousel()
@@ -101,49 +143,93 @@ const QUICK_ENTRIES = [
   { label: "我的收益", icon: Wallet, tint: "#FEF2F2", color: "#EF4444", path: "/pages/profile/index" },
 ]
 
+const isCloudStorageImageUrl = (url: string) =>
+  /^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)/i.test(url)
+
 const IndexPage = () => {
   const isMiniApp = ([Taro.ENV_TYPE.WEAPP, Taro.ENV_TYPE.TT] as string[]).includes(Taro.getEnv() as string)
-  const statusBarHeight = isMiniApp ? 22 : 8
+  const statusBarHeight = isMiniApp ? (Taro.getWindowInfo().statusBarHeight || 22) : 44
 
   const [banners, setBanners] = useState<BannerItem[]>([])
   const [roadshows, setRoadshows] = useState<RoadshowItem[]>([])
   const [resources, setResources] = useState<ResourceItem[]>([])
   const [feeds, setFeeds] = useState<PostItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [failedBannerImages, setFailedBannerImages] = useState<Set<string>>(() => new Set())
+  const [loadedBannerImages, setLoadedBannerImages] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
-    console.log('[首页] PROJECT_DOMAIN:', PROJECT_DOMAIN)
+    console.log('[首页] API domain:', PROJECT_DOMAIN)
     loadHomeData()
   }, [])
 
   const loadHomeData = async () => {
     try {
       setLoading(true)
-      const [bannersRes, projectsRes, resourcesRes, postsRes] = await Promise.all([
-        Network.request({ url: '/api/banners' }),
-        Network.request({ url: '/api/events' }),
-        Network.request({ url: '/api/community/resources' }),
-        Network.request({ url: '/api/community/posts' }),
+      setLoadFailed(false)
+      const [bannersRes, projectsRes, resourcesRes, postsRes, homepageRes] = await Promise.all([
+        Network.request({ url: '/api/banners' }).catch((error) => {
+          console.error('[首页] Banner加载失败:', error)
+          return null
+        }),
+        Network.request({ url: '/api/projects?pageSize=100' }).catch((error) => {
+          console.error('[首页] 项目加载失败:', error)
+          return null
+        }),
+        Network.request({ url: '/api/community/resources?limit=100' }).catch((error) => {
+          console.error('[首页] 资源加载失败:', error)
+          return null
+        }),
+        Network.request({ url: '/api/community/posts?pageSize=100' }).catch((error) => {
+          console.error('[首页] 动态加载失败:', error)
+          return null
+        }),
+        Network.request({ url: '/api/homepage' }).catch((error) => {
+          console.warn('[首页] 首页配置加载失败，使用默认列表:', error)
+          return null
+        }),
       ])
       console.log('[首页] banners:', bannersRes?.data)
       console.log('[首页] projects:', projectsRes?.data)
       console.log('[首页] resources:', resourcesRes?.data)
       console.log('[首页] posts:', postsRes?.data)
+      console.log('[首页] config:', homepageRes?.data)
 
-      if (bannersRes?.data?.data) {
-        const list = Array.isArray(bannersRes.data.data) ? bannersRes.data.data : []
-        // 兼容 link_config 可能是 JSON 字符串的情况
-        const parsed = list.map((b: any) => ({
-          ...b,
-          link_config: typeof b.link_config === 'string' ? JSON.parse(b.link_config) : (b.link_config || {})
-        }))
+      setLoadFailed([bannersRes, projectsRes, resourcesRes, postsRes].some(response => response === null))
+      const homepageConfig = (homepageRes?.data?.data || null) as HomepageConfig | null
+
+      if (bannersRes) {
+        const list = getResponseList<BannerItem>(bannersRes.data?.data)
+        const parsed = list.map((banner: BannerItem) => {
+          let linkConfig = banner.link_config || {}
+          if (typeof banner.link_config === 'string') {
+            try {
+              linkConfig = JSON.parse(banner.link_config)
+            } catch {
+              console.warn('[首页] Banner link_config 不是有效 JSON:', banner.id)
+              linkConfig = {}
+            }
+          }
+          return { ...banner, link_config: linkConfig }
+        })
         setBanners(parsed.slice(0, 5))
       }
-      if (projectsRes?.data?.data) setRoadshows(projectsRes.data.data.slice(0, 6))
-      if (resourcesRes?.data?.data) setResources(resourcesRes.data.data.slice(0, 5))
-      if (postsRes?.data?.data) setFeeds(postsRes.data.data.slice(0, 5))
+      if (projectsRes) {
+        const list = getResponseList<RoadshowItem>(projectsRes.data?.data)
+        setRoadshows(selectHomepageItems(list, homepageConfig, 'projects', 6))
+      }
+      if (resourcesRes) {
+        const list = getResponseList<ResourceItem>(resourcesRes.data?.data)
+        setResources(selectHomepageItems(list, homepageConfig, 'resources', 5))
+      }
+      if (postsRes) {
+        const list = getResponseList<PostItem>(postsRes.data?.data)
+        setFeeds(selectHomepageItems(list, homepageConfig, 'posts', 5))
+      }
     } catch (err) {
       console.error('[首页] 加载数据失败:', err)
+      setLoadFailed(true)
     } finally {
       setLoading(false)
     }
@@ -162,7 +248,10 @@ const IndexPage = () => {
   const formatTimeAgo = (dateStr: string) => {
     if (!dateStr) return ''
     const diff = Date.now() - new Date(dateStr).getTime()
+    if (!Number.isFinite(diff)) return ''
+    if (diff <= 0) return '刚刚'
     const mins = Math.floor(diff / 60000)
+    if (mins < 1) return '刚刚'
     if (mins < 60) return `${mins}分钟前`
     const hours = Math.floor(mins / 60)
     if (hours < 24) return `${hours}小时前`
@@ -208,25 +297,66 @@ const IndexPage = () => {
     }
   }
 
+  const handleQuickEntryClick = (path: string) => {
+    if (!path) {
+      Taro.showToast({ title: '功能建设中，敬请期待', icon: 'none' })
+      return
+    }
+    Taro.switchTab({ url: path })
+  }
+
+  const handleBannerImageError = (bannerId: string) => {
+    setFailedBannerImages(current => {
+      const next = new Set(current)
+      next.add(bannerId)
+      return next
+    })
+  }
+
+  const handleBannerImageLoad = (bannerId: string) => {
+    setLoadedBannerImages(current => {
+      const next = new Set(current)
+      next.add(bannerId)
+      return next
+    })
+  }
+
   return (
     <ScrollView scrollY className="h-full bg-[#F5F6FA]">
       {/* ── Custom Header ── */}
       <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pb-5">
         <View style={{ height: `${statusBarHeight}px` }} />
-        <View className="flex flex-row items-center justify-between mb-3">
-          <View className="flex flex-row items-center gap-2">
-            <Text className="block text-xl font-bold text-white">星河百谷</Text>
-            <Text className="block text-xs text-[#E8D5A8] bg-[#F4EEE2] px-2 py-0 rounded-full">商会会员平台</Text>
+        {isMiniApp && (
+          <View className="flex flex-row items-center justify-between mb-3">
+            <View className="flex flex-row items-center gap-2">
+              <Text className="block text-xl font-bold text-white">星河百谷</Text>
+              <Text className="block text-xs text-[#E8D5A8] bg-[#F4EEE2] px-2 py-0 rounded-full">商会会员平台</Text>
+            </View>
+            <View className="relative" onClick={() => Taro.navigateTo({ url: '/pages/message/index' })}>
+              <Bell size={20} color="#ffffff" />
+              <View className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+            </View>
           </View>
-          <View className="relative" onClick={() => Taro.switchTab({ url: '/pages/message/index' })}>
-            <Bell size={20} color="#ffffff" />
-            <View className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
-          </View>
-        </View>
+        )}
         {/* Search Bar */}
-        <View style={{ backgroundColor: 'rgba(255,255,255,0.15)' }} className="rounded-xl px-3 py-2 flex flex-row items-center gap-2">
+        <View
+          style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+          className="rounded-xl px-3 py-2 flex flex-row items-center gap-2"
+          onClick={() => Taro.showToast({ title: '搜索功能建设中', icon: 'none' })}
+        >
           <Search size={16} color="rgba(255,255,255,0.6)" />
           <Text className="block text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>搜索项目、人才、资源...</Text>
+          {!isMiniApp && (
+            <View
+              className="ml-auto"
+              onClick={(event) => {
+                event.stopPropagation()
+                Taro.navigateTo({ url: '/pages/message/index' })
+              }}
+            >
+              <Bell size={18} color="#ffffff" />
+            </View>
+          )}
         </View>
       </View>
 
@@ -241,23 +371,34 @@ const IndexPage = () => {
             <CarouselContent>
               {banners.map((banner) => (
                 <CarouselItem key={banner.id}>
-                  {banner.image_url ? (
-                    <View className="rounded-2xl overflow-hidden relative h-full" onClick={() => handleBannerClick(banner)}>
-                      <Image src={banner.image_url} mode="aspectFill" className="w-full h-full" />
+                  <View
+                    className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] rounded-2xl p-5 relative overflow-hidden h-full"
+                    onClick={() => handleBannerClick(banner)}
+                  >
+                    {isCloudStorageImageUrl(banner.image_url) && !failedBannerImages.has(banner.id) && (
+                      <Image
+                        src={banner.image_url}
+                        mode="aspectFill"
+                        className={`absolute inset-0 w-full h-full ${loadedBannerImages.has(banner.id) ? 'opacity-100' : 'opacity-0'}`}
+                        onLoad={() => handleBannerImageLoad(banner.id)}
+                        onError={() => handleBannerImageError(banner.id)}
+                      />
+                    )}
+                    {loadedBannerImages.has(banner.id) ? (
                       <View className="absolute left-0 bottom-0 right-0 p-4" style={{ background: 'linear-gradient(transparent, rgba(27,42,74,0.85))' }}>
                         <Text className="block text-white text-base font-bold">{banner.title}</Text>
                       </View>
-                    </View>
-                  ) : (
-                    <View className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] rounded-2xl p-5 relative overflow-hidden h-full" onClick={() => handleBannerClick(banner)}>
-                      <View className="absolute -right-6 -top-6 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                      <View className="absolute left-0 bottom-0 right-0 h-1 bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8] rounded-full" />
-                      <Text className="block text-white text-lg font-bold mb-1">{banner.title}</Text>
-                      <View className="rounded-lg px-3 py-1 self-start" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-                        <Text className="block text-white text-xs font-medium">立即参与 →</Text>
+                    ) : (
+                      <View>
+                        <View className="absolute -right-6 -top-6 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
+                        <View className="absolute left-0 bottom-0 right-0 h-1 bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8] rounded-full" />
+                        <Text className="block text-white text-lg font-bold mb-1">{banner.title}</Text>
+                        <View className="rounded-lg px-3 py-1 self-start" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                          <Text className="block text-white text-xs font-medium">立即参与 →</Text>
+                        </View>
                       </View>
-                    </View>
-                  )}
+                    )}
+                  </View>
                 </CarouselItem>
               ))}
             </CarouselContent>
@@ -271,18 +412,10 @@ const IndexPage = () => {
         <View className="bg-white rounded-2xl p-4 shadow-sm">
           <View className="grid grid-cols-4 gap-y-4">
             {QUICK_ENTRIES.map((entry) => (
-              <View key={entry.label} className="flex flex-col items-center gap-1" onClick={() => {
-                if (entry.path) {
-                  if (entry.path.includes('/pages/')) {
-                    const isTab = ['index', 'business', 'discover', 'message', 'profile'].some(t => entry.path.includes(t + '/index'))
-                    if (isTab) {
-                      Taro.switchTab({ url: entry.path })
-                    } else {
-                      Taro.navigateTo({ url: entry.path })
-                    }
-                  }
-                }
-              }}
+              <View
+                key={entry.label}
+                className="flex flex-col items-center gap-1"
+                onClick={() => handleQuickEntryClick(entry.path)}
               >
                 <View className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ backgroundColor: entry.tint }}>
                   <entry.icon size={22} color={entry.color} />
@@ -312,6 +445,9 @@ const IndexPage = () => {
             <View className="flex flex-row gap-3 pr-4">
               {roadshows.map((item) => (
                 <Card key={item.id} className="min-w-[260px] shadow-sm border-0 overflow-hidden flex-shrink-0">
+                  {isCloudStorageImageUrl(item.cover_image) && (
+                    <Image src={item.cover_image} mode="aspectFill" className="w-full h-36" />
+                  )}
                   <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] p-4 relative overflow-hidden">
                     <View className="absolute -right-4 -bottom-4 w-20 h-20 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
                     <View className="flex flex-row items-center justify-between mb-2">
@@ -345,7 +481,10 @@ const IndexPage = () => {
               <View className="w-1 h-5 bg-[#C9A96E] rounded-full" />
               <Text className="block text-base font-semibold text-[#1A1D2E]">资源大厅</Text>
             </View>
-            <View className="flex flex-row items-center gap-0">
+            <View
+              className="flex flex-row items-center gap-0"
+              onClick={() => Taro.switchTab({ url: '/pages/business/index' })}
+            >
               <Text className="block text-xs text-gray-400">全部</Text>
               <ChevronRight size={14} color="#9CA3AF" />
             </View>
@@ -433,8 +572,15 @@ const IndexPage = () => {
 
       {/* ── Empty State ── */}
       {!loading && banners.length === 0 && roadshows.length === 0 && resources.length === 0 && feeds.length === 0 && (
-        <View className="flex items-center justify-center py-20">
-          <Text className="block text-sm text-gray-400">暂无数据，请在后台配置Banner和内容</Text>
+        <View className="flex flex-col items-center justify-center gap-3 py-20">
+          <Text className="block text-sm text-gray-400">
+            {loadFailed ? '内容加载失败，请检查网络后重试' : '暂无数据，请在后台配置Banner和内容'}
+          </Text>
+          {loadFailed && (
+            <Button variant="outline" size="sm" onClick={loadHomeData}>
+              <Text className="block">重新加载</Text>
+            </Button>
+          )}
         </View>
       )}
 

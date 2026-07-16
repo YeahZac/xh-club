@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { queryRows, queryOne, queryExecute } from '@/storage/database/mysql-client';
+import { queryRows, queryOne, queryExecute, withTransaction } from '@/storage/database/mysql-client';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { PoolConnection } from 'mysql2/promise';
+import { isCloudStorageUrl } from '@/utils/media-url';
 
 export interface ProductRow extends RowDataPacket {
   id: string;
@@ -70,7 +72,8 @@ export class MallService {
   async createProduct(data: {
     name: string;
     description?: string;
-    image_url?: string;
+    image_url: string;
+    video_url?: string;
     points_price: number;
     cash_price?: string;
     stock: number;
@@ -78,11 +81,17 @@ export class MallService {
     enable_distribution?: boolean;
     distribution_rate?: string;
   }) {
+    if (!isCloudStorageUrl(data.image_url)) {
+      return { code: 400, msg: '商品图片为必填项', data: null };
+    }
+    if (data.video_url && !isCloudStorageUrl(data.video_url)) {
+      return { code: 400, msg: '商品视频必须使用微信云托管对象存储 URL', data: null };
+    }
     try {
       const result = await queryExecute(
-        `INSERT INTO mall_products (name, description, image_url, points_price, cash_price, stock, category, enable_distribution, distribution_rate, status, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0)`,
-        [data.name, data.description || null, data.image_url || null,
+        `INSERT INTO mall_products (name, description, image_url, video_url, points_price, cash_price, stock, category, enable_distribution, distribution_rate, status, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0)`,
+        [data.name, data.description || null, data.image_url, data.video_url || null,
          data.points_price, data.cash_price || '0', data.stock, data.category,
          data.enable_distribution || false, data.distribution_rate || '0']
       );
@@ -143,88 +152,109 @@ export class MallService {
     points_used: number;
     referrer_id?: string;
   }) {
+    if (!Number.isInteger(data.quantity) || data.quantity <= 0) {
+      return { code: 400, msg: '商品数量必须为正整数', data: null };
+    }
+    if (!Number.isInteger(data.points_used) || data.points_used < 0) {
+      return { code: 400, msg: '使用积分不能为负数', data: null };
+    }
+
     try {
-      // 获取商品信息
-      const product = await queryOne<ProductRow>('SELECT * FROM mall_products WHERE id = ?', [data.product_id]);
-      if (!product) {
-        return { code: 404, msg: '商品不存在', data: null };
-      }
+      return await withTransaction(async connection => {
+        const [productRows] = await connection.query<ProductRow[]>(
+          'SELECT * FROM mall_products WHERE id = ? FOR UPDATE',
+          [data.product_id],
+        );
+        const product = productRows[0];
+        if (!product) return { code: 404, msg: '商品不存在', data: null };
+        if (product.status !== 'active') return { code: 400, msg: '商品已下架', data: null };
+        if (product.stock < data.quantity) return { code: 400, msg: '库存不足', data: null };
 
-      // 检查库存
-      if (product.stock < data.quantity) {
-        return { code: 400, msg: '库存不足', data: null };
-      }
+        const [memberRows] = await connection.query<MemberRow[]>(
+          'SELECT * FROM members WHERE id = ? FOR UPDATE',
+          [data.member_id],
+        );
+        const member = memberRows[0];
+        if (!member) return { code: 404, msg: '会员不存在', data: null };
+        if (member.available_points < data.points_used) {
+          return { code: 400, msg: '积分不足', data: null };
+        }
 
-      // 检查会员积分
-      const member = await queryOne<MemberRow>('SELECT * FROM members WHERE id = ?', [data.member_id]);
-      if (!member) {
-        return { code: 404, msg: '会员不存在', data: null };
-      }
-      if (member.available_points < data.points_used) {
-        return { code: 400, msg: '积分不足', data: null };
-      }
+        const orderNo = `ORD${Date.now()}${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        const totalAmount = parseFloat(product.cash_price || '0') * data.quantity;
+        const [orderResult] = await connection.query<ResultSetHeader>(
+          `INSERT INTO mall_orders
+             (order_no, member_id, product_id, product_name, quantity, total_amount, points_used, cash_amount, referrer_id, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+          [
+            orderNo,
+            data.member_id,
+            data.product_id,
+            product.name,
+            data.quantity,
+            totalAmount.toString(),
+            data.points_used,
+            totalAmount.toString(),
+            data.referrer_id || null,
+          ],
+        );
 
-      // 生成订单号
-      const orderNo = `ORD${Date.now()}${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      const totalAmount = parseFloat(product.cash_price || '0') * data.quantity;
-      const cashAmount = totalAmount;
+        await connection.query(
+          'UPDATE members SET available_points = available_points - ?, updated_at = NOW() WHERE id = ?',
+          [data.points_used, data.member_id],
+        );
+        await connection.query(
+          'UPDATE mall_products SET stock = stock - ?, sales_count = sales_count + ?, updated_at = NOW() WHERE id = ?',
+          [data.quantity, data.quantity, data.product_id],
+        );
 
-      // 创建订单
-      const orderResult = await queryExecute(
-        `INSERT INTO mall_orders (order_no, member_id, product_id, product_name, quantity, total_amount, points_used, cash_amount, referrer_id, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid')`,
-        [orderNo, data.member_id, data.product_id, product.name, data.quantity,
-         totalAmount.toString(), data.points_used, cashAmount.toString(), data.referrer_id || null]
-      );
+        if (data.referrer_id && product.enable_distribution) {
+          await this.processDistribution(
+            connection,
+            data.referrer_id,
+            data.member_id,
+            String(orderResult.insertId),
+            product,
+          );
+        }
 
-      // 扣减积分
-      await queryExecute(
-        'UPDATE members SET available_points = available_points - ?, updated_at = NOW() WHERE id = ?',
-        [data.points_used, data.member_id]
-      );
-
-      // 扣减库存，增加销量
-      await queryExecute(
-        'UPDATE mall_products SET stock = stock - ?, sales_count = sales_count + ?, updated_at = NOW() WHERE id = ?',
-        [data.quantity, data.quantity, data.product_id]
-      );
-
-      // 处理分销
-      if (data.referrer_id && product.enable_distribution) {
-        await this.processDistribution(data.referrer_id, data.member_id, String(orderResult.insertId), product);
-      }
-
-      // 查询新创建的订单
-      const order = await queryOne('SELECT * FROM mall_orders WHERE id = ?', [orderResult.insertId]);
-      return { code: 200, msg: '下单成功', data: order };
+        const [orderRows] = await connection.query<RowDataPacket[]>(
+          'SELECT * FROM mall_orders WHERE id = ?',
+          [orderResult.insertId],
+        );
+        return { code: 200, msg: '下单成功', data: orderRows[0] || null };
+      });
     } catch (error) {
       this.logger.error('创建订单失败', error);
       return { code: 500, msg: '创建订单失败', data: null };
     }
   }
 
-  async processDistribution(referrerId: string, buyerId: string, orderId: string, product: any) {
-    try {
-      const relations = await queryRows(
-        'SELECT * FROM distribution_relations WHERE child_id = ?',
-        [buyerId]
-      );
-      for (const relation of relations) {
-        if (relation.parent_id === referrerId || relation.level === 1) {
-          const rate = parseFloat(product.distribution_rate || '0');
-          const amount = parseFloat(product.cash_price || '0') * rate / 100;
-          if (amount > 0) {
-            await queryExecute(
-              `INSERT INTO distribution_earnings (member_id, order_id, from_member_id, amount, rate, level, status)
-               VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
-              [referrerId, orderId, buyerId, amount.toString(), rate.toString(), relation.level]
-            );
-          }
-          break;
+  private async processDistribution(
+    connection: PoolConnection,
+    referrerId: string,
+    buyerId: string,
+    orderId: string,
+    product: ProductRow,
+  ) {
+    const [relations] = await connection.query<RowDataPacket[]>(
+      'SELECT * FROM distribution_relations WHERE child_id = ?',
+      [buyerId],
+    );
+    for (const relation of relations) {
+      if (String(relation.parent_id) === String(referrerId) || relation.level === 1) {
+        const rate = parseFloat(product.distribution_rate || '0');
+        const amount = parseFloat(product.cash_price || '0') * rate / 100;
+        if (amount > 0) {
+          await connection.query(
+            `INSERT INTO distribution_earnings
+               (member_id, order_id, from_member_id, amount, rate, level, status)
+             VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+            [referrerId, orderId, buyerId, amount.toString(), rate.toString(), relation.level],
+          );
         }
+        break;
       }
-    } catch (error) {
-      this.logger.error('处理分销失败', error);
     }
   }
 

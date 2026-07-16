@@ -1,52 +1,50 @@
-import { Controller, Get, Post, Body, Query } from '@nestjs/common'
+import { Controller, Get, Post, Body, Query, Req, UseGuards } from '@nestjs/common'
 import { MessagesService } from './messages.service'
+import { MemberAuthGuard } from '@/auth/auth.guard'
 
 @Controller('messages')
+@UseGuards(MemberAuthGuard)
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
 
   @Get()
-  async getMessages(@Query() query: any) {
+  async getMessages(@Query() query: any, @Req() request: any) {
     console.log('[MessagesController] GET /api/messages')
-    const memberId = query.member_id
-    if (!memberId) return { code: 400, msg: '缺少member_id', data: null }
-    const result = await this.messagesService.getMessages(memberId, query)
+    const result = await this.messagesService.getMessages(request.user.sub, query)
     return { code: 200, msg: 'success', data: result }
   }
 
   @Post()
-  async sendMessage(@Body() body: { sender_id: string; receiver_id: string; content: string; type?: string }) {
+  async sendMessage(@Body() body: { receiver_id: string; content: string; type?: string }, @Req() request: any) {
     console.log('[MessagesController] POST /api/messages')
-    const result = await this.messagesService.sendMessage(body)
+    const result = await this.messagesService.sendMessage({ ...body, sender_id: request.user.sub })
     return { code: 200, msg: '发送成功', data: result }
   }
 }
 
 @Controller('notifications')
+@UseGuards(MemberAuthGuard)
 export class NotificationsController {
   constructor(private readonly messagesService: MessagesService) {}
 
   @Get()
-  async getNotifications(@Query() query: any) {
+  async getNotifications(@Query() query: any, @Req() request: any) {
     console.log('[NotificationsController] GET /api/notifications')
-    const memberId = query.member_id
-    if (!memberId) return { code: 400, msg: '缺少member_id', data: null }
-    const result = await this.messagesService.getNotifications(memberId, query)
+    const result = await this.messagesService.getNotifications(request.user.sub, query)
     return { code: 200, msg: 'success', data: result }
   }
 
   @Get('unread-count')
-  async getUnreadCount(@Query('member_id') memberId: string) {
+  async getUnreadCount(@Req() request: any) {
     console.log('[NotificationsController] GET /api/notifications/unread-count')
-    if (!memberId) return { code: 400, msg: '缺少member_id', data: null }
-    const result = await this.messagesService.getUnreadCount(memberId)
+    const result = await this.messagesService.getUnreadCount(request.user.sub)
     return { code: 200, msg: 'success', data: result }
   }
 
   @Post('mark-read')
-  async markAsRead(@Body() body: { member_id: string; type: 'messages' | 'notifications'; ids?: string[] }) {
+  async markAsRead(@Body() body: { type: 'messages' | 'notifications'; ids?: string[] }, @Req() request: any) {
     console.log('[NotificationsController] POST /api/notifications/mark-read')
-    const result = await this.messagesService.markAsRead(body.member_id, body.type, body.ids)
+    const result = await this.messagesService.markAsRead(request.user.sub, body.type, body.ids)
     return { code: 200, msg: '操作成功', data: result }
   }
 }

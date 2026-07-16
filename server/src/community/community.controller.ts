@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common'
+import { Controller, Get, Post, Body, Param, Query, Req, UseGuards } from '@nestjs/common'
 import { CommunityService } from './community.service'
+import { MemberAuthGuard } from '@/auth/auth.guard'
 
 @Controller('community')
 export class CommunityController {
@@ -20,16 +21,18 @@ export class CommunityController {
   }
 
   @Post('posts')
-  async createPost(@Body() dto: any) {
+  @UseGuards(MemberAuthGuard)
+  async createPost(@Body() dto: any, @Req() request: any) {
     console.log('[CommunityController] POST /api/community/posts')
-    const result = await this.communityService.createPost(dto)
+    const result = await this.communityService.createPost({ ...dto, member_id: request.user.sub })
     return { code: 200, msg: '发布成功', data: result }
   }
 
   @Post('posts/:id/like')
-  async likePost(@Param('id') id: string, @Body() body: any) {
+  @UseGuards(MemberAuthGuard)
+  async likePost(@Param('id') id: string, @Req() request: any) {
     console.log('[CommunityController] POST /api/community/posts/:id/like')
-    const result = await this.communityService.likePost({ post_id: id, member_id: body.member_id || '0' })
+    const result = await this.communityService.likePost({ post_id: id, member_id: request.user.sub })
     return { code: 200, msg: '点赞成功', data: result }
   }
 
@@ -41,9 +44,10 @@ export class CommunityController {
   }
 
   @Post('posts/:id/comment')
-  async commentPost(@Param('id') id: string, @Body() body: any) {
+  @UseGuards(MemberAuthGuard)
+  async commentPost(@Param('id') id: string, @Body() body: any, @Req() request: any) {
     console.log('[CommunityController] POST /api/community/posts/:id/comment')
-    const result = await this.communityService.commentPost({ ...body, post_id: id })
+    const result = await this.communityService.commentPost({ ...body, post_id: id, member_id: request.user.sub })
     return { code: 200, msg: '评论成功', data: result }
   }
 }

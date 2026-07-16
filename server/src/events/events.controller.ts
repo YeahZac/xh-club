@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Delete, Body, Param, Query } from '@nestjs/common'
+import { Body, Controller, Get, Post, Delete, Param, Query, Req, UseGuards } from '@nestjs/common'
 import { EventsService } from './events.service'
+import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard'
 
 @Controller('events')
 export class EventsController {
@@ -20,16 +21,18 @@ export class EventsController {
   }
 
   @Post(':id/register')
-  async register(@Param('id') id: string, @Body() body: { member_id: string }) {
+  @UseGuards(MemberAuthGuard)
+  async register(@Param('id') id: string, @Req() request: any) {
     console.log('[EventsController] POST /api/events/:id/register')
-    const result = await this.eventsService.registerEvent(id, body.member_id)
+    const result = await this.eventsService.registerEvent(id, request.user.sub)
     return { code: 200, msg: '报名成功', data: result }
   }
 
   @Delete(':id/register')
-  async cancelRegister(@Param('id') id: string, @Body() body: { member_id: string }) {
+  @UseGuards(MemberAuthGuard)
+  async cancelRegister(@Param('id') id: string, @Req() request: any) {
     console.log('[EventsController] DELETE /api/events/:id/register')
-    const result = await this.eventsService.cancelRegistration(id, body.member_id)
+    const result = await this.eventsService.cancelRegistration(id, request.user.sub)
     return { code: 200, msg: '取消成功', data: result }
   }
 }
@@ -53,6 +56,7 @@ export class ProjectsController {
   }
 
   @Post()
+  @UseGuards(AdminAuthGuard)
   async createProject(@Body() dto: any) {
     console.log('[ProjectsController] POST /api/projects')
     const result = await this.eventsService.createProject(dto)
@@ -72,6 +76,7 @@ export class ResourcesController {
   }
 
   @Post()
+  @UseGuards(AdminAuthGuard)
   async createResource(@Body() dto: any) {
     console.log('[ResourcesController] POST /api/resources')
     const result = await this.eventsService.createResource(dto)

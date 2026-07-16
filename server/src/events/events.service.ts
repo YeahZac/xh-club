@@ -1,5 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
+import { isCloudStorageUrl } from '@/utils/media-url'
 
 @Injectable()
 export class EventsService {
@@ -167,12 +168,19 @@ export class EventsService {
   /** 创建项目 */
   async createProject(dto: any) {
     console.log('[EventsService] createProject - title:', dto.title)
+    if (!isCloudStorageUrl(dto.cover_image)) {
+      throw new HttpException('项目封面图片为必填项', HttpStatus.BAD_REQUEST)
+    }
+    if (dto.video_url && !isCloudStorageUrl(dto.video_url)) {
+      throw new HttpException('项目视频必须使用微信云托管对象存储 URL', HttpStatus.BAD_REQUEST)
+    }
     const { data, error } = await this.client()
       .from('projects')
       .insert({
         title: dto.title,
         description: dto.description,
         cover_image: dto.cover_image || null,
+        video_url: dto.video_url || null,
         industry: dto.industry,
         stage: dto.stage || 'seed',
         amount_min: dto.amount_min || null,

@@ -7,11 +7,14 @@ import {
   UseInterceptors,
   UploadedFile,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadService } from './upload.service';
+import { AdminAuthGuard } from '@/auth/auth.guard';
 
 @Controller('upload')
+@UseGuards(AdminAuthGuard)
 export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
@@ -38,6 +41,20 @@ export class UploadController {
     }
 
     const result = await this.uploadService.uploadImage(file);
+    return {
+      code: 200,
+      msg: 'Upload successful',
+      data: result,
+    };
+  }
+
+  @Post('video')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadVideo(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+    const result = await this.uploadService.uploadVideo(file);
     return {
       code: 200,
       msg: 'Upload successful',

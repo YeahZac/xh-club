@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, Res, HttpCode } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query, Res, HttpCode, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { EventRegistrationService } from './event-registration.service';
+import { AdminAuthGuard } from '@/auth/auth.guard';
 
 @Controller('event-registration')
 export class EventRegistrationController {
@@ -26,6 +27,7 @@ export class EventRegistrationController {
 
   /** 获取报名列表（管理员） */
   @Get()
+  @UseGuards(AdminAuthGuard)
   async findAll(@Query('keyword') keyword?: string) {
     console.log('[EventRegistration] GET /api/event-registration', keyword ? `keyword=${keyword}` : '');
     const data = await this.service.findAll(keyword);
@@ -34,6 +36,7 @@ export class EventRegistrationController {
 
   /** 导出CSV（管理员） */
   @Get('export')
+  @UseGuards(AdminAuthGuard)
   async exportCsv(@Res() res: Response) {
     console.log('[EventRegistration] GET /api/event-registration/export');
     const csv = await this.service.exportCsv();
@@ -45,6 +48,7 @@ export class EventRegistrationController {
 
   /** 删除报名（管理员） */
   @Delete(':id')
+  @UseGuards(AdminAuthGuard)
   @HttpCode(200)
   async remove(@Param('id') id: string) {
     console.log('[EventRegistration] DELETE /api/event-registration/' + id);

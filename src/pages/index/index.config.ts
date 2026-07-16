@@ -1,3 +1,3 @@
 export default typeof definePageConfig === 'function'
-  ? definePageConfig({ navigationBarTitleText: '粤商汇' })
-  : { navigationBarTitleText: '粤商汇' }
+  ? definePageConfig({ navigationBarTitleText: '星河百谷', navigationStyle: 'custom' })
+  : { navigationBarTitleText: '星河百谷', navigationStyle: 'custom' }

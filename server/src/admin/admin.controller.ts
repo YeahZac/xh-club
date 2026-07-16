@@ -1,6 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common'
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common'
 import { AdminService } from './admin.service'
 import * as bcrypt from 'bcryptjs'
+import { AdminAuthGuard } from '@/auth/auth.guard'
+import { Public } from '@/auth/public.decorator'
 
 // 数据库初始化 SQL（直接嵌入代码，避免文件路径问题）
 const INIT_SQL = `
@@ -280,13 +282,28 @@ CREATE TABLE member_departments (
 CREATE TABLE members (
   id INT AUTO_INCREMENT PRIMARY KEY,
   phone VARCHAR(20) NOT NULL UNIQUE,
+  wx_openid VARCHAR(128) UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   name VARCHAR(50),
   avatar VARCHAR(255),
+  gender VARCHAR(10),
+  birthday VARCHAR(20),
   company_name VARCHAR(100),
-  position VARCHAR(50),
-  industry VARCHAR(50),
+  company_position VARCHAR(128),
+  industry_primary VARCHAR(64),
+  industry_secondary VARCHAR(64),
+  company_scale VARCHAR(32),
+  company_founded VARCHAR(10),
+  company_address VARCHAR(500),
+  company_website VARCHAR(500),
+  business_description TEXT,
+  core_advantage VARCHAR(500),
+  resources_supply TEXT,
+  resources_demand TEXT,
+  city VARCHAR(64),
+  wechat_id VARCHAR(128),
   bio TEXT,
+  member_type VARCHAR(32) DEFAULT 'unpaid',
   membership_level VARCHAR(20) DEFAULT 'normal',
   credit_score INT DEFAULT 0,
   active_score INT DEFAULT 0,
@@ -294,7 +311,10 @@ CREATE TABLE members (
   total_points INT DEFAULT 0,
   available_points INT DEFAULT 0,
   referrer_id INT,
+  join_source VARCHAR(64),
   status VARCHAR(20) DEFAULT 'pending',
+  approved_at TIMESTAMP NULL,
+  approved_by VARCHAR(36),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_phone (phone),
@@ -307,7 +327,8 @@ CREATE TABLE events (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(200) NOT NULL,
   description TEXT,
-  cover_image VARCHAR(500),
+  cover_image VARCHAR(500) NOT NULL,
+  video_url VARCHAR(500),
   event_type VARCHAR(50),
   status VARCHAR(20) DEFAULT 'draft',
   start_time DATETIME,
@@ -328,19 +349,39 @@ CREATE TABLE event_registrations (
   id INT AUTO_INCREMENT PRIMARY KEY,
   event_id INT NOT NULL,
   member_id INT NOT NULL,
-  status VARCHAR(20) DEFAULT 'pending',
+  status VARCHAR(20) DEFAULT 'registered',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_event_member (event_id, member_id),
   INDEX idx_event_id (event_id),
   INDEX idx_member_id (member_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 通用报名表
+CREATE TABLE event_form_registrations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(64) NOT NULL,
+  gender VARCHAR(16),
+  birthday DATE,
+  age INT,
+  industry VARCHAR(64),
+  phone VARCHAR(32) NOT NULL,
+  contact_method VARCHAR(128),
+  referrer VARCHAR(64),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 文章表
 CREATE TABLE articles (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(200) NOT NULL,
+  subtitle VARCHAR(255),
   content TEXT,
   summary VARCHAR(500),
-  cover_image VARCHAR(500),
+  cover_image VARCHAR(500) NOT NULL,
+  video_url VARCHAR(500),
+  category VARCHAR(50) DEFAULT 'news',
+  tags JSON,
   author VARCHAR(100),
   status VARCHAR(20) DEFAULT 'draft',
   view_count INT DEFAULT 0,
@@ -423,7 +464,11 @@ CREATE TABLE projects (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(200) NOT NULL,
   description TEXT,
-  cover_image VARCHAR(500),
+  cover_image VARCHAR(500) NOT NULL,
+  video_url VARCHAR(500),
+  industry VARCHAR(64),
+  stage VARCHAR(32) DEFAULT 'seed',
+  amount_max DECIMAL(14,2),
   status VARCHAR(20) DEFAULT 'draft',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -450,7 +495,8 @@ CREATE TABLE mall_products (
   price DECIMAL(10,2),
   points_price INT,
   stock INT DEFAULT 0,
-  cover_image VARCHAR(500),
+  image_url VARCHAR(500) NOT NULL,
+  video_url VARCHAR(500),
   images JSON,
   status VARCHAR(20) DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -568,7 +614,7 @@ CREATE TABLE mall_orders (
 CREATE TABLE banners (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(100) NOT NULL,
-  image_url VARCHAR(500),
+  image_url VARCHAR(500) NOT NULL,
   link_type VARCHAR(20) DEFAULT 'link' COMMENT '链接类型: article/event/link/miniapp',
   link_id VARCHAR(100) COMMENT '关联ID',
   link_config JSON COMMENT '链接配置',
@@ -580,10 +626,33 @@ CREATE TABLE banners (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 首页栏目配置
+CREATE TABLE homepage_sections (
+  section VARCHAR(32) PRIMARY KEY,
+  display_name VARCHAR(64) NOT NULL,
+  is_enabled TINYINT(1) DEFAULT 1,
+  item_limit INT DEFAULT 5,
+  sort_order INT DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 首页栏目内容
+CREATE TABLE homepage_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  section VARCHAR(32) NOT NULL,
+  item_id VARCHAR(64) NOT NULL,
+  sort_order INT DEFAULT 0,
+  is_active TINYINT(1) DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_homepage_section_item (section, item_id),
+  INDEX idx_homepage_section (section, is_active, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 插入默认角色
 INSERT IGNORE INTO roles (name, display_name, description, permissions, is_system) VALUES 
 ('super_admin', '超级管理员', '拥有所有权限', '["*"]', 1),
-('admin', '普通管理员', '基础管理权限', '["dashboard","members","articles","banners"]', 1);
+('admin', '普通管理员', '基础管理权限', '["dashboard","homepage","members","articles","banners"]', 1);
 
 -- 插入默认会员等级
 INSERT IGNORE INTO member_levels (level_code, level_name, min_contribution, discount_rate, points_multiplier, sort_order) VALUES
@@ -591,9 +660,15 @@ INSERT IGNORE INTO member_levels (level_code, level_name, min_contribution, disc
 ('silver', '银卡会员', 100, 0.95, 1.20, 2),
 ('gold', '金卡会员', 500, 0.90, 1.50, 3),
 ('diamond', '钻石会员', 2000, 0.85, 2.00, 4);
+
+INSERT IGNORE INTO homepage_sections (section, display_name, item_limit, sort_order) VALUES
+('projects', '精选项目', 6, 1),
+('resources', '资源大厅', 5, 2),
+('posts', '商会动态', 5, 3);
 `
 
 @Controller('admin')
+@UseGuards(AdminAuthGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
@@ -702,9 +777,13 @@ export class AdminController {
           `SELECT id FROM users WHERE login_account = 'admin' LIMIT 1`
         )
         if (!existing || existing.length === 0) {
-          const passwordHash = await bcrypt.hash('a123123', 10)
+          const initialPassword = process.env.ADMIN_INITIAL_PASSWORD
+          if (!initialPassword) {
+            results.push('未配置 ADMIN_INITIAL_PASSWORD，跳过初始管理员创建')
+          } else {
+          const passwordHash = await bcrypt.hash(initialPassword, 10)
           await this.adminService.executeRaw(
-            `INSERT INTO users (login_account, password_hash, name) VALUES ('admin', '${passwordHash}', '系统管理员')`
+            `INSERT INTO users (login_account, phone, password_hash, name) VALUES ('admin', 'admin', '${passwordHash}', '系统管理员')`
           )
           const newUsers = await this.adminService.executeRaw(`SELECT id FROM users WHERE login_account = 'admin'`)
           const userId = newUsers[0]?.id
@@ -713,7 +792,8 @@ export class AdminController {
               `INSERT IGNORE INTO admins (user_id, role_id, status) VALUES (${userId}, 1, 'enabled')`
             )
           }
-          results.push('admin 账号已创建（密码: a123123）')
+          results.push('admin 账号已创建')
+          }
         } else {
           results.push('admin 账号已存在')
         }
@@ -742,6 +822,199 @@ export class AdminController {
         results.push('banners 表已创建')
       } catch (e: any) {
         results.push('banners 表创建失败: ' + e.message)
+      }
+
+      // 7. 创建首页栏目配置表
+      try {
+        await this.adminService.executeRaw(`
+          CREATE TABLE IF NOT EXISTS homepage_sections (
+            section VARCHAR(32) PRIMARY KEY,
+            display_name VARCHAR(64) NOT NULL,
+            is_enabled TINYINT(1) DEFAULT 1,
+            item_limit INT DEFAULT 5,
+            sort_order INT DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+          CREATE TABLE IF NOT EXISTS homepage_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            section VARCHAR(32) NOT NULL,
+            item_id VARCHAR(64) NOT NULL,
+            sort_order INT DEFAULT 0,
+            is_active TINYINT(1) DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_homepage_section_item (section, item_id),
+            INDEX idx_homepage_section (section, is_active, sort_order)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+          INSERT IGNORE INTO homepage_sections
+            (section, display_name, item_limit, sort_order)
+          VALUES
+            ('projects', '精选项目', 6, 1),
+            ('resources', '资源大厅', 5, 2),
+            ('posts', '商会动态', 5, 3);
+        `)
+        results.push('首页栏目配置表已创建')
+      } catch (e: any) {
+        results.push('首页栏目配置表创建失败: ' + e.message)
+      }
+
+      // 8. 补齐内容媒体字段（封面由接口对新建/编辑内容强制校验）
+      const mediaColumns: Array<[string, string, string]> = [
+        ['events', 'video_url', 'VARCHAR(500) NULL'],
+        ['projects', 'video_url', 'VARCHAR(500) NULL'],
+        ['projects', 'industry', 'VARCHAR(64) NULL'],
+        ['projects', 'stage', `VARCHAR(32) DEFAULT 'seed'`],
+        ['projects', 'amount_max', 'DECIMAL(14,2) NULL'],
+        ['articles', 'subtitle', 'VARCHAR(255) NULL'],
+        ['articles', 'video_url', 'VARCHAR(500) NULL'],
+        ['articles', 'category', `VARCHAR(50) DEFAULT 'news'`],
+        ['articles', 'tags', 'JSON NULL'],
+        ['mall_products', 'image_url', 'VARCHAR(500) NULL'],
+        ['mall_products', 'video_url', 'VARCHAR(500) NULL'],
+      ]
+      for (const [table, column, definition] of mediaColumns) {
+        try {
+          await this.adminService.executeRaw(
+            `ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`
+          )
+        } catch (e: any) {
+          if (!e.message?.includes('Duplicate column')) {
+            results.push(`${table}.${column} 添加失败: ${e.message}`)
+          }
+        }
+      }
+      try {
+        await this.adminService.executeRaw(
+          `UPDATE mall_products
+           SET image_url = COALESCE(image_url, cover_image)
+           WHERE image_url IS NULL`
+        )
+      } catch {
+        // 旧表没有 cover_image 时无需复制
+      }
+      results.push('内容图片及视频字段已完成兼容补齐')
+
+      // 9. members 表补充微信 openid
+      try {
+        await this.adminService.executeRaw(
+          `ALTER TABLE members ADD COLUMN wx_openid VARCHAR(128) NULL UNIQUE AFTER phone`
+        )
+        results.push('members.wx_openid 列已添加')
+      } catch (e: any) {
+        if (e.message?.includes('Duplicate column')) {
+          results.push('members.wx_openid 列已存在，跳过')
+        } else {
+          results.push('members.wx_openid 添加失败: ' + e.message)
+        }
+      }
+
+      // 10. 补齐统一会员字段
+      const memberColumns: Record<string, string> = {
+        gender: 'VARCHAR(10) NULL',
+        birthday: 'VARCHAR(20) NULL',
+        company_position: 'VARCHAR(128) NULL',
+        industry_primary: 'VARCHAR(64) NULL',
+        industry_secondary: 'VARCHAR(64) NULL',
+        company_scale: 'VARCHAR(32) NULL',
+        company_founded: 'VARCHAR(10) NULL',
+        company_address: 'VARCHAR(500) NULL',
+        company_website: 'VARCHAR(500) NULL',
+        business_description: 'TEXT NULL',
+        core_advantage: 'VARCHAR(500) NULL',
+        resources_supply: 'TEXT NULL',
+        resources_demand: 'TEXT NULL',
+        city: 'VARCHAR(64) NULL',
+        wechat_id: 'VARCHAR(128) NULL',
+        member_type: `VARCHAR(32) NOT NULL DEFAULT 'unpaid'`,
+        join_source: 'VARCHAR(64) NULL',
+        approved_at: 'TIMESTAMP NULL',
+        approved_by: 'VARCHAR(36) NULL',
+      }
+      for (const [column, definition] of Object.entries(memberColumns)) {
+        try {
+          await this.adminService.executeRaw(
+            `ALTER TABLE members ADD COLUMN ${column} ${definition}`
+          )
+        } catch (e: any) {
+          if (!e.message?.includes('Duplicate column')) {
+            results.push(`members.${column} 添加失败: ${e.message}`)
+          }
+        }
+      }
+      try {
+        await this.adminService.executeRaw(
+          `UPDATE members
+           SET company_position = COALESCE(company_position, position),
+               industry_primary = COALESCE(industry_primary, industry)`
+        )
+      } catch {
+        // 旧字段不存在时无需复制
+      }
+      results.push('会员字段已完成兼容补齐')
+
+      // 11. 拆分通用报名与会员活动报名，兼容旧表数据
+      try {
+        const registrationColumns = await this.adminService.executeRaw(
+          `SELECT COLUMN_NAME
+           FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'event_registrations'`
+        )
+        const columnNames = new Set((registrationColumns || []).map((row: any) => row.COLUMN_NAME))
+        const isLegacyFormTable = columnNames.has('name') && !columnNames.has('event_id')
+
+        if (isLegacyFormTable) {
+          const formTable = await this.adminService.executeRaw(
+            `SHOW TABLES LIKE 'event_form_registrations'`
+          )
+          if (!formTable || formTable.length === 0) {
+            await this.adminService.executeRaw(
+              `RENAME TABLE event_registrations TO event_form_registrations`
+            )
+          } else {
+            await this.adminService.executeRaw(
+              `INSERT INTO event_form_registrations
+                 (name, gender, birthday, age, industry, phone, contact_method, referrer, created_at)
+               SELECT name, gender, birthday, age, industry, phone, contact_method, referrer, created_at
+               FROM event_registrations`
+            )
+            await this.adminService.executeRaw(`DROP TABLE event_registrations`)
+          }
+          results.push('旧通用报名数据已迁移到 event_form_registrations')
+        }
+
+        await this.adminService.executeRaw(`
+          CREATE TABLE IF NOT EXISTS event_form_registrations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(64) NOT NULL,
+            gender VARCHAR(16),
+            birthday DATE,
+            age INT,
+            industry VARCHAR(64),
+            phone VARCHAR(32) NOT NULL,
+            contact_method VARCHAR(128),
+            referrer VARCHAR(64),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_phone (phone)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `)
+
+        await this.adminService.executeRaw(`
+          CREATE TABLE IF NOT EXISTS event_registrations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            event_id INT NOT NULL,
+            member_id INT NOT NULL,
+            status VARCHAR(20) DEFAULT 'registered',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_event_member (event_id, member_id),
+            INDEX idx_event_id (event_id),
+            INDEX idx_member_id (member_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `)
+        results.push('活动报名表结构已统一')
+      } catch (e: any) {
+        results.push('活动报名表迁移失败: ' + e.message)
       }
 
       return {
@@ -783,6 +1056,7 @@ export class AdminController {
 
   /** 登录 */
   @Post('login')
+  @Public()
   async login(@Body() body: { username: string; password: string }) {
     console.log('[AdminController] POST /api/admin/login - username:', body.username)
     const result = await this.adminService.login(body.username, body.password)

@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
-import * as path from 'path';
 import * as COS from 'cos-nodejs-sdk-v5';
 import { normalizeMediaUrl } from '@/utils/media-url';
 
@@ -40,8 +39,6 @@ export class UploadService {
 
       const data = await response.json() as any;
       
-      this.logger.log(`临时密钥 API 完整响应: ${JSON.stringify(data)}`);
-      
       if (data.errcode) {
         throw new Error(`获取临时密钥失败: ${data.errmsg}`);
       }
@@ -76,8 +73,6 @@ export class UploadService {
       } else {
         throw new Error(`无法解析临时密钥响应格式，请检查日志中的完整响应`);
       }
-
-      this.logger.log(`临时密钥: TmpSecretId=${TmpSecretId?.substring(0, 10)}..., Bucket=${Bucket}, Region=${Region}`);
 
       // 如果环境变量没有配置 bucket，使用接口返回的
       if (!this.bucket && Bucket) {
@@ -124,7 +119,8 @@ export class UploadService {
       const timestamp = Date.now();
       const randomStr = Math.random().toString(36).substring(2, 8);
       const originalName = file.originalname || 'file';
-      const key = `${folder}/${timestamp}_${randomStr}_${originalName}`;
+      const extension = originalName.match(/\.([a-zA-Z0-9]{1,10})$/)?.[1]?.toLowerCase() || 'bin';
+      const key = `${folder}/${timestamp}_${randomStr}.${extension}`;
 
       // 获取文件内容
       let body: Buffer | fs.ReadStream;
@@ -257,6 +253,19 @@ export class UploadService {
     return this.uploadFile(file, folder);
   }
 
+  /** 上传内容视频 */
+  async uploadVideo(file: Express.Multer.File, folder: string = 'videos') {
+    const allowedTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw new Error('只支持 MP4、WebM、MOV 格式的视频');
+    }
+    const maxSize = 100 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new Error('视频大小不能超过 100MB');
+    }
+    return this.uploadFile(file, folder);
+  }
+
   /**
    * 上传头像
    */
@@ -292,7 +301,7 @@ export class UploadService {
    * 检查云存储是否可用
    */
   isAvailable(): boolean {
-    return this.cos !== null && this.bucket !== '';
+    return this.bucket !== '';
   }
 
   /**

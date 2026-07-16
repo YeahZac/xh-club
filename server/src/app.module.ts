@@ -12,6 +12,8 @@ import { UploadModule } from './upload/upload.module'
 import { ArticlesModule } from './articles/articles.module'
 import { AuthModule } from './auth/auth.module'
 import { BannersModule } from './banners/banners.module'
+import { EventRegistrationModule } from './event-registration/event-registration.module'
+import { HomepageModule } from './homepage/homepage.module'
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { BannersModule } from './banners/banners.module'
     ArticlesModule,
     AuthModule,
     BannersModule,
+    EventRegistrationModule,
+    HomepageModule,
   ],
   controllers: [AppController],
   providers: [AppService],

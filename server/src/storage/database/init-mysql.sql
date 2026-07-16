@@ -122,8 +122,8 @@ CREATE TABLE IF NOT EXISTS check_in_records (
   INDEX idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 活动报名表
-CREATE TABLE IF NOT EXISTS event_registrations (
+-- 通用报名表
+CREATE TABLE IF NOT EXISTS event_form_registrations (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(64) NOT NULL,
   gender VARCHAR(16),
@@ -137,6 +137,18 @@ CREATE TABLE IF NOT EXISTS event_registrations (
   INDEX idx_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 会员活动报名表
+CREATE TABLE IF NOT EXISTS event_registrations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  event_id INT NOT NULL,
+  member_id INT NOT NULL,
+  status VARCHAR(20) DEFAULT 'registered',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_event_member (event_id, member_id),
+  INDEX idx_event_id (event_id),
+  INDEX idx_member_id (member_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 商品表
 CREATE TABLE IF NOT EXISTS mall_products (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -146,7 +158,8 @@ CREATE TABLE IF NOT EXISTS mall_products (
   cash_price DECIMAL(10,2),
   stock INT DEFAULT 0,
   category VARCHAR(64),
-  image_url VARCHAR(512),
+  image_url VARCHAR(512) NOT NULL,
+  video_url VARCHAR(512),
   status VARCHAR(32) DEFAULT 'active',
   enable_distribution BOOLEAN DEFAULT FALSE,
   distribution_rate DECIMAL(5,2) DEFAULT 0,
@@ -197,6 +210,28 @@ CREATE TABLE IF NOT EXISTS distribution_earnings (
   INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 首页栏目配置
+CREATE TABLE IF NOT EXISTS homepage_sections (
+  section VARCHAR(32) PRIMARY KEY,
+  display_name VARCHAR(64) NOT NULL,
+  is_enabled TINYINT(1) DEFAULT 1,
+  item_limit INT DEFAULT 5,
+  sort_order INT DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS homepage_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  section VARCHAR(32) NOT NULL,
+  item_id VARCHAR(64) NOT NULL,
+  sort_order INT DEFAULT 0,
+  is_active TINYINT(1) DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_homepage_section_item (section, item_id),
+  INDEX idx_homepage_section (section, is_active, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================
 -- 插入初始数据
 -- ============================================================
@@ -207,3 +242,8 @@ INSERT INTO member_levels (name, min_points, max_points, benefits) VALUES
 ('银卡会员', 1000, 4999, '{"discount": 0.95, "points_rate": 1.2}'),
 ('金卡会员', 5000, 19999, '{"discount": 0.9, "points_rate": 1.5}'),
 ('钻石会员', 20000, NULL, '{"discount": 0.85, "points_rate": 2.0}');
+
+INSERT IGNORE INTO homepage_sections (section, display_name, item_limit, sort_order) VALUES
+('projects', '精选项目', 6, 1),
+('resources', '资源大厅', 5, 2),
+('posts', '商会动态', 5, 3);

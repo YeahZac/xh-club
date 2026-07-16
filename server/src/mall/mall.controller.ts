@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpCode, HttpStatus, Req, UseGuards, ForbiddenException } from '@nestjs/common';
 import { MallService } from './mall.service';
+import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard';
 
 @Controller('mall')
 export class MallController {
@@ -20,11 +21,13 @@ export class MallController {
   }
 
   @Post('products')
+  @UseGuards(AdminAuthGuard)
   @HttpCode(HttpStatus.OK)
   async createProduct(@Body() body: {
     name: string;
     description?: string;
-    image_url?: string;
+    image_url: string;
+    video_url?: string;
     points_price: number;
     cash_price?: string;
     stock: number;
@@ -36,12 +39,14 @@ export class MallController {
   }
 
   @Put('products/:id')
+  @UseGuards(AdminAuthGuard)
   @HttpCode(HttpStatus.OK)
   async updateProduct(@Param('id') id: string, @Body() body: any) {
     return this.mallService.updateProduct(id, body);
   }
 
   @Delete('products/:id')
+  @UseGuards(AdminAuthGuard)
   @HttpCode(HttpStatus.OK)
   async deleteProduct(@Param('id') id: string) {
     return this.mallService.deleteProduct(id);
@@ -50,6 +55,7 @@ export class MallController {
   // ==================== 订单接口 ====================
 
   @Post('orders')
+  @UseGuards(MemberAuthGuard)
   @HttpCode(HttpStatus.OK)
   async createOrder(@Body() body: {
     member_id: string;
@@ -57,21 +63,25 @@ export class MallController {
     quantity: number;
     points_used: number;
     referrer_id?: string;
-  }) {
-    return this.mallService.createOrder(body);
+  }, @Req() request: any) {
+    return this.mallService.createOrder({ ...body, member_id: request.user.sub });
   }
 
   // ==================== 分销接口 ====================
 
   @Get('distribution/stats/:memberId')
+  @UseGuards(MemberAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async getDistributionStats(@Param('memberId') memberId: string) {
+  async getDistributionStats(@Param('memberId') memberId: string, @Req() request: any) {
+    if (String(memberId) !== String(request.user.sub)) throw new ForbiddenException('无权查看其他会员数据');
     return this.mallService.getDistributionStats(memberId);
   }
 
   @Get('distribution/subordinates/:memberId')
+  @UseGuards(MemberAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async getSubordinates(@Param('memberId') memberId: string) {
+  async getSubordinates(@Param('memberId') memberId: string, @Req() request: any) {
+    if (String(memberId) !== String(request.user.sub)) throw new ForbiddenException('无权查看其他会员数据');
     return this.mallService.getSubordinates(memberId);
   }
 }
