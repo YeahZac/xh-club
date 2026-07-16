@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
+import { ensureSchemaColumns } from '@/storage/database/ensure-schema-columns'
 import { UploadService } from '@/upload/upload.service'
 
 export const HOMEPAGE_SECTIONS = [
@@ -109,7 +110,6 @@ export class HomepageService {
       )
     }
 
-    const { ensureSchemaColumns } = await import('@/storage/database/ensure-schema-columns')
     await ensureSchemaColumns()
   }
 
