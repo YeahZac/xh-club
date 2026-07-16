@@ -90,6 +90,20 @@ const isCloudStorageImageUrl = (url: string) => {
   return /(?:\.myqcloud\.com|\.tcb\.qcloud\.la)(?:\/|\?|$)/i.test(value)
 }
 
+/** 与管理台 MEDIA_SPECS 上传比例一致 */
+const FEED_COVER_ASPECT: Record<string, string> = {
+  event: 'aspect-[69/29]',
+  product: 'aspect-square',
+  project: 'aspect-video',
+  article: 'aspect-video',
+  financing: 'aspect-video',
+  roadshow: 'aspect-video',
+  resource: 'aspect-video',
+}
+
+const getFeedCoverAspect = (item: HomepageFeedItem) =>
+  FEED_COVER_ASPECT[item.content_type] || FEED_COVER_ASPECT[item.detail_type] || 'aspect-[4/3]'
+
 const IndexPage = () => {
   const isMiniApp = ([Taro.ENV_TYPE.WEAPP, Taro.ENV_TYPE.TT] as string[]).includes(Taro.getEnv() as string)
   const statusBarHeight = isMiniApp ? (Taro.getWindowInfo().statusBarHeight || 22) : 44
@@ -260,14 +274,6 @@ const IndexPage = () => {
     })
   }
 
-  const handleCoverImageError = (itemId: string) => {
-    setFailedCoverImages(current => {
-      const next = new Set(current)
-      next.add(itemId)
-      return next
-    })
-  }
-
   return (
     <ScrollView scrollY className="h-full bg-[#F5F6FA]">
       {/* ── Custom Header ── */}
@@ -396,6 +402,7 @@ const IndexPage = () => {
                 {column.map((item) => {
                   const key = String(item.id)
                   const coverOk = isCloudStorageImageUrl(item.cover_image || '') && !failedFeedImages.has(key)
+                  const aspectClass = getFeedCoverAspect(item)
                   return (
                     <View
                       key={key}
@@ -403,14 +410,16 @@ const IndexPage = () => {
                       onClick={() => openFeedItem(item)}
                     >
                       {coverOk ? (
-                        <Image
-                          src={item.cover_image!}
-                          mode="widthFix"
-                          className="w-full"
-                          onError={() => setFailedFeedImages((prev) => new Set(prev).add(key))}
-                        />
+                        <View className={`relative w-full overflow-hidden ${aspectClass}`}>
+                          <Image
+                            src={item.cover_image!}
+                            mode="aspectFill"
+                            className="absolute inset-0 w-full h-full"
+                            onError={() => setFailedFeedImages((prev) => new Set(prev).add(key))}
+                          />
+                        </View>
                       ) : (
-                        <View className="w-full aspect-[4/3] bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] flex items-center justify-center px-3">
+                        <View className={`w-full ${aspectClass} bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] flex items-center justify-center px-3`}>
                           <Text className="block text-white text-sm font-semibold text-center">{item.title}</Text>
                         </View>
                       )}

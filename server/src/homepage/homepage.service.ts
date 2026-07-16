@@ -7,6 +7,7 @@ export const HOMEPAGE_SECTIONS = [
   'events',
   'products',
   'projects',
+  'articles',
   'financing',
   'roadshow',
   'resource',
@@ -22,9 +23,10 @@ const SECTION_META: Record<
   events: { display_name: '活动', content_type: 'event', content_type_label: '活动', sort_order: 1 },
   products: { display_name: '商城商品', content_type: 'product', content_type_label: '商城商品', sort_order: 2 },
   projects: { display_name: '项目', content_type: 'project', content_type_label: '项目', sort_order: 3 },
-  financing: { display_name: '融资招募', content_type: 'financing', content_type_label: '融资招募', sort_order: 4 },
-  roadshow: { display_name: '项目路演', content_type: 'roadshow', content_type_label: '项目路演', sort_order: 5 },
-  resource: { display_name: '资源对接', content_type: 'resource', content_type_label: '资源对接', sort_order: 6 },
+  articles: { display_name: '文章', content_type: 'article', content_type_label: '文章', sort_order: 4 },
+  financing: { display_name: '融资招募', content_type: 'financing', content_type_label: '融资招募', sort_order: 5 },
+  roadshow: { display_name: '项目路演', content_type: 'roadshow', content_type_label: '项目路演', sort_order: 6 },
+  resource: { display_name: '资源对接', content_type: 'resource', content_type_label: '资源对接', sort_order: 7 },
 }
 
 const SORT_MODES: HomepageSortMode[] = ['time_desc', 'view_count', 'custom']
@@ -217,6 +219,12 @@ export class HomepageService {
         'SELECT id, title, cover_image, IFNULL(view_count, 0) AS view_count, created_at FROM projects WHERE id = ?',
         [itemId],
       )
+    } else if (section === 'articles') {
+      row = await queryOne(
+        `SELECT id, title, cover_image, category, IFNULL(view_count, 0) AS view_count, created_at
+         FROM articles WHERE id = ? AND status = 'published'`,
+        [itemId],
+      )
     } else if (section === 'financing' || section === 'roadshow' || section === 'resource') {
       row = await queryOne(
         `SELECT id, title, cover_image, IFNULL(view_count, 0) AS view_count, created_at, category
@@ -230,7 +238,9 @@ export class HomepageService {
     const typeLabel =
       section === 'events'
         ? this.eventTypeLabel(row.event_type) || meta.content_type_label
-        : meta.content_type_label
+        : section === 'articles'
+          ? this.articleCategoryLabel(row.category) || meta.content_type_label
+          : meta.content_type_label
 
     const detailType =
       section === 'events'
@@ -239,7 +249,9 @@ export class HomepageService {
           ? 'product'
           : section === 'projects'
             ? 'project'
-            : 'business'
+            : section === 'articles'
+              ? 'article'
+              : 'business'
 
     return {
       id: homepageItem.id,
@@ -267,6 +279,17 @@ export class HomepageService {
       meeting: '定期例会',
     }
     return type ? map[type] || type : ''
+  }
+
+  private articleCategoryLabel(category?: string) {
+    const map: Record<string, string> = {
+      news: '商会新闻',
+      insight: '行业洞察',
+      member: '会员风采',
+      report: '活动报道',
+      policy: '政策解读',
+    }
+    return category ? map[category] || category : ''
   }
 
   async getCandidates(sectionValue: string, keyword?: string) {
@@ -302,6 +325,17 @@ export class HomepageService {
            ORDER BY created_at DESC LIMIT 100`
         : `SELECT id, title, cover_image, IFNULL(view_count, 0) AS view_count, created_at
            FROM projects WHERE status IN ('active', 'published', 'funding')
+           ORDER BY created_at DESC LIMIT 100`
+      return queryRows(sql, kw ? [like] : [])
+    }
+
+    if (section === 'articles') {
+      const sql = kw
+        ? `SELECT id, title, cover_image, category, IFNULL(view_count, 0) AS view_count, created_at
+           FROM articles WHERE status = 'published' AND title LIKE ?
+           ORDER BY created_at DESC LIMIT 100`
+        : `SELECT id, title, cover_image, category, IFNULL(view_count, 0) AS view_count, created_at
+           FROM articles WHERE status = 'published'
            ORDER BY created_at DESC LIMIT 100`
       return queryRows(sql, kw ? [like] : [])
     }
