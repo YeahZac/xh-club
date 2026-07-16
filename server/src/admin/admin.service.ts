@@ -1238,7 +1238,15 @@ export class AdminService {
          WHERE is_active = 1
          ORDER BY id ASC`,
       )
-      return rows || []
+      const list = rows || []
+      return Promise.all(
+        list.map(async (row: any) => ({
+          ...row,
+          content: row.content
+            ? await this.uploadService.signHtmlMedia(row.content)
+            : '',
+        })),
+      )
     } catch (error) {
       console.error('[AdminService] getActiveInvitationRulesForClient error:', error)
       return []

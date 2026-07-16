@@ -782,11 +782,18 @@
 
     <!-- ====== 邀请奖励 ====== -->
     <div data-page="invitations" class="p-8 fade-in">
+      <div class="bg-gradient-to-r from-navy-800 to-navy-700 rounded-2xl p-5 mb-6 text-white">
+        <h3 class="font-bold text-lg">邀请奖励规则配置</h3>
+        <p class="text-sm text-white/80 mt-2 leading-relaxed">
+          在此配置「积分值 / 经验值」与图文规则说明。小程序首页「会员推荐」二级页会读取本页<strong>已启用</strong>规则：
+          顶部展示奖励数值，下方展示图文说明；每位会员还有唯一推荐码、推荐人数与推荐人员列表。
+        </p>
+      </div>
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
         <div class="flex justify-between items-center mb-2">
           <div>
-            <h3 class="font-bold text-navy-800">邀请奖励规则</h3>
-            <p class="text-xs text-gray-400 mt-1">配置积分值、经验值与图文说明，小程序「会员推荐」页将读取此处内容</p>
+            <h3 class="font-bold text-navy-800">规则列表</h3>
+            <p class="text-xs text-gray-400 mt-1">建议至少保留一条启用中的规则，并完善图文说明（支持图片、排版、附件）</p>
           </div>
           <button onclick="showAddInvitationRuleModal()" class="px-4 py-2 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg text-sm hover:shadow-lg transition">+ 新增规则</button>
         </div>
@@ -4282,26 +4289,30 @@ async function loadInvitationRules() {
 function showAddInvitationRuleModal(rule) {
   const isEdit = !!(rule && rule.id)
   showModal(`
-    <div class="p-6 max-h-[85vh] overflow-y-auto">
-      <h3 class="text-lg font-bold text-navy-800 mb-4">${isEdit ? '编辑' : '新增'}邀请奖励规则</h3>
+    <div class="p-6 max-h-[90vh] overflow-y-auto" style="max-width:760px">
+      <h3 class="text-lg font-bold text-navy-800 mb-1">${isEdit ? '编辑' : '新增'}邀请奖励规则</h3>
+      <p class="text-xs text-gray-400 mb-4">图文说明将直接展示在小程序「会员推荐」页；积分值 / 经验值会汇总展示在页面顶部。</p>
       <div class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">规则名称</label>
-          <input id="invRuleName" value="${escapeHtml(rule?.rule_name || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 邀请注册奖励">
+          <label class="block text-sm font-medium text-gray-700 mb-1">规则名称 *</label>
+          <input id="invRuleName" value="${escapeHtml(rule?.rule_name || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 邀请好友注册奖励">
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">积分值</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">积分值 *</label>
             <input id="invPointsValue" type="number" min="0" value="${Number(rule?.points_value ?? rule?.reward_value ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 100">
+            <p class="text-xs text-gray-400 mt-1">成功邀请好友后奖励的积分数量</p>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">经验值</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">经验值 *</label>
             <input id="invExperienceValue" type="number" min="0" value="${Number(rule?.experience_value ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 50">
+            <p class="text-xs text-gray-400 mt-1">成功邀请好友后奖励的经验数量</p>
           </div>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">规则说明（图文）</label>
-          <div id="invRuleContent" class="bg-white border border-gray-200 rounded-xl overflow-hidden" style="min-height:180px"></div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">规则说明（图文，必填）*</label>
+          <p class="text-xs text-gray-400 mb-2">支持标题、加粗、颜色、图片、表情、附件。请写清奖励条件、发放规则与注意事项。</p>
+          <div id="invRuleContent" class="bg-white border border-gray-200 rounded-xl overflow-hidden" style="min-height:280px"></div>
         </div>
         <div class="flex justify-end gap-3 pt-2">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
@@ -4309,10 +4320,10 @@ function showAddInvitationRuleModal(rule) {
         </div>
       </div>
     </div>
-  `)
+  `, { wide: true })
   setTimeout(() => {
     initRichEditor('invRuleContent', rule?.content || '')
-  }, 50)
+  }, 80)
 }
 
 async function showEditInvitationRuleModal(id) {
@@ -4332,6 +4343,7 @@ async function saveInvitationRule(id) {
   }
   if (!body.rule_name) return toast('请填写规则名称', 'error')
   if (body.points_value <= 0 && body.experience_value <= 0) return toast('请至少配置积分值或经验值', 'error')
+  if (!body.content || body.content === '<p><br></p>') return toast('请填写规则图文说明', 'error')
 
   const res = id
     ? await api(`/admin/invitation-rules/${id}`, { method: 'PUT', body })

@@ -53,7 +53,16 @@ export class EventsService {
       ['cover_image', 'video_url'],
       ['description', 'content'],
     )
-    return { ...signed, registrations: registrations || [] }
+    const registrationCount = Array.isArray(registrations) ? registrations.length : 0
+    const currentParticipants = Math.max(
+      Number(signed.current_participants || 0),
+      registrationCount,
+    )
+    return {
+      ...signed,
+      current_participants: currentParticipants,
+      registrations: registrations || [],
+    }
   }
 
   /** 报名活动 */
