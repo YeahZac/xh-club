@@ -493,17 +493,25 @@ CREATE TABLE resources (
 CREATE TABLE mall_products (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(200) NOT NULL,
-  description TEXT,
+  description MEDIUMTEXT,
   price DECIMAL(10,2),
   points_price INT,
+  cash_price DECIMAL(10,2) DEFAULT 0,
   stock INT DEFAULT 0,
   image_url VARCHAR(500) NOT NULL,
   video_url VARCHAR(500),
   images JSON,
+  category VARCHAR(32) NOT NULL DEFAULT 'gift',
   status VARCHAR(20) DEFAULT 'active',
+  sort_order INT NOT NULL DEFAULT 0,
+  enable_distribution TINYINT(1) NOT NULL DEFAULT 0,
+  distribution_rate DECIMAL(5,2) DEFAULT 0,
+  sales_count INT NOT NULL DEFAULT 0,
+  view_count INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_status (status)
+  INDEX idx_status (status),
+  INDEX idx_category (category)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 积分兑换表
@@ -880,6 +888,13 @@ export class AdminController {
         ['articles', 'tags', 'JSON NULL'],
         ['mall_products', 'image_url', 'VARCHAR(500) NULL'],
         ['mall_products', 'video_url', 'VARCHAR(500) NULL'],
+        ['mall_products', 'category', `VARCHAR(32) NOT NULL DEFAULT 'gift'`],
+        ['mall_products', 'cash_price', 'DECIMAL(10,2) DEFAULT 0'],
+        ['mall_products', 'sort_order', 'INT NOT NULL DEFAULT 0'],
+        ['mall_products', 'enable_distribution', 'TINYINT(1) NOT NULL DEFAULT 0'],
+        ['mall_products', 'distribution_rate', 'DECIMAL(5,2) DEFAULT 0'],
+        ['mall_products', 'sales_count', 'INT NOT NULL DEFAULT 0'],
+        ['mall_products', 'view_count', 'INT NOT NULL DEFAULT 0'],
       ]
       for (const [table, column, definition] of mediaColumns) {
         try {

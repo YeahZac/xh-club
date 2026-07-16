@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { queryRows, queryOne, queryExecute, withTransaction } from '@/storage/database/mysql-client';
+import { ensureSchemaColumns } from '@/storage/database/ensure-schema-columns';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
 import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url';
@@ -107,6 +108,7 @@ export class MallService {
       return { code: 400, msg: '商品视频必须使用微信云托管对象存储 URL', data: null };
     }
     try {
+      await ensureSchemaColumns();
       const result = await queryExecute(
         `INSERT INTO mall_products (name, description, image_url, video_url, points_price, cash_price, stock, category, enable_distribution, distribution_rate, status, sort_order)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0)`,

@@ -1,5 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { queryRows, queryOne, queryExecute, getConnectionStatus, testConnection, getPool } from '@/storage/database/mysql-client'
+import { ensureSchemaColumns } from '@/storage/database/ensure-schema-columns'
 import * as bcrypt from 'bcryptjs'
 import { RowDataPacket, ResultSetHeader } from 'mysql2'
 import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url'
@@ -820,6 +821,7 @@ export class AdminService {
   /** ====== 商品管理 ====== */
   async createMallProduct(dto: any) {
     try {
+      await ensureSchemaColumns()
       const imageUrl = assertCloudStorageImageUrl(dto.image_url || dto.cover_image)
       const videoUrl = normalizeOptionalVideoUrl(dto.video_url)
       const result = await queryExecute(
@@ -846,6 +848,7 @@ export class AdminService {
 
   async updateMallProduct(id: string, dto: any) {
     try {
+      await ensureSchemaColumns()
       const updates: string[] = []
       const params: any[] = []
       const assign = (field: string, value: any) => {
