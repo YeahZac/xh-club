@@ -241,21 +241,34 @@ export class RoadshowService {
     )
 
     await queryExecute('DELETE FROM roadshow_projects WHERE business_id = ?', [businessId])
+    const seenProjectIds = new Set<number>()
     for (const [index, item] of projects.entries()) {
       const projectId = Number(item.project_id)
       if (!Number.isInteger(projectId) || projectId <= 0) {
         throw new HttpException('项目选择无效', HttpStatus.BAD_REQUEST)
       }
+      if (seenProjectIds.has(projectId)) {
+        throw new HttpException(`路演项目不能重复选择（项目 #${projectId}）`, HttpStatus.BAD_REQUEST)
+      }
+      seenProjectIds.add(projectId)
       const project = await queryOne('SELECT id FROM projects WHERE id = ?', [projectId])
       if (!project) throw new HttpException(`项目 #${projectId} 不存在`, HttpStatus.BAD_REQUEST)
       const coverImage = item.cover_image
         ? assertCloudStorageImageUrl(item.cover_image, true)
         : null
-      await queryExecute(
-        `INSERT INTO roadshow_projects (business_id, project_id, cover_image, sort_order)
-         VALUES (?, ?, ?, ?)`,
-        [businessId, projectId, coverImage, Number(item.sort_order) || index],
-      )
+      try {
+        await queryExecute(
+          `INSERT INTO roadshow_projects (business_id, project_id, cover_image, sort_order)
+           VALUES (?, ?, ?, ?)`,
+          [businessId, projectId, coverImage, Number(item.sort_order) || index],
+        )
+      } catch (error: any) {
+        const msg = String(error?.message || '')
+        if (msg.includes('uk_roadshow_project') || msg.includes('Duplicate entry')) {
+          throw new HttpException(`路演项目不能重复选择（项目 #${projectId}）`, HttpStatus.BAD_REQUEST)
+        }
+        throw error
+      }
     }
 
     const existingDimensions = await queryRows(

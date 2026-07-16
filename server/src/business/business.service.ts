@@ -148,16 +148,30 @@ export class BusinessService {
       ],
     )
     const businessId = String(result.insertId)
-    if (dto.category === 'roadshow' && dto.roadshow) {
-      await this.roadshowService.saveConfig(businessId, {
-        start_time: toMysqlDateTime(dto.start_time || dto.roadshow.start_time),
-        end_time: toMysqlDateTime(dto.end_time || dto.roadshow.end_time),
-        form_fields: dto.form_fields ?? dto.roadshow.form_fields,
-        projects: dto.roadshow.projects,
-        dimensions: dto.roadshow.dimensions,
-      })
+    try {
+      if (dto.category === 'roadshow' && dto.roadshow) {
+        await this.roadshowService.saveConfig(businessId, {
+          start_time: toMysqlDateTime(dto.start_time || dto.roadshow.start_time),
+          end_time: toMysqlDateTime(dto.end_time || dto.roadshow.end_time),
+          form_fields: dto.form_fields ?? dto.roadshow.form_fields,
+          projects: dto.roadshow.projects,
+          dimensions: dto.roadshow.dimensions,
+        })
+      }
+      return this.getAdminById(businessId)
+    } catch (error) {
+      // 路演配置失败时回滚已创建的商机，避免重复点击产生多条脏数据
+      try {
+        await queryExecute('DELETE FROM roadshow_scores WHERE business_id = ?', [businessId])
+        await queryExecute('DELETE FROM roadshow_registrations WHERE business_id = ?', [businessId])
+        await queryExecute('DELETE FROM roadshow_projects WHERE business_id = ?', [businessId])
+        await queryExecute('DELETE FROM roadshow_score_dimensions WHERE business_id = ?', [businessId])
+        await queryExecute('DELETE FROM business_opportunities WHERE id = ?', [businessId])
+      } catch (cleanupError) {
+        console.error('[BusinessService] create 回滚失败:', cleanupError)
+      }
+      throw error
     }
-    return this.getAdminById(businessId)
   }
 
   async update(id: string, dto: any) {

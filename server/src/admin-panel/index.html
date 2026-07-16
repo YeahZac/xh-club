@@ -2116,7 +2116,7 @@ function renderBizRoadshowProjects() {
       <div class="flex items-center gap-3">
         <div class="flex-1">
           <label class="block text-xs text-gray-500 mb-1">选择项目 *</label>
-          <select id="bizProjectSelect_${index}" onchange="_bizRoadshowProjects[${index}].project_id=this.value" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
+          <select id="bizProjectSelect_${index}" onchange="onBizRoadshowProjectChange(${index}, this.value)" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
             <option value="">请选择项目</option>
             ${options}
           </select>
@@ -2141,6 +2141,20 @@ function renderBizRoadshowProjects() {
 function addBizRoadshowProject() {
   _bizRoadshowProjects.push({ project_id: '', cover_image: '', sort_order: _bizRoadshowProjects.length })
   renderBizRoadshowProjects()
+}
+
+function onBizRoadshowProjectChange(index, value) {
+  const next = String(value || '')
+  if (next) {
+    const duplicated = _bizRoadshowProjects.some((item, i) => i !== index && String(item.project_id) === next)
+    if (duplicated) {
+      toast('该项目已在列表中，请勿重复选择', 'error')
+      const sel = document.getElementById(`bizProjectSelect_${index}`)
+      if (sel) sel.value = String(_bizRoadshowProjects[index].project_id || '')
+      return
+    }
+  }
+  _bizRoadshowProjects[index].project_id = next
 }
 
 function renderBizRoadshowDimensions() {
@@ -2182,6 +2196,11 @@ function collectBizRoadshowPayload() {
       cover_image: item.cover_image || null,
       sort_order: index,
     }))
+  const projectIds = projects.map(item => String(item.project_id))
+  if (new Set(projectIds).size !== projectIds.length) {
+    toast('路演项目不能重复选择，请检查项目列表', 'error')
+    return null
+  }
   const dimensions = _bizRoadshowDimensions
     .filter(item => String(item.name || '').trim())
     .map((item, index) => ({
@@ -2440,6 +2459,7 @@ async function showBusinessModal(editId) {
 }
 
 async function saveBusiness(editId) {
+  if (window.__bizSaving) return
   if (!assertNoUploading()) return
   const cover = document.getElementById('bizCover').value.trim()
   const category = document.getElementById('bizCategory').value
@@ -2455,15 +2475,35 @@ async function saveBusiness(editId) {
   if (!cover) return toast('商机封面图片为必填项', 'error')
   if (category === 'roadshow') {
     const roadshowPayload = collectBizRoadshowPayload()
+    if (!roadshowPayload) return
     if (!roadshowPayload?.roadshow?.projects?.length) return toast('请至少选择一个路演项目', 'error')
     if (!roadshowPayload?.roadshow?.dimensions?.length) return toast('请至少配置一个评分维度', 'error')
     Object.assign(body, roadshowPayload)
   }
   const url = editId ? `/admin/business/${editId}` : '/admin/business'
   const method = editId ? 'PUT' : 'POST'
-  const res = await api(url, { method, body })
-  if (res.code === 200) { toast(editId ? '更新成功' : '创建成功'); closeModal(); loadBusiness(); }
-  else toast(res.msg || '操作失败', 'error')
+  const saveBtn = document.querySelector('#modalRoot button[onclick*="saveBusiness"]')
+  window.__bizSaving = true
+  if (saveBtn) {
+    saveBtn.disabled = true
+    saveBtn.textContent = '保存中...'
+  }
+  try {
+    const res = await api(url, { method, body })
+    if (res.code === 200) {
+      toast(editId ? '更新成功' : '创建成功')
+      closeModal()
+      loadBusiness()
+    } else {
+      toast(res.msg || '操作失败', 'error')
+    }
+  } finally {
+    window.__bizSaving = false
+    if (saveBtn) {
+      saveBtn.disabled = false
+      saveBtn.textContent = '保存'
+    }
+  }
 }
 
 async function deleteBusiness(id) {
