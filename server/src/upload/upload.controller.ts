@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadService } from './upload.service';
-import { AdminAuthGuard } from '@/auth/auth.guard';
+import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard';
 
 @Controller('upload')
 @UseGuards(AdminAuthGuard)
@@ -153,6 +153,27 @@ export class UploadController {
         bucket: envInfo.bucket,
         region: envInfo.region,
       },
+    };
+  }
+}
+
+/** 会员端图片上传（人才入驻等） */
+@Controller('upload/member')
+@UseGuards(MemberAuthGuard)
+export class MemberUploadController {
+  constructor(private readonly uploadService: UploadService) {}
+
+  @Post('image')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  async uploadImage(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+    const result = await this.uploadService.uploadImage(file, 'member');
+    return {
+      code: 200,
+      msg: 'Upload successful',
+      data: result,
     };
   }
 }

@@ -3,12 +3,12 @@ import { View, Text, ScrollView, Image } from "@tarojs/components"
 import Taro from "@tarojs/taro"
 import {
   Search, Clock, MapPin, Users,
-  ShoppingBag, Award, Star
+  ShoppingBag, Award
 } from "lucide-react-taro"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -41,16 +41,15 @@ interface EventItem {
   form_fields?: EventFormField[] | string | null
 }
 
-interface MemberItem {
+interface TalentItem {
   id: string
-  name: string
-  avatar: string
-  company_name: string
-  company_position: string
-  industry_primary: string
-  membership_level: string
-  credit_score: number
-  core_advantage: string
+  real_name: string
+  contact: string
+  photo_url: string
+  avatar_url?: string
+  member_avatar?: string
+  industry_tags: string[]
+  experience?: string
 }
 
 interface ProductItem {
@@ -63,15 +62,13 @@ interface ProductItem {
   category: string
 }
 
-const eventTypeMap: Record<string, string> = {
-  other: '其他活动', roadshow: '项目路演', salon: '专题沙龙', annual: '年度大会', training: '培训', meeting: '定期例会',
+interface IndustryItem {
+  code: string
+  name: string
 }
 
-const levelMap: Record<string, { label: string; color: string }> = {
-  normal: { label: '普通', color: 'bg-gray-100 text-gray-600' },
-  silver: { label: '银卡', color: 'bg-gray-200 text-gray-700' },
-  gold: { label: '金卡', color: 'bg-amber-50 text-amber-600' },
-  diamond: { label: '钻石', color: 'bg-sky-50 text-sky-600' },
+const eventTypeMap: Record<string, string> = {
+  other: '其他活动', roadshow: '项目路演', salon: '专题沙龙', annual: '年度大会', training: '培训', meeting: '定期例会',
 }
 
 const isCloudStorageImageUrl = (url: string) =>
@@ -97,7 +94,8 @@ const DiscoverPage = () => {
   const statusBarHeight = isMiniApp ? (Taro.getWindowInfo().statusBarHeight || 22) : 44
 
   const [events, setEvents] = useState<EventItem[]>([])
-  const [members, setMembers] = useState<MemberItem[]>([])
+  const [talents, setTalents] = useState<TalentItem[]>([])
+  const [industries, setIndustries] = useState<IndustryItem[]>([])
   const [products, setProducts] = useState<ProductItem[]>([])
   const [loading, setLoading] = useState(true)
   const [registerOpen, setRegisterOpen] = useState(false)
@@ -111,17 +109,19 @@ const DiscoverPage = () => {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [eventsRes, membersRes, productsRes] = await Promise.all([
+      const [eventsRes, talentsRes, industriesRes, productsRes] = await Promise.all([
         Network.request({ url: '/api/events?pageSize=100' }),
-        Network.request({ url: '/api/members' }),
+        Network.request({ url: '/api/talents?pageSize=100' }),
+        Network.request({ url: '/api/industries' }),
         Network.request({ url: '/api/mall/products' }),
       ])
       console.log('[发现页] events:', eventsRes?.data)
-      console.log('[发现页] members:', membersRes?.data)
+      console.log('[发现页] talents:', talentsRes?.data)
       console.log('[发现页] products:', productsRes?.data)
 
       setEvents(getResponseList<EventItem>(eventsRes?.data?.data))
-      setMembers(getResponseList<MemberItem>(membersRes?.data?.data))
+      setTalents(getResponseList<TalentItem>(talentsRes?.data?.data))
+      setIndustries(Array.isArray(industriesRes?.data?.data) ? industriesRes.data.data : [])
       setProducts(getResponseList<ProductItem>(productsRes?.data?.data))
     } catch (err) {
       console.error('[发现页] 加载失败:', err)
@@ -129,6 +129,9 @@ const DiscoverPage = () => {
       setLoading(false)
     }
   }
+
+  const industryName = (code: string) =>
+    industries.find((item) => item.code === code)?.name || code
 
   const formatTime = (dateStr: string) => {
     if (!dateStr) return ''
@@ -296,38 +299,53 @@ const DiscoverPage = () => {
           <TabsContent value="talents">
             <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 220px)' }}>
               <View className="flex flex-col gap-3 pb-8">
-                {members.map((item) => {
-                  const level = levelMap[item.membership_level] || levelMap.normal
+                {talents.map((item) => {
+                  const avatar = item.avatar_url || item.member_avatar || item.photo_url
                   return (
-                    <Card key={item.id} className="shadow-sm border-0">
+                    <Card
+                      key={item.id}
+                      className="shadow-sm border-0"
+                      onClick={() => Taro.navigateTo({ url: `/pages/content-detail/index?type=talent&id=${item.id}` })}
+                    >
                       <CardContent className="p-4">
                         <View className="flex flex-row items-start gap-3">
-                          <Avatar className="w-12 h-12 flex-shrink-0">
-                            <AvatarFallback className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] text-white text-base">{(item.name || '?')[0]}</AvatarFallback>
+                          <Avatar className="w-12 h-12 flex-shrink-0 overflow-hidden">
+                            {isCloudStorageImageUrl(avatar || '') ? (
+                              <AvatarImage src={avatar!} mode="aspectFill" />
+                            ) : null}
+                            <AvatarFallback className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] text-white text-base">
+                              {(item.real_name || '?')[0]}
+                            </AvatarFallback>
                           </Avatar>
                           <View className="flex-1 min-w-0">
                             <View className="flex flex-row items-center gap-2 mb-1">
-                              <Text className="block text-sm font-semibold text-[#1A1D2E]">{item.name}</Text>
-                              <Badge className={`${level.color} text-[10px] px-1 py-0`}>{level.label}</Badge>
+                              <Text className="block text-sm font-semibold text-[#1A1D2E]">{item.real_name}</Text>
+                              <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-[10px] px-1 py-0">已入驻</Badge>
                             </View>
-                            <Text className="block text-xs text-gray-500">{item.company_position || ''} · {item.company_name || ''}</Text>
-                            {item.core_advantage && <Text className="block text-xs text-gray-400 mt-1">{item.core_advantage}</Text>}
-                            <View className="flex flex-row items-center gap-3 mt-2">
-                              <View className="flex flex-row items-center gap-1">
-                                <Star size={12} color="#C9A96E" />
-                                <Text className="block text-xs text-[#C9A96E]">信用 {item.credit_score || 60}</Text>
-                              </View>
+                            <View className="flex flex-row flex-wrap gap-1 mb-1">
+                              {(item.industry_tags || []).slice(0, 3).map((code) => (
+                                <Badge key={code} className="bg-gray-100 text-gray-500 text-[10px] px-1 py-0">
+                                  {industryName(code)}
+                                </Badge>
+                              ))}
                             </View>
+                            {item.experience && (
+                              <Text className="block text-xs text-gray-400 mt-1">
+                                {item.experience.slice(0, 48)}{item.experience.length > 48 ? '...' : ''}
+                              </Text>
+                            )}
                           </View>
-                          <Button size="sm" variant="outline" className="text-xs h-7 rounded-lg">介绍对接</Button>
+                          <Button size="sm" variant="outline" className="text-xs h-7 rounded-lg">
+                            查看详情
+                          </Button>
                         </View>
                       </CardContent>
                     </Card>
                   )
                 })}
-                {members.length === 0 && !loading && (
+                {talents.length === 0 && !loading && (
                   <View className="flex items-center justify-center py-16">
-                    <Text className="block text-sm text-gray-400">暂无会员</Text>
+                    <Text className="block text-sm text-gray-400">暂无入驻人才</Text>
                   </View>
                 )}
               </View>

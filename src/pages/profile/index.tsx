@@ -4,7 +4,7 @@ import Taro from "@tarojs/taro"
 import {
   User, Award, TrendingUp, ChevronRight, Settings, Shield,
   FileText, Users, Gift, ShoppingBag, Star, Wallet, ChartBar, LogOut, Crown,
-  DollarSign, UserPlus, Camera
+  DollarSign, UserPlus, Camera, BadgeCheck
 } from "lucide-react-taro"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -213,6 +213,7 @@ const ProfilePage = () => {
     {
       title: '其他',
       items: [
+        { icon: BadgeCheck, label: '人才入驻', color: '#C9A96E', action: 'talent' },
         { icon: Shield, label: '隐私设置', color: '#6B7280' },
         { icon: Settings, label: '系统设置', color: '#6B7280' },
         { icon: LogOut, label: '退出登录', color: '#EF4444' },
@@ -430,6 +431,13 @@ const ProfilePage = () => {
                       loadSubordinates()
                     } else if (item.action === 'mall') {
                       Taro.switchTab({ url: '/pages/mall/index' })
+                    } else if (item.action === 'talent') {
+                      const memberId = Taro.getStorageSync('member_id')
+                      if (!memberId) {
+                        Taro.showToast({ title: '请先登录', icon: 'none' })
+                        return
+                      }
+                      Taro.navigateTo({ url: '/pages/talent-settle/index' })
                     }
                   }
                   return (

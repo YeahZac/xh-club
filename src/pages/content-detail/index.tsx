@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/button'
 import { RichHtml } from '@/components/rich-html'
 import { Network } from '@/network'
 
-type ContentType = 'article' | 'project' | 'event' | 'business'
+type ContentType = 'article' | 'project' | 'event' | 'business' | 'talent'
 
 const TYPE_TITLE: Record<ContentType, string> = {
   article: '文章详情',
   project: '项目详情',
   event: '活动详情',
   business: '商机详情',
+  talent: '人才详情',
 }
 
 const CATEGORY_MAP: Record<string, string> = {
@@ -35,7 +36,7 @@ const unwrapDetail = (payload: unknown): Record<string, any> | null => {
   for (let i = 0; i < 3; i += 1) {
     if (!current || typeof current !== 'object') return null
     const obj = current as Record<string, any>
-    if (obj.title || obj.name || obj.content || obj.description) return obj
+    if (obj.title || obj.name || obj.real_name || obj.content || obj.description || obj.experience) return obj
     if ('data' in obj) {
       current = obj.data
       continue
@@ -49,12 +50,23 @@ const ContentDetailPage = () => {
   const [contentType, setContentType] = useState<ContentType>('article')
   const [loading, setLoading] = useState(true)
   const [detail, setDetail] = useState<Record<string, any> | null>(null)
+  const [industryMap, setIndustryMap] = useState<Record<string, string>>({})
 
   useLoad((query) => {
     const type = (query?.type || 'article') as ContentType
     const id = query?.id || ''
     setContentType(type)
     Taro.setNavigationBarTitle({ title: TYPE_TITLE[type] || '详情' })
+    if (type === 'talent') {
+      Network.request({ url: '/api/industries' }).then((res) => {
+        const map: Record<string, string> = {}
+        const list = Array.isArray(res?.data?.data) ? res.data.data : []
+        list.forEach((item: any) => {
+          map[item.code] = item.name
+        })
+        setIndustryMap(map)
+      }).catch(() => undefined)
+    }
     if (id) {
       loadDetail(type, id)
     } else {
@@ -70,6 +82,7 @@ const ContentDetailPage = () => {
         project: `/api/projects/${id}`,
         event: `/api/events/${id}`,
         business: `/api/business/${id}`,
+        talent: `/api/talents/${id}`,
       }
       const res = await Network.request({ url: urlMap[type] })
       console.log('[内容详情]', type, res?.data)
@@ -87,12 +100,17 @@ const ContentDetailPage = () => {
     }
   }
 
-  const title = detail?.title || detail?.name || ''
-  const cover = detail?.cover_image || detail?.image_url || ''
+  const title = detail?.title || detail?.name || detail?.real_name || ''
+  const cover =
+    contentType === 'talent'
+      ? detail?.photo_url
+      : detail?.cover_image || detail?.image_url || ''
   const html =
     contentType === 'article' || contentType === 'business'
       ? detail?.content
-      : detail?.description
+      : contentType === 'talent'
+        ? null
+        : detail?.description
 
   const formatTime = (dateStr?: string) => {
     if (!dateStr) return ''
@@ -149,6 +167,8 @@ const ContentDetailPage = () => {
     )
   }
 
+  const talentAvatar = detail.avatar_url || detail.member_avatar || detail.photo_url
+
   return (
     <View className="flex flex-col h-full bg-[#F5F6FA]">
       <ScrollView scrollY className="flex-1">
@@ -156,17 +176,48 @@ const ContentDetailPage = () => {
           <Image src={cover} mode="aspectFill" className="w-full aspect-video" />
         )}
         <View className="bg-white px-4 py-5 mb-3">
-          <View className="flex flex-row items-center gap-2 mb-2 flex-wrap">
-            {(detail.category || detail.event_type) && (
-              <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-[10px] px-2 py-0">
-                {CATEGORY_MAP[detail.category || detail.event_type] || detail.category || detail.event_type}
-              </Badge>
-            )}
-            {detail.stage && (
-              <Badge className="bg-gray-100 text-gray-600 text-[10px] px-2 py-0">{detail.stage}</Badge>
-            )}
-          </View>
-          <Text className="block text-xl font-bold text-[#1A1D2E] leading-relaxed">{title}</Text>
+          {contentType === 'talent' ? (
+            <View className="flex flex-row items-center gap-3 mb-3">
+              {isCloudStorageImageUrl(talentAvatar) ? (
+                <Image src={talentAvatar} mode="aspectFill" className="w-14 h-14 rounded-full" />
+              ) : (
+                <View className="w-14 h-14 rounded-full bg-[#1B2A4A] flex items-center justify-center">
+                  <Text className="block text-white text-lg font-bold">{(title || '?')[0]}</Text>
+                </View>
+              )}
+              <View className="flex-1">
+                <Text className="block text-xl font-bold text-[#1A1D2E]">{title}</Text>
+                {detail.contact && (
+                  <Text className="block text-sm text-gray-500 mt-1">{detail.contact}</Text>
+                )}
+              </View>
+            </View>
+          ) : (
+            <>
+              <View className="flex flex-row items-center gap-2 mb-2 flex-wrap">
+                {(detail.category || detail.event_type) && (
+                  <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-[10px] px-2 py-0">
+                    {CATEGORY_MAP[detail.category || detail.event_type] || detail.category || detail.event_type}
+                  </Badge>
+                )}
+                {detail.stage && (
+                  <Badge className="bg-gray-100 text-gray-600 text-[10px] px-2 py-0">{detail.stage}</Badge>
+                )}
+              </View>
+              <Text className="block text-xl font-bold text-[#1A1D2E] leading-relaxed">{title}</Text>
+            </>
+          )}
+
+          {contentType === 'talent' && Array.isArray(detail.industry_tags) && (
+            <View className="flex flex-row flex-wrap gap-2 mt-2">
+              {detail.industry_tags.map((code: string) => (
+                <Badge key={code} className="bg-[#FAF6F1] text-[#C9A96E] text-xs px-2 py-0">
+                  {industryMap[code] || code}
+                </Badge>
+              ))}
+            </View>
+          )}
+
           {detail.subtitle && (
             <Text className="block text-sm text-gray-500 mt-2">{detail.subtitle}</Text>
           )}
@@ -198,8 +249,24 @@ const ContentDetailPage = () => {
         </View>
 
         <View className={`bg-white px-4 py-5 ${contentType === 'event' ? 'mb-24' : 'mb-8'}`}>
-          <Text className="block text-base font-semibold text-[#1A1D2E] mb-3">详细内容</Text>
-          <RichHtml html={html} />
+          <Text className="block text-base font-semibold text-[#1A1D2E] mb-3">
+            {contentType === 'talent' ? '过往经历' : '详细内容'}
+          </Text>
+          {contentType === 'talent' ? (
+            <>
+              <Text className="block text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+                {detail.experience || '暂无经历介绍'}
+              </Text>
+              {isCloudStorageImageUrl(detail.card_image_url) && (
+                <View className="mt-4">
+                  <Text className="block text-sm font-semibold text-[#1A1D2E] mb-2">个人名片</Text>
+                  <Image src={detail.card_image_url} mode="widthFix" className="w-full rounded-xl" />
+                </View>
+              )}
+            </>
+          ) : (
+            <RichHtml html={html} />
+          )}
         </View>
       </ScrollView>
 

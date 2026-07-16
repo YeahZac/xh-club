@@ -111,6 +111,10 @@
         会员管理
         <span id="pendingBadge" class="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full hidden">0</span>
       </a>
+      <a onclick="switchPage('talents')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="talents">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        人才管理
+      </a>
       <a onclick="switchPage('events')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="events">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         活动管理
@@ -172,6 +176,10 @@
           <a onclick="switchPage('departments')" class="sidebar-item flex items-center gap-3 px-5 py-2.5 pl-12 cursor-pointer text-sm text-navy-300 transition hover:text-white" data-nav="departments">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
             部门管理
+          </a>
+          <a onclick="switchPage('industries')" class="sidebar-item flex items-center gap-3 px-5 py-2.5 pl-12 cursor-pointer text-sm text-navy-300 transition hover:text-white" data-nav="industries">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5a1.99 1.99 0 011.414.586l7 7a2 2 0 010 2.828l-7 7A2 2 0 0112 21H7a4 4 0 01-4-4V7a4 4 0 014-4z"/></svg>
+            行业配置
           </a>
           <a onclick="switchPage('config')" class="sidebar-item flex items-center gap-3 px-5 py-2.5 pl-12 cursor-pointer text-sm text-navy-300 transition hover:text-white" data-nav="config">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
@@ -314,6 +322,40 @@
           </thead>
           <tbody id="memberTableBody" class="divide-y divide-gray-50">
             <tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+
+    <!-- ====== 人才管理 ====== -->
+    <div data-page="talents" class="p-8 fade-in">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+          <select id="talentStatusFilter" onchange="loadTalents()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+            <option value="">全部状态</option>
+            <option value="pending">待审核</option>
+            <option value="approved">已通过</option>
+            <option value="rejected">未通过</option>
+          </select>
+          <input id="talentKeyword" onkeydown="if(event.key==='Enter')loadTalents()" placeholder="搜索姓名/联系方式/用户ID" class="px-4 py-2 border border-gray-200 rounded-xl text-sm w-64 outline-none focus:ring-2 focus:ring-brand-400">
+          <button onclick="loadTalents()" class="px-4 py-2 bg-navy-100 text-navy-700 rounded-xl text-sm">搜索</button>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table class="w-full">
+          <thead class="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">人才</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">用户ID</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">联系方式</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">行业标签</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">状态</th>
+              <th class="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">操作</th>
+            </tr>
+          </thead>
+          <tbody id="talentTableBody" class="divide-y divide-gray-50">
+            <tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -618,6 +660,20 @@
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
             保存权限配置
           </button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ====== 行业配置 ====== -->
+    <div data-page="industries" class="p-8 fade-in">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="font-bold text-navy-800">行业标签配置</h3>
+          <button onclick="showIndustryModal()" class="px-4 py-2 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg text-sm hover:shadow-lg transition">+ 新增行业</button>
+        </div>
+        <div id="industriesList" class="space-y-3">
+          <p class="text-gray-400">加载中...</p>
         </div>
       </div>
     </div>
@@ -1101,10 +1157,10 @@ function switchPage(page) {
     const navItem = document.querySelector(`[data-nav="${page}"]`)
     if (navItem) navItem.classList.add('active')
   }
-  const titles = { dashboard: '数据看板', homepage: '首页管理', members: '会员管理', events: '活动管理', projects: '项目管理', business: '商机管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
+  const titles = { dashboard: '数据看板', homepage: '首页管理', members: '会员管理', talents: '人才管理', events: '活动管理', projects: '项目管理', business: '商机管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', industries: '行业配置', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
   document.getElementById('pageTitle').textContent = titles[page] || page
   // 加载数据（role-edit页面不加载数据）
-  const loaders = { dashboard: loadDashboard, homepage: loadHomepage, members: loadMembers, events: loadEvents, projects: loadProjects, business: loadBusiness, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, memberLevels: loadMemberLevels, invitations: loadInvitationRules, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
+  const loaders = { dashboard: loadDashboard, homepage: loadHomepage, members: loadMembers, talents: loadTalents, events: loadEvents, projects: loadProjects, business: loadBusiness, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, industries: loadIndustries, memberLevels: loadMemberLevels, invitations: loadInvitationRules, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
   if (loaders[page]) loaders[page]()
 }
 
@@ -2911,6 +2967,8 @@ const PERMISSION_PAGES = [
   { key: 'dashboard', name: '数据看板' },
   { key: 'homepage', name: '首页管理' },
   { key: 'members', name: '会员管理' },
+  { key: 'talents', name: '人才管理' },
+  { key: 'business', name: '商机管理' },
   { key: 'events', name: '活动管理' },
   { key: 'projects', name: '项目管理' },
   { key: 'banners', name: 'Banner管理' },
@@ -2919,6 +2977,7 @@ const PERMISSION_PAGES = [
   { key: 'org', name: '组织架构' },
   { key: 'admins', name: '管理员管理' },
   { key: 'roles', name: '角色权限' },
+  { key: 'industries', name: '行业配置' },
   { key: 'memberLevels', name: '会员等级' },
   { key: 'invitations', name: '邀请奖励' },
   { key: 'pointsRules', name: '积分规则' },
@@ -3103,7 +3162,7 @@ function togglePagePerms(page, checked) {
 }
 
 async function updateRole(id) {
-  const pages = ['dashboard','members','events','projects','banners','articles','mall','org','admins','roles','memberLevels','invitations','pointsRules','contributions','departments','config']
+  const pages = ['dashboard','members','talents','business','events','projects','banners','articles','mall','org','admins','roles','industries','memberLevels','invitations','pointsRules','contributions','departments','config']
   const permissions = {}
   
   pages.forEach(page => {
@@ -3147,6 +3206,250 @@ async function deleteRole(id) {
   if (!confirm('确定删除此角色？')) return
   const res = await api(`/admin/roles/${id}`, { method: 'DELETE' })
   if (res.code === 200) { toast('已删除'); loadRoles(); }
+  else toast(res.msg || '删除失败', 'error')
+}
+
+
+const TALENT_STATUS_MAP = { pending: '待审核', approved: '已通过', rejected: '未通过' }
+const TALENT_STATUS_COLOR = { pending: 'bg-yellow-100 text-yellow-700', approved: 'bg-green-100 text-green-700', rejected: 'bg-red-100 text-red-700' }
+let industryNameMap = {}
+
+async function ensureIndustryNameMap() {
+  const res = await api('/admin/industries')
+  if (res.code === 200) {
+    industryNameMap = {}
+    ;(res.data || []).forEach((item) => { industryNameMap[item.code] = item.name })
+  }
+}
+
+function formatIndustryTags(tags) {
+  const list = Array.isArray(tags) ? tags : []
+  return list.map((code) => industryNameMap[code] || code).join('、') || '-'
+}
+
+// ===== 人才管理 =====
+async function loadTalents() {
+  await ensureIndustryNameMap()
+  const status = document.getElementById('talentStatusFilter')?.value || ''
+  const keyword = document.getElementById('talentKeyword')?.value?.trim() || ''
+  const qs = new URLSearchParams()
+  if (status) qs.set('status', status)
+  if (keyword) qs.set('keyword', keyword)
+  const res = await api('/admin/talents' + (qs.toString() ? `?${qs}` : ''))
+  if (res.code !== 200) return
+  const list = Array.isArray(res.data) ? res.data : []
+  if (!list.length) {
+    document.getElementById('talentTableBody').innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">暂无人才申请</td></tr>'
+    return
+  }
+  document.getElementById('talentTableBody').innerHTML = list.map((item) => {
+    const avatar = item.avatar_url || item.member_avatar || item.photo_url || ''
+    const avatarHtml = avatar
+      ? `<img src="${escapeHtml(avatar)}" class="w-10 h-10 rounded-full object-cover">`
+      : `<div class="w-10 h-10 rounded-full bg-navy-100 text-navy-700 flex items-center justify-center text-sm font-bold">${escapeHtml((item.real_name || '?')[0])}</div>`
+    return `
+    <tr class="hover:bg-gray-50">
+      <td class="px-6 py-4">
+        <div class="flex items-center gap-3">
+          ${avatarHtml}
+          <div>
+            <p class="font-medium text-navy-800">${escapeHtml(item.real_name)}</p>
+            <p class="text-xs text-gray-400">${escapeHtml(item.member_name || '')}</p>
+          </div>
+        </div>
+      </td>
+      <td class="px-6 py-4 text-sm text-gray-600">${escapeHtml(item.member_id)}</td>
+      <td class="px-6 py-4 text-sm">${escapeHtml(item.contact)}</td>
+      <td class="px-6 py-4 text-sm text-gray-600">${escapeHtml(formatIndustryTags(item.industry_tags))}</td>
+      <td class="px-6 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${TALENT_STATUS_COLOR[item.status] || 'bg-gray-100 text-gray-500'}">${TALENT_STATUS_MAP[item.status] || item.status}</span></td>
+      <td class="px-6 py-4 text-center">
+        <button onclick="showTalentModal('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 mr-1">编辑</button>
+        ${item.status === 'pending' ? `<button onclick="reviewTalent('${item.id}','approved')" class="px-2.5 py-1 text-xs rounded-lg bg-green-100 text-green-700 hover:bg-green-200 mr-1">通过</button>
+        <button onclick="rejectTalentPrompt('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200">拒绝</button>` : ''}
+      </td>
+    </tr>`
+  }).join('')
+}
+
+async function showTalentModal(id) {
+  await ensureIndustryNameMap()
+  const res = await api(`/admin/talents/${id}`)
+  if (res.code !== 200) return toast(res.msg || '加载失败', 'error')
+  const item = res.data
+  const industries = await api('/admin/industries')
+  const industryOptions = (industries.data || []).map((ind) => {
+    const selected = (item.industry_tags || []).includes(ind.code) ? 'selected' : ''
+    return `<option value="${escapeHtml(ind.code)}" ${selected}>${escapeHtml(ind.name)}</option>`
+  }).join('')
+  showModal(`
+    <div class="p-6" style="max-width:760px">
+      <h3 class="text-lg font-bold text-navy-800 mb-2">编辑人才信息</h3>
+      <p class="text-xs text-gray-400 mb-4">关联用户ID：${escapeHtml(item.member_id)} · 昵称：${escapeHtml(item.member_name || '-')}</p>
+      <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">真实姓名</label><input id="talRealName" value="${escapeHtml(item.real_name || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">联系方式</label><input id="talContact" value="${escapeHtml(item.contact || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">行业标签</label>
+          <select id="talIndustryTags" multiple class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none h-28">${industryOptions}</select>
+          <p class="text-xs text-gray-400 mt-1">按住 Ctrl/Command 多选</p>
+        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">过往经历 / 描述</label><textarea id="talExperience" rows="4" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${escapeHtml(item.experience || '')}</textarea></div>
+        <div class="grid grid-cols-1 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">头像</label>
+            <div class="flex items-center gap-3">
+              <input id="talAvatar" value="${escapeHtml(item.avatar_url || '')}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+              <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'talAvatar')"></label>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">职业照片</label>
+            <div class="flex items-center gap-3">
+              <input id="talPhoto" value="${escapeHtml(item.photo_url || '')}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+              <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'talPhoto')"></label>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">个人名片</label>
+            <div class="flex items-center gap-3">
+              <input id="talCard" value="${escapeHtml(item.card_image_url || '')}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+              <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'talCard')"></label>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">审核状态</label>
+            <select id="talStatus" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+              <option value="pending" ${item.status==='pending'?'selected':''}>待审核</option>
+              <option value="approved" ${item.status==='approved'?'selected':''}>已通过</option>
+              <option value="rejected" ${item.status==='rejected'?'selected':''}>未通过</option>
+            </select>
+          </div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">未通过原因</label><input id="talRejectReason" value="${escapeHtml(item.reject_reason || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        </div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="saveTalent('${item.id}')" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  `, { wide: true })
+}
+
+async function saveTalent(id) {
+  if (!assertNoUploading()) return
+  const select = document.getElementById('talIndustryTags')
+  const tags = Array.from(select.selectedOptions).map((opt) => opt.value)
+  const body = {
+    real_name: document.getElementById('talRealName').value,
+    contact: document.getElementById('talContact').value,
+    industry_tags: tags,
+    experience: document.getElementById('talExperience').value,
+    avatar_url: document.getElementById('talAvatar').value.trim() || null,
+    photo_url: document.getElementById('talPhoto').value.trim(),
+    card_image_url: document.getElementById('talCard').value.trim() || null,
+    status: document.getElementById('talStatus').value,
+    reject_reason: document.getElementById('talRejectReason').value,
+  }
+  if (!body.real_name || !body.contact || !body.photo_url || !tags.length) {
+    return toast('请完善姓名、联系方式、职业照片和行业标签', 'error')
+  }
+  if (body.status === 'rejected' && !String(body.reject_reason || '').trim()) {
+    return toast('未通过时请填写原因', 'error')
+  }
+  const res = await api(`/admin/talents/${id}`, { method: 'PUT', body })
+  if (res.code === 200) { toast('保存成功'); closeModal(); loadTalents(); }
+  else toast(res.msg || '保存失败', 'error')
+}
+
+async function reviewTalent(id, status) {
+  const res = await api(`/admin/talents/${id}/review`, { method: 'POST', body: { status } })
+  if (res.code === 200) { toast('已通过'); loadTalents(); }
+  else toast(res.msg || '操作失败', 'error')
+}
+
+async function rejectTalentPrompt(id) {
+  const reason = prompt('请输入未通过原因')
+  if (reason === null) return
+  if (!String(reason).trim()) return toast('请填写未通过原因', 'error')
+  const res = await api(`/admin/talents/${id}/review`, { method: 'POST', body: { status: 'rejected', reject_reason: reason.trim() } })
+  if (res.code === 200) { toast('已拒绝'); loadTalents(); }
+  else toast(res.msg || '操作失败', 'error')
+}
+
+// ===== 行业配置 =====
+async function loadIndustries() {
+  const res = await api('/admin/industries')
+  const list = document.getElementById('industriesList')
+  if (res.code === 200 && res.data?.length) {
+    list.innerHTML = res.data.map((item) => `
+      <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
+        <div>
+          <p class="font-medium text-navy-800">${escapeHtml(item.name)}</p>
+          <p class="text-xs text-gray-400">编码: ${escapeHtml(item.code)} · 排序: ${item.sort_order} · ${item.status === 'active' ? '启用' : '停用'}</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="showIndustryModalById('${item.id}')" class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑</button>
+          <button onclick="deleteIndustry('${item.id}')" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
+        </div>
+      </div>
+    `).join('')
+  } else {
+    list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无行业配置</p>'
+  }
+}
+
+
+async function showIndustryModalById(id) {
+  const res = await api('/admin/industries')
+  const item = (res.data || []).find((row) => String(row.id) === String(id))
+  showIndustryModal(item || null)
+}
+
+function showIndustryModal(item) {
+  const edit = item && item.id
+  showModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold text-navy-800 mb-4">${edit ? '编辑行业' : '新增行业'}</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">行业名称</label><input id="indName" value="${escapeHtml(item?.name || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">编码</label><input id="indCode" value="${escapeHtml(item?.code || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="如 tech"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">排序</label><input id="indSort" type="number" value="${escapeHtml(item?.sort_order ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">状态</label>
+          <select id="indStatus" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+            <option value="active" ${!item || item?.status==='active'?'selected':''}>启用</option>
+            <option value="inactive" ${item?.status==='inactive'?'selected':''}>停用</option>
+          </select>
+        </div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="saveIndustry('${edit ? item.id : ''}')" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+
+async function saveIndustry(editId) {
+  const body = {
+    name: document.getElementById('indName').value,
+    code: document.getElementById('indCode').value,
+    sort_order: parseInt(document.getElementById('indSort').value) || 0,
+    status: document.getElementById('indStatus').value,
+  }
+  if (!body.name.trim()) return toast('请填写行业名称', 'error')
+  const url = editId ? `/admin/industries/${editId}` : '/admin/industries'
+  const method = editId ? 'PUT' : 'POST'
+  const res = await api(url, { method, body })
+  if (res.code === 200) { toast(editId ? '更新成功' : '创建成功'); closeModal(); loadIndustries(); }
+  else toast(res.msg || '保存失败', 'error')
+}
+
+async function deleteIndustry(id) {
+  if (!confirm('确认删除该行业？')) return
+  const res = await api(`/admin/industries/${id}`, { method: 'DELETE' })
+  if (res.code === 200) { toast('已删除'); loadIndustries(); }
   else toast(res.msg || '删除失败', 'error')
 }
 

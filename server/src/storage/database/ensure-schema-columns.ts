@@ -55,6 +55,45 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       INDEX idx_business_sort (sort_order)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   },
+  {
+    name: 'industries',
+    sql: `CREATE TABLE IF NOT EXISTS industries (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      code VARCHAR(64) NOT NULL,
+      name VARCHAR(64) NOT NULL,
+      sort_order INT NOT NULL DEFAULT 0,
+      status VARCHAR(32) NOT NULL DEFAULT 'active',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_industries_code (code),
+      UNIQUE KEY uk_industries_name (name),
+      INDEX idx_industries_status (status),
+      INDEX idx_industries_sort (sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
+  {
+    name: 'talent_applications',
+    sql: `CREATE TABLE IF NOT EXISTS talent_applications (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      member_id INT NOT NULL,
+      real_name VARCHAR(64) NOT NULL,
+      contact VARCHAR(64) NOT NULL,
+      photo_url VARCHAR(500) NOT NULL,
+      industry_tags JSON NOT NULL,
+      experience TEXT NULL,
+      card_image_url VARCHAR(500) NULL,
+      avatar_url VARCHAR(500) NULL,
+      status VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'pending|approved|rejected',
+      reject_reason VARCHAR(500) NULL,
+      reviewed_at TIMESTAMP NULL,
+      reviewed_by VARCHAR(64) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_talent_member (member_id),
+      INDEX idx_talent_status (status),
+      INDEX idx_talent_updated (updated_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
 ]
 
 function isDuplicateColumnError(message?: string): boolean {
@@ -95,12 +134,11 @@ export async function ensureSchemaColumns(): Promise<void> {
   } catch (error: any) {
     const msg = String(error?.message || '')
     if (
-      msg.includes('Unknown column') ||
-      msg.includes("doesn't exist") ||
-      error?.code === 'ER_NO_SUCH_TABLE'
+      !msg.includes('Unknown column') &&
+      !msg.includes("doesn't exist") &&
+      error?.code !== 'ER_NO_SUCH_TABLE'
     ) {
-      return
+      console.warn('[MySQL] 调整 business_opportunities.user_id 失败:', error?.message || error)
     }
-    console.warn('[MySQL] 调整 business_opportunities.user_id 失败:', error?.message || error)
   }
 }

@@ -3,6 +3,7 @@ export default defineAppConfig({
     'pages/index/index',
     'pages/event-register/index',
     'pages/content-detail/index',
+    'pages/talent-settle/index',
     'pages/admin/index',
     'pages/message/index',
     'pages/business/index',
