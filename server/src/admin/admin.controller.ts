@@ -1183,6 +1183,13 @@ export class AdminController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Get('projects/:id')
+  async getProject(@Param('id') id: string) {
+    console.log('[AdminController] GET /api/admin/projects/:id')
+    const result = await this.adminService.getProjectById(id)
+    return { code: 200, msg: 'success', data: result }
+  }
+
   @Post('projects')
   async createProject(@Body() dto: any) {
     console.log('[AdminController] POST /api/admin/projects')

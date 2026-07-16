@@ -570,6 +570,18 @@ export class AdminService {
     }
   }
 
+  async getProjectById(id: string) {
+    try {
+      const row = await queryOne('SELECT * FROM projects WHERE id = ?', [id])
+      if (!row) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
+      return this.uploadService.signRowFields(row, ['cover_image', 'video_url'])
+    } catch (error) {
+      console.error('[AdminService] getProjectById error:', error)
+      if (error instanceof HttpException) throw error
+      throw new HttpException('获取项目失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
   async createProject(dto: any) {
     try {
       const coverImage = assertCloudStorageImageUrl(dto.cover_image)

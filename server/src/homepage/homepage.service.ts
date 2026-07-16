@@ -222,7 +222,7 @@ export class HomepageService {
     } else if (section === 'articles') {
       row = await queryOne(
         `SELECT id, title, cover_image, category, IFNULL(view_count, 0) AS view_count, created_at
-         FROM articles WHERE id = ? AND status = 'published'`,
+         FROM articles WHERE id = ?`,
         [itemId],
       )
     } else if (section === 'financing' || section === 'roadshow' || section === 'resource') {
@@ -331,11 +331,11 @@ export class HomepageService {
 
     if (section === 'articles') {
       const sql = kw
-        ? `SELECT id, title, cover_image, category, IFNULL(view_count, 0) AS view_count, created_at
-           FROM articles WHERE status = 'published' AND title LIKE ?
+        ? `SELECT id, title, cover_image, category, status, IFNULL(view_count, 0) AS view_count, created_at
+           FROM articles WHERE title LIKE ?
            ORDER BY created_at DESC LIMIT 100`
-        : `SELECT id, title, cover_image, category, IFNULL(view_count, 0) AS view_count, created_at
-           FROM articles WHERE status = 'published'
+        : `SELECT id, title, cover_image, category, status, IFNULL(view_count, 0) AS view_count, created_at
+           FROM articles
            ORDER BY created_at DESC LIMIT 100`
       return queryRows(sql, kw ? [like] : [])
     }

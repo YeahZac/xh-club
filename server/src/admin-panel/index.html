@@ -420,13 +420,76 @@
             <option value="closed">已关闭</option>
           </select>
         </div>
-        <button onclick="showProjectModal()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition flex items-center gap-2">
+        <button onclick="openProjectEditPage()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition flex items-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
           创建项目
         </button>
       </div>
-      <div id="projectCards" class="grid grid-cols-3 gap-6">
-        <p class="text-gray-400 col-span-3 text-center py-12">加载中...</p>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table class="w-full">
+          <thead class="bg-gray-50 text-xs text-gray-500">
+            <tr>
+              <th class="px-6 py-3 text-left">项目名称</th>
+              <th class="px-6 py-3 text-left">添加日期</th>
+              <th class="px-6 py-3 text-left">状态</th>
+              <th class="px-6 py-3 text-center">操作</th>
+            </tr>
+          </thead>
+          <tbody id="projectTableBody">
+            <tr><td colspan="4" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ====== 项目编辑 ====== -->
+    <div data-page="project-edit" class="p-8 fade-in">
+      <div class="flex items-center gap-3 mb-6">
+        <button onclick="switchPage('projects')" class="p-2 hover:bg-gray-100 rounded-lg transition">
+          <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        </button>
+        <h2 class="text-lg font-bold text-navy-800" id="projectEditTitle">编辑项目</h2>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">项目名称</label><input id="pjEditTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">状态</label>
+            <select id="pjEditStatus" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+              <option value="active">进行中</option>
+              <option value="funded">已融资</option>
+              <option value="closed">已关闭</option>
+              <option value="draft">草稿</option>
+            </select>
+          </div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">融资阶段</label><select id="pjEditStage" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></select></div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">封面图片 <span class="text-red-500">*</span></label>
+          <p id="pjEditCoverHint" class="text-xs text-gray-400 mb-2"></p>
+          <div class="flex items-center gap-3">
+            <input id="pjEditCover" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="请上传项目封面">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'pjEditCover', 690, 388)"></label>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">项目视频（选填）</label>
+          <div class="flex items-center gap-3">
+            <input id="pjEditVideo" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传项目路演视频">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" onchange="uploadFile(this, 'pjEditVideo')"></label>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">行业</label><select id="pjEditIndustry" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></select></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">融资金额(万)</label><input id="pjEditAmount" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">项目描述</label>
+          <div id="pjEditDescEditor"></div>
+        </div>
+        <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
+          <button onclick="switchPage('projects')" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">返回列表</button>
+          <button onclick="saveProjectEdit()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存项目</button>
+        </div>
       </div>
     </div>
 
@@ -478,8 +541,22 @@
           添加Banner
         </button>
       </div>
-      <div id="bannerCards" class="grid grid-cols-2 gap-6">
-        <p class="text-gray-400 col-span-2 text-center py-12">加载中...</p>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table class="w-full">
+          <thead class="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">标题</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">跳转类型</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">跳转目标</th>
+              <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500">排序</th>
+              <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500">状态</th>
+              <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500">操作</th>
+            </tr>
+          </thead>
+          <tbody id="bannerTableBody">
+            <tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -854,6 +931,9 @@ const EVENT_TYPE_MAP = { other: '其他活动', roadshow: '项目路演', salon:
 const BUSINESS_CATEGORY_MAP = { roadshow: '项目路演', financing: '融资招募', resource: '资源对接' }
 const CATEGORY_MAP = { rights: '会员权益', service: '商务服务', gift: '商务礼品', activity: '活动权益', learning: '学习成长' }
 const STAGE_MAP = { seed: '种子期', angel: '天使轮', a: 'A轮', b: 'B轮', c: 'C轮', ip: 'IPO', bootstrapped: '自有资金' }
+const PROJECT_STATUS_MAP = { active: '进行中', funded: '已融资', closed: '已关闭', draft: '草稿' }
+const PROJECT_STATUS_COLORS = { active: 'bg-green-100 text-green-700', funded: 'bg-blue-100 text-blue-700', closed: 'bg-gray-100 text-gray-500', draft: 'bg-yellow-100 text-yellow-700' }
+let _editingProjectId = null
 const INDUSTRY_MAP = { tech: '科技互联网', finance: '金融资本', manufacture: '先进制造', realestate: '房地产建筑', health: '大健康', education: '教育培训', media: '文化传媒', law: '法律服务', agriculture: '现代农业', trade: '跨境贸易', food: '餐饮消费', energy: '环保能源', service: '综合服务' }
 
 // ===== 富文本编辑器（Quill）=====
@@ -915,9 +995,10 @@ function initRichEditor(editorId, html) {
         container: [
           [{ header: [1, 2, 3, false] }],
           ['bold', 'italic', 'underline', 'strike'],
+          [{ color: [] }],
           [{ list: 'ordered' }, { list: 'bullet' }],
           [{ align: [] }],
-          ['link', 'image', 'emoji', 'attachment'],
+          ['link', 'image', 'emoji', 'attachment', 'htmlcopy'],
           ['clean']
         ],
         handlers: {
@@ -983,6 +1064,18 @@ function initRichEditor(editorId, html) {
               }
             }
             input.click()
+          },
+          htmlcopy() {
+            const html = quill.root.innerHTML || ''
+            const done = () => toast('HTML 已复制到剪贴板')
+            const fail = () => toast('复制失败，请手动复制', 'error')
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(html).then(done).catch(() => {
+                copyHtmlFallback(html) ? done() : fail()
+              })
+            } else {
+              copyHtmlFallback(html) ? done() : fail()
+            }
           }
         }
       }
@@ -993,8 +1086,10 @@ function initRichEditor(editorId, html) {
   setTimeout(() => {
     const emojiBtn = host.parentElement?.querySelector('.ql-emoji')
     const attachBtn = host.parentElement?.querySelector('.ql-attachment')
+    const htmlCopyBtn = host.parentElement?.querySelector('.ql-htmlcopy')
     if (emojiBtn && !emojiBtn.dataset.ready) { emojiBtn.dataset.ready = '1'; emojiBtn.innerHTML = '😊'; emojiBtn.title = '表情' }
     if (attachBtn && !attachBtn.dataset.ready) { attachBtn.dataset.ready = '1'; attachBtn.innerHTML = '📎'; attachBtn.title = '插入文件' }
+    if (htmlCopyBtn && !htmlCopyBtn.dataset.ready) { htmlCopyBtn.dataset.ready = '1'; htmlCopyBtn.innerHTML = '&lt;/&gt;'; htmlCopyBtn.title = '复制 HTML 代码' }
   }, 0)
 
   if (html) {
@@ -1155,21 +1250,37 @@ function hasButtonPermission(pageKey, buttonAction) {
   return !!(perms[pageKey] && perms[pageKey][buttonAction]);
 }
 
+function copyHtmlFallback(text) {
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.left = '-9999px'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
+}
+
 function switchPage(page) {
-  // 检查权限（超级管理员跳过检查，role-edit页面跳过检查）
-  if (page !== 'role-edit' && !hasPagePermission(page)) {
+  // 检查权限（超级管理员跳过检查，二级编辑页跳过检查）
+  if (page !== 'role-edit' && page !== 'project-edit' && !hasPagePermission(page)) {
     toast('您没有访问此页面的权限', 'error');
     return;
   }
   document.querySelectorAll('[data-page]').forEach(el => el.classList.remove('active'))
   document.querySelector(`[data-page="${page}"]`).classList.add('active')
-  // 只更新侧边栏高亮（role-edit页面不高亮任何侧边栏项）
+  // 只更新侧边栏高亮（二级编辑页不高亮任何侧边栏项）
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'))
-  if (page !== 'role-edit') {
+  if (page !== 'role-edit' && page !== 'project-edit') {
     const navItem = document.querySelector(`[data-nav="${page}"]`)
     if (navItem) navItem.classList.add('active')
   }
-  const titles = { dashboard: '数据看板', homepage: '首页管理', members: '会员管理', talents: '人才管理', events: '活动管理', projects: '项目管理', business: '商机管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', industries: '行业配置', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
+  const titles = { dashboard: '数据看板', homepage: '首页管理', members: '会员管理', talents: '人才管理', events: '活动管理', projects: '项目管理', business: '商机管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', 'project-edit': '编辑项目', industries: '行业配置', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
   document.getElementById('pageTitle').textContent = titles[page] || page
   // 加载数据（role-edit页面不加载数据）
   const loaders = { dashboard: loadDashboard, homepage: loadHomepage, members: loadMembers, talents: loadTalents, events: loadEvents, projects: loadProjects, business: loadBusiness, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, industries: loadIndustries, memberLevels: loadMemberLevels, invitations: loadInvitationRules, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
@@ -1288,11 +1399,21 @@ async function loadHomepage() {
   }
 }
 
+function formatHomepageCandidateLabel(section, item) {
+  const title = item.title || `内容 #${item.id}`
+  if (section === 'articles' && item.status) {
+    const statusMap = { draft: '草稿', published: '已发布', archived: '已归档' }
+    const label = statusMap[item.status] || item.status
+    return `${title} [${label}]`
+  }
+  return title
+}
+
 function renderHomepageSection(section) {
   const candidates = homepageCandidates[section.section] || []
   const candidateMap = new Map(candidates.map(item => [String(item.id), item]))
   const options = candidates.map(item =>
-    `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title || `内容 #${item.id}`)}</option>`
+    `<option value="${escapeHtml(item.id)}">${escapeHtml(formatHomepageCandidateLabel(section.section, item))}</option>`
   ).join('')
   const showCustomSort = homepageSortMode === 'custom'
   const rows = (section.items || []).map(item => {
@@ -1301,7 +1422,7 @@ function renderHomepageSection(section) {
       <tr class="border-t border-gray-100">
         <td class="px-4 py-3">
           <p class="text-sm font-medium text-navy-800">${escapeHtml(content?.title || `已失效内容 #${item.item_id}`)}</p>
-          <p class="text-xs text-gray-400">ID: ${escapeHtml(item.item_id)}${content?.view_count != null ? ` · 浏览 ${content.view_count}` : ''}</p>
+          <p class="text-xs text-gray-400">ID: ${escapeHtml(item.item_id)}${section.section === 'articles' && content?.status ? ` · ${escapeHtml(({ draft: '草稿', published: '已发布', archived: '已归档' })[content.status] || content.status)}` : ''}${content?.view_count != null ? ` · 浏览 ${content.view_count}` : ''}</p>
         </td>
         <td class="px-4 py-3 w-32 ${showCustomSort ? '' : 'opacity-40'}">
           <input id="home-order-${item.id}" type="number" value="${Number(item.sort_order) || 0}" class="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm" ${showCustomSort ? '' : 'disabled'}>
@@ -1376,7 +1497,7 @@ async function searchHomepageCandidates(section) {
     if (!select) return
     select.innerHTML = '<option value="">选择要加入的内容</option>' +
       homepageCandidates[section].map(item =>
-        `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title || `内容 #${item.id}`)}</option>`
+        `<option value="${escapeHtml(item.id)}">${escapeHtml(formatHomepageCandidateLabel(section, item))}</option>`
       ).join('')
     toast(`找到 ${homepageCandidates[section].length} 条`)
   } catch (error) {
@@ -1821,95 +1942,107 @@ async function submitUpdateEvent(id) {
 }
 
 // ===== 项目管理 =====
+function populateProjectEditSelects() {
+  const stageSel = document.getElementById('pjEditStage')
+  const industrySel = document.getElementById('pjEditIndustry')
+  if (stageSel) {
+    stageSel.innerHTML = Object.entries(STAGE_MAP).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')
+  }
+  if (industrySel) {
+    industrySel.innerHTML = Object.entries(INDUSTRY_MAP).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')
+  }
+  const hint = document.getElementById('pjEditCoverHint')
+  if (hint) hint.textContent = mediaHint('project')
+}
+
+async function openProjectEditPage(id) {
+  _editingProjectId = id || null
+  populateProjectEditSelects()
+  document.getElementById('projectEditTitle').textContent = id ? '编辑项目' : '创建项目'
+  document.getElementById('pjEditTitle').value = ''
+  document.getElementById('pjEditStatus').value = 'active'
+  document.getElementById('pjEditStage').value = 'seed'
+  document.getElementById('pjEditCover').value = ''
+  document.getElementById('pjEditVideo').value = ''
+  document.getElementById('pjEditIndustry').value = Object.keys(INDUSTRY_MAP)[0] || ''
+  document.getElementById('pjEditAmount').value = ''
+  switchPage('project-edit')
+  initRichEditor('pjEditDescEditor', '')
+  if (!id) return
+  const res = await api(`/admin/projects/${id}`)
+  if (res.code !== 200) {
+    toast(res.msg || '加载项目失败', 'error')
+    switchPage('projects')
+    return
+  }
+  const p = res.data
+  document.getElementById('pjEditTitle').value = p.title || ''
+  document.getElementById('pjEditStatus').value = p.status || 'active'
+  document.getElementById('pjEditStage').value = p.stage || 'seed'
+  document.getElementById('pjEditCover').value = p.cover_image || ''
+  document.getElementById('pjEditVideo').value = p.video_url || ''
+  document.getElementById('pjEditIndustry').value = p.industry || Object.keys(INDUSTRY_MAP)[0] || ''
+  document.getElementById('pjEditAmount').value = p.amount_max ? Math.round(p.amount_max / 10000) : ''
+  initRichEditor('pjEditDescEditor', p.description || '')
+}
+
+async function saveProjectEdit() {
+  if (!assertNoUploading()) return
+  const body = {
+    title: document.getElementById('pjEditTitle').value,
+    cover_image: document.getElementById('pjEditCover').value,
+    video_url: document.getElementById('pjEditVideo').value || null,
+    industry: document.getElementById('pjEditIndustry').value,
+    stage: document.getElementById('pjEditStage').value,
+    amount_max: parseInt(document.getElementById('pjEditAmount').value || '0', 10) * 10000 || null,
+    description: getRichEditorHtml('pjEditDescEditor'),
+    status: document.getElementById('pjEditStatus').value,
+  }
+  if (!body.title.trim()) return toast('请输入项目名称', 'error')
+  if (!body.cover_image.trim()) return toast('项目封面图片为必填项', 'error')
+  const url = _editingProjectId ? `/admin/projects/${_editingProjectId}` : '/admin/projects'
+  const method = _editingProjectId ? 'PUT' : 'POST'
+  const res = await api(url, { method, body })
+  if (res.code === 200) {
+    toast(_editingProjectId ? '项目已更新' : '项目创建成功')
+    _editingProjectId = res.data?.id || _editingProjectId
+    switchPage('projects')
+  } else {
+    toast(res.msg || '保存失败', 'error')
+  }
+}
+
 async function loadProjects() {
   const status = document.getElementById('projectFilter').value
   const res = await api('/admin/projects')
   if (res.code !== 200) return
   let projects = Array.isArray(res.data) ? res.data : (res.data?.list || [])
   if (status) projects = projects.filter(p => p.status === status)
+  const tbody = document.getElementById('projectTableBody')
+  if (!tbody) return
   if (!projects.length) {
-    document.getElementById('projectCards').innerHTML = '<p class="text-gray-400 col-span-3 text-center py-12">暂无项目</p>'
+    tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-gray-400">暂无项目</td></tr>'
     return
   }
-  document.getElementById('projectCards').innerHTML = projects.map(p => `
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">
-      <div class="h-32 bg-gradient-to-br from-navy-700 to-navy-900 flex items-center justify-center relative">
-        <p class="text-white text-lg font-bold px-4 text-center">${p.title}</p>
-        <span class="absolute top-3 right-3 text-xs px-2 py-1 rounded-full bg-white/20 text-white">${STAGE_MAP[p.stage] || p.stage || '-'}</span>
-      </div>
-      <div class="p-4">
-        <p class="text-sm text-gray-600 line-clamp-2 mb-3">${p.description || '暂无描述'}</p>
-        <div class="flex items-center justify-between">
-          <span class="text-xs text-gray-400">${INDUSTRY_MAP[p.industry] || p.industry || '-'}</span>
-          <span class="text-xs px-2 py-1 rounded-full ${p.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">${p.status === 'active' ? '进行中' : '已关闭'}</span>
-        </div>
-      </div>
-    </div>
+  tbody.innerHTML = projects.map(p => `
+    <tr class="border-t border-gray-50 hover:bg-gray-50/50">
+      <td class="px-6 py-4">
+        <p class="text-sm font-medium text-navy-800">${escapeHtml(p.title || '-')}</p>
+        <p class="text-xs text-gray-400 mt-0.5">${escapeHtml(INDUSTRY_MAP[p.industry] || p.industry || '')}${p.stage ? ' · ' + escapeHtml(STAGE_MAP[p.stage] || p.stage) : ''}</p>
+      </td>
+      <td class="px-6 py-4 text-sm text-gray-600">${p.created_at ? new Date(p.created_at).toLocaleDateString('zh-CN') : '-'}</td>
+      <td class="px-6 py-4">
+        <span class="text-xs px-2.5 py-1 rounded-full ${PROJECT_STATUS_COLORS[p.status] || 'bg-gray-100 text-gray-500'}">${PROJECT_STATUS_MAP[p.status] || p.status || '-'}</span>
+      </td>
+      <td class="px-6 py-4 text-center">
+        <button onclick="openProjectEditPage('${p.id}')" class="px-3 py-1.5 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200">编辑</button>
+      </td>
+    </tr>
   `).join('')
 }
 
 function showProjectModal() {
-  showModal(`
-    <div class="p-6">
-      <h3 class="text-lg font-bold text-navy-800 mb-6">创建项目</h3>
-      <div class="space-y-4">
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">项目名称</label><input id="pjTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">封面图片 <span class="text-red-500">*</span></label>
-          <p class="text-xs text-gray-400 mb-2">${mediaHint('project')}</p>
-          <div class="flex items-center gap-3">
-            <input id="pjCover" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传项目封面">
-            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'pjCover', 690, 388)"></label>
-          </div>
-          ${mediaPreviewBox('project')}
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">项目视频（选填）</label>
-          <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，单文件 ≤200MB</p>
-          <div class="flex items-center gap-3">
-            <input id="pjVideo" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传项目路演视频">
-            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" onchange="uploadFile(this, 'pjVideo')"></label>
-          </div>
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">行业</label><select id="pjIndustry" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${Object.entries(INDUSTRY_MAP).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">融资阶段</label><select id="pjStage" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${Object.entries(STAGE_MAP).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">融资金额(万)</label><input id="pjAmount" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">联系方式</label><input id="pjContact" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">项目描述</label>
-          <div id="pjDescEditor"></div>
-        </div>
-        <div class="flex justify-end gap-3 pt-4">
-          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
-          <button onclick="createProject()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
-        </div>
-      </div>
-    </div>
-  `, { wide: true })
-  initRichEditor('pjDescEditor', '')
-}
-
-async function createProject() {
-  if (!assertNoUploading()) return
-  const body = {
-    title: document.getElementById('pjTitle').value,
-    cover_image: document.getElementById('pjCover').value,
-    video_url: document.getElementById('pjVideo').value || null,
-    industry: document.getElementById('pjIndustry').value,
-    stage: document.getElementById('pjStage').value,
-    amount_max: parseInt(document.getElementById('pjAmount').value) * 10000,
-    description: getRichEditorHtml('pjDescEditor'),
-    status: 'active'
-  }
-  if (!body.title.trim()) return toast('请输入项目名称', 'error')
-  if (!body.cover_image.trim()) return toast('项目封面图片为必填项', 'error')
-  const res = await api('/admin/projects', { method: 'POST', body })
-  if (res.code === 200) { toast('项目创建成功'); closeModal(); loadProjects(); }
-  else toast(res.msg || '创建失败', 'error')
+  openProjectEditPage()
 }
 
 
@@ -2348,36 +2481,76 @@ function formatBannerLinkDesc(linkType, lc = {}) {
   return ''
 }
 
+async function loadBannerTitleMaps() {
+  const [eventsRes, articlesRes, projectsRes, businessRes, productsRes] = await Promise.all([
+    api('/admin/events'),
+    api('/admin/articles?limit=500'),
+    api('/admin/projects'),
+    api('/admin/business'),
+    api('/admin/mall-products'),
+  ])
+  const toMap = (rows, titleKey = 'title') => {
+    const list = Array.isArray(rows) ? rows : (rows?.list || [])
+    const map = {}
+    list.forEach(item => { map[String(item.id)] = item[titleKey] || item.name || item.title || '' })
+    return map
+  }
+  return {
+    events: eventsRes.code === 200 ? toMap(eventsRes.data) : {},
+    articles: articlesRes.code === 200 ? toMap(articlesRes.data) : {},
+    projects: projectsRes.code === 200 ? toMap(projectsRes.data) : {},
+    business: businessRes.code === 200 ? toMap(businessRes.data) : {},
+    products: productsRes.code === 200 ? toMap(productsRes.data, 'name') : {},
+  }
+}
+
+function resolveBannerLinkTitle(linkType, lc = {}, maps = {}) {
+  if (linkType === 'article' && lc.article_id) return maps.articles?.[String(lc.article_id)] || ''
+  if (linkType === 'event' && lc.event_id) return maps.events?.[String(lc.event_id)] || ''
+  if (linkType === 'project' && lc.project_id) return maps.projects?.[String(lc.project_id)] || ''
+  if ((linkType === 'financing' || linkType === 'roadshow' || linkType === 'resource') && lc.business_id) {
+    return maps.business?.[String(lc.business_id)] || ''
+  }
+  if (linkType === 'product' && lc.product_id) return maps.products?.[String(lc.product_id)] || ''
+  if (linkType === 'link') return lc.url || ''
+  if (linkType === 'miniapp') return lc.path ? `${lc.appid || ''} ${lc.path}`.trim() : (lc.appid || '')
+  return ''
+}
+
 async function loadBanners() {
   const res = await api('/admin/banners')
   if (res.code !== 200) return
   const banners = res.data || []
+  const tbody = document.getElementById('bannerTableBody')
+  if (!tbody) return
   if (!banners.length) {
-    document.getElementById('bannerCards').innerHTML = '<p class="text-gray-400 col-span-2 text-center py-12">暂无Banner</p>'
+    tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">暂无Banner</td></tr>'
     return
   }
-  document.getElementById('bannerCards').innerHTML = banners.map(b => {
+  const maps = await loadBannerTitleMaps()
+  tbody.innerHTML = banners.map(b => {
     const lc = b.link_config || {}
-    const linkDesc = formatBannerLinkDesc(b.link_type, lc)
+    const linkTitle = resolveBannerLinkTitle(b.link_type, lc, maps) || formatBannerLinkDesc(b.link_type, lc) || '-'
     return `
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">
-      <div class="h-40 bg-gradient-to-br from-navy-600 to-brand-400 flex items-center justify-center relative">
-        ${b.image_url ? `<img src="${escapeHtml(b.image_url)}" class="w-full h-full object-cover" onerror="this.style.display='none'">` : ''}
-        <p class="absolute text-white text-lg font-bold">${escapeHtml(b.title)}</p>
-        <span class="absolute top-3 right-3 text-xs px-2 py-1 rounded-full ${b.is_active ? 'bg-green-500 text-white' : 'bg-gray-500 text-white'}">${b.is_active ? '已启用' : '已禁用'}</span>
-      </div>
-      <div class="p-4 flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <p class="font-medium text-navy-800 truncate">${escapeHtml(b.title)}</p>
-          <p class="text-xs text-gray-400 mt-1">排序: ${b.sort_order} · <span class="px-1.5 py-0.5 rounded bg-brand-50 text-brand-600">${BANNER_LINK_TYPE_MAP[b.link_type] || b.link_type || '-'}</span>${linkDesc ? ' · ' + escapeHtml(String(linkDesc).slice(0, 36)) : ''}</p>
-        </div>
-        <div class="flex gap-2 flex-shrink-0">
+    <tr class="border-t border-gray-50 hover:bg-gray-50/50">
+      <td class="px-6 py-4">
+        <p class="text-sm font-medium text-navy-800">${escapeHtml(b.title)}</p>
+        ${b.image_url ? `<img src="${escapeHtml(b.image_url)}" class="mt-2 h-10 w-24 object-cover rounded border border-gray-100" onerror="this.style.display='none'">` : ''}
+      </td>
+      <td class="px-6 py-4 text-sm text-gray-600">${escapeHtml(BANNER_LINK_TYPE_MAP[b.link_type] || b.link_type || '-')}</td>
+      <td class="px-6 py-4 text-sm text-navy-700 max-w-xs truncate" title="${escapeHtml(linkTitle)}">${escapeHtml(linkTitle)}</td>
+      <td class="px-6 py-4 text-center text-sm text-gray-600">${b.sort_order ?? '-'}</td>
+      <td class="px-6 py-4 text-center">
+        <span class="text-xs px-2.5 py-1 rounded-full ${b.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">${b.is_active ? '已启用' : '已禁用'}</span>
+      </td>
+      <td class="px-6 py-4 text-center">
+        <div class="flex items-center justify-center gap-2 flex-wrap">
           <button onclick="showBannerModal('${b.id}')" class="px-3 py-1.5 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200">编辑</button>
           <button onclick="toggleBanner('${b.id}', ${!b.is_active})" class="px-3 py-1.5 text-xs rounded-lg ${b.is_active ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}">${b.is_active ? '禁用' : '启用'}</button>
           <button onclick="deleteBanner('${b.id}')" class="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200">删除</button>
         </div>
-      </div>
-    </div>`
+      </td>
+    </tr>`
   }).join('')
 }
 
