@@ -1223,6 +1223,13 @@ export class AdminController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Get('mall-products/:id')
+  async getMallProduct(@Param('id') id: string) {
+    console.log('[AdminController] GET /api/admin/mall-products/:id')
+    const result = await this.adminService.getMallProductById(id)
+    return { code: 200, msg: 'success', data: result }
+  }
+
   @Post('mall-products')
   async createMallProduct(@Body() dto: any) {
     console.log('[AdminController] POST /api/admin/mall-products')

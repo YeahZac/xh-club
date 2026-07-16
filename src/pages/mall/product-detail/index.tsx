@@ -6,6 +6,7 @@ import {
 } from "lucide-react-taro"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { RichHtml } from "@/components/rich-html"
 import { Network } from "@/network"
 import { addToCart } from "@/lib/mall-cart"
 
@@ -208,9 +209,11 @@ const ProductDetailPage = () => {
           <Text className="block text-base font-semibold text-gray-900 mb-3">
             商品详情
           </Text>
-          <Text className="block text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
-            {product.description || "暂无详情"}
-          </Text>
+          <RichHtml
+            html={product.description}
+            className="text-sm"
+            emptyText="暂无商品图文详情"
+          />
         </CardContent>
       </Card>
 

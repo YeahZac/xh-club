@@ -18,6 +18,9 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['mall_products', 'image_url', 'VARCHAR(500) NULL'],
   ['mall_products', 'video_url', 'VARCHAR(500) NULL'],
   ['mall_products', 'view_count', 'INT NOT NULL DEFAULT 0'],
+  ['mall_products', 'description', 'MEDIUMTEXT NULL'],
+  ['events', 'description', 'MEDIUMTEXT NULL'],
+  ['events', 'content', 'MEDIUMTEXT NULL'],
   ['events', 'view_count', 'INT NOT NULL DEFAULT 0'],
   ['homepage_sections', 'sort_mode', `VARCHAR(32) NOT NULL DEFAULT 'custom'`],
   // 商机管理（兼容旧 business_opportunities 表结构）
@@ -247,6 +250,26 @@ export async function ensureSchemaColumns(): Promise<void> {
       error?.code !== 'ER_NO_SUCH_TABLE'
     ) {
       console.warn('[MySQL] 调整 business_opportunities.user_id 失败:', error?.message || error)
+    }
+  }
+
+  // 富文本字段升级为 MEDIUMTEXT，避免图文内容被截断
+  for (const [table, column] of [
+    ['mall_products', 'description'],
+    ['events', 'description'],
+    ['events', 'content'],
+  ] as const) {
+    try {
+      await pool.query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` MEDIUMTEXT NULL`)
+    } catch (error: any) {
+      const msg = String(error?.message || '')
+      if (
+        !msg.includes('Unknown column') &&
+        !msg.includes("doesn't exist") &&
+        error?.code !== 'ER_NO_SUCH_TABLE'
+      ) {
+        console.warn(`[MySQL] 调整 ${table}.${column} 为 MEDIUMTEXT 失败:`, error?.message || error)
+      }
     }
   }
 }

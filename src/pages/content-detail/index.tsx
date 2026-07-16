@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { View, Text, ScrollView, Image, Textarea, Input } from '@tarojs/components'
 import Taro, { useLoad } from '@tarojs/taro'
-import { Clock, MapPin, Users } from 'lucide-react-taro'
+import { Clock, MapPin, Users, Eye } from 'lucide-react-taro'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { RichHtml } from '@/components/rich-html'
+import { isDisplayableImageUrl } from '@/lib/media-url'
 import { Network } from '@/network'
 
 type ContentType = 'article' | 'project' | 'event' | 'business' | 'talent'
@@ -37,8 +38,26 @@ const CATEGORY_MAP: Record<string, string> = {
   meeting: '定期例会',
 }
 
-const isCloudStorageImageUrl = (url?: string) =>
-  !!url && /^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)/i.test(url)
+const STATUS_MAP: Record<string, string> = {
+  open: '报名中',
+  closed: '已结束',
+  cancelled: '已取消',
+  draft: '草稿',
+  published: '已发布',
+  active: '进行中',
+  funded: '已融资',
+  pending: '待审核',
+  approved: '已通过',
+  rejected: '未通过',
+}
+
+const formatDetailTime = (dateStr?: string | null) => {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return String(dateStr)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 const unwrapDetail = (payload: unknown): Record<string, any> | null => {
   let current: unknown = payload
@@ -168,22 +187,26 @@ const ContentDetailPage = () => {
   const html =
     contentType === 'article' || contentType === 'business'
       ? detail?.content
-      : contentType === 'talent'
-        ? null
-        : detail?.description
+      : contentType === 'event'
+        ? ([detail?.description, detail?.content].find(
+            (v) => typeof v === 'string' && v.trim() && v.trim() !== '<p><br></p>',
+          ) || '')
+        : contentType === 'talent'
+          ? null
+          : detail?.description
 
+  const eventSignupCount = contentType === 'event'
+    ? Number(
+      detail?.current_participants
+      ?? (Array.isArray(detail?.registrations) ? detail.registrations.length : 0)
+      ?? 0,
+    )
+    : 0
   const isRoadshow = contentType === 'business' && detail?.category === 'roadshow'
   const memberState = detail?.member_state || {}
   const roadshowProjects = Array.isArray(detail?.roadshow_projects) ? detail.roadshow_projects : []
   const scoreDimensions = Array.isArray(detail?.score_dimensions) ? detail.score_dimensions : []
   const formFields = parseFormFields(detail?.form_fields)
-
-  const formatTime = (dateStr?: string) => {
-    if (!dateStr) return ''
-    const d = new Date(dateStr)
-    if (Number.isNaN(d.getTime())) return dateStr
-    return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
-  }
 
   const ensureLoggedIn = () => {
     const memberId = Taro.getStorageSync('member_id')
@@ -317,46 +340,59 @@ const ContentDetailPage = () => {
   return (
     <View className="flex flex-col h-full bg-[#F5F6FA]">
       <ScrollView scrollY className="flex-1">
-        {isCloudStorageImageUrl(cover) && (
+        {isDisplayableImageUrl(cover) && (
           <Image src={cover} mode="aspectFill" className="w-full aspect-video" />
         )}
-        <View className="bg-white px-4 py-5 mb-3">
+
+        {contentType === 'event' && (
+          <View className="bg-[#1B2A4A] px-3.5 py-2.5 flex flex-row items-center justify-between">
+            <View className="flex flex-row items-center gap-1.5">
+              <Users size={14} color="#E8D5A8" />
+              <Text className="block text-xs text-white">当前报名人数</Text>
+            </View>
+            <Text className="block text-sm font-bold text-[#E8D5A8]">
+              {eventSignupCount}{detail.max_participants ? ` / ${detail.max_participants}` : ''} 人
+            </Text>
+          </View>
+        )}
+
+        <View className="bg-white px-3.5 py-3.5 mb-2">
           {contentType === 'talent' ? (
-            <View className="flex flex-row items-center gap-3 mb-3">
-              {isCloudStorageImageUrl(talentAvatar) ? (
-                <Image src={talentAvatar} mode="aspectFill" className="w-14 h-14 rounded-full" />
+            <View className="flex flex-row items-center gap-2.5 mb-2">
+              {isDisplayableImageUrl(talentAvatar) ? (
+                <Image src={talentAvatar} mode="aspectFill" className="w-12 h-12 rounded-full" />
               ) : (
-                <View className="w-14 h-14 rounded-full bg-[#1B2A4A] flex items-center justify-center">
-                  <Text className="block text-white text-lg font-bold">{(title || '?')[0]}</Text>
+                <View className="w-12 h-12 rounded-full bg-[#1B2A4A] flex items-center justify-center">
+                  <Text className="block text-white text-base font-bold">{(title || '?')[0]}</Text>
                 </View>
               )}
               <View className="flex-1">
-                <Text className="block text-xl font-bold text-[#1A1D2E]">{title}</Text>
+                <Text className="block text-base font-bold text-[#1A1D2E]">{title}</Text>
                 {detail.contact && (
-                  <Text className="block text-sm text-gray-500 mt-1">{detail.contact}</Text>
+                  <Text className="block text-xs text-gray-500 mt-0.5">{detail.contact}</Text>
                 )}
               </View>
             </View>
           ) : (
             <>
-              <View className="flex flex-row items-center gap-2 mb-2 flex-wrap">
+              <View className="flex flex-row items-center gap-1.5 mb-1.5 flex-wrap">
                 {(detail.category || detail.event_type) && (
-                  <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-xs font-medium px-2.5 py-1">
+                  <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-xs font-medium px-2 py-0.5">
                     {CATEGORY_MAP[detail.category || detail.event_type] || detail.category || detail.event_type}
                   </Badge>
                 )}
                 {detail.stage && (
-                  <Badge className="bg-gray-100 text-gray-600 text-xs px-2 py-0">{detail.stage}</Badge>
+                  <Badge className="bg-gray-100 text-gray-600 text-xs px-1.5 py-0">{detail.stage}</Badge>
                 )}
               </View>
-              <Text className="block text-xl font-bold text-[#1A1D2E] leading-relaxed">{title}</Text>
+              <Text className="block text-base font-bold text-[#1A1D2E] leading-snug">{title}</Text>
             </>
           )}
 
           {contentType === 'talent' && Array.isArray(detail.industry_tags) && (
-            <View className="flex flex-row flex-wrap gap-2 mt-2">
+            <View className="flex flex-row flex-wrap gap-1.5 mt-1.5">
               {detail.industry_tags.map((code: string) => (
-                <Badge key={code} className="bg-[#FAF6F1] text-[#C9A96E] text-xs px-2 py-0">
+                <Badge key={code} className="bg-[#FAF6F1] text-[#C9A96E] text-xs px-1.5 py-0">
                   {industryMap[code] || code}
                 </Badge>
               ))}
@@ -364,73 +400,92 @@ const ContentDetailPage = () => {
           )}
 
           {detail.subtitle && (
-            <Text className="block text-sm text-gray-500 mt-2">{detail.subtitle}</Text>
+            <Text className="block text-xs text-gray-500 mt-1.5">{detail.subtitle}</Text>
           )}
           {detail.summary && (
-            <Text className="block text-sm text-gray-500 mt-2 leading-relaxed">{detail.summary}</Text>
+            <Text className="block text-xs text-gray-500 mt-1.5 leading-relaxed">{detail.summary}</Text>
           )}
 
-          {isRoadshow && (
-            <View className="flex flex-col gap-2 mt-4 pt-4 border-t border-gray-100">
-              {detail.start_time && (
-                <View className="flex flex-row items-center gap-2">
-                  <Clock size={14} color="#6B7280" />
-                  <Text className="block text-xs text-gray-500">开始：{formatTime(detail.start_time)}</Text>
-                </View>
-              )}
-              {detail.end_time && (
-                <View className="flex flex-row items-center gap-2">
-                  <Clock size={14} color="#6B7280" />
-                  <Text className="block text-xs text-gray-500">结束：{formatTime(detail.end_time)}</Text>
-                </View>
-              )}
-              <View className="flex flex-row items-center gap-2">
-                <Users size={14} color="#6B7280" />
+          {/* 通用元信息：发布时间 / 开始时间 / 浏览 / 状态 */}
+          <View className="flex flex-col gap-1.5 mt-3 pt-3 border-t border-gray-100">
+            {(detail.created_at || detail.published_at) && (
+              <View className="flex flex-row items-center gap-1.5">
+                <Clock size={12} color="#6B7280" />
+                <Text className="block text-xs text-gray-500">
+                  发布时间：{formatDetailTime(detail.published_at || detail.created_at)}
+                </Text>
+              </View>
+            )}
+            {detail.start_time && (
+              <View className="flex flex-row items-center gap-1.5">
+                <Clock size={12} color="#6B7280" />
+                <Text className="block text-xs text-gray-500">
+                  开始时间：{formatDetailTime(detail.start_time)}
+                </Text>
+              </View>
+            )}
+            {detail.end_time && (isRoadshow || contentType === 'event') && (
+              <View className="flex flex-row items-center gap-1.5">
+                <Clock size={12} color="#6B7280" />
+                <Text className="block text-xs text-gray-500">
+                  结束时间：{formatDetailTime(detail.end_time)}
+                </Text>
+              </View>
+            )}
+            {typeof detail.view_count !== 'undefined' && detail.view_count !== null && (
+              <View className="flex flex-row items-center gap-1.5">
+                <Eye size={12} color="#6B7280" />
+                <Text className="block text-xs text-gray-500">
+                  浏览次数：{detail.view_count || 0}
+                </Text>
+              </View>
+            )}
+            {contentType === 'event' && detail.status && (
+              <View className="flex flex-row items-center gap-1.5">
+                <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-xs px-1.5 py-0">
+                  状态：{STATUS_MAP[detail.status] || detail.status}
+                </Badge>
+              </View>
+            )}
+            {contentType === 'event' && detail.location && (
+              <View className="flex flex-row items-center gap-1.5">
+                <MapPin size={12} color="#6B7280" />
+                <Text className="block text-xs text-gray-500">{detail.location}</Text>
+              </View>
+            )}
+            {contentType === 'event' && (
+              <View className="flex flex-row items-center gap-1.5">
+                <Users size={12} color="#6B7280" />
+                <Text className="block text-xs text-gray-500">
+                  报名人数：{eventSignupCount}/{detail.max_participants || '∞'}人
+                </Text>
+              </View>
+            )}
+            {isRoadshow && (
+              <View className="flex flex-row items-center gap-1.5">
+                <Users size={12} color="#6B7280" />
                 <Text className="block text-xs text-gray-500">
                   已报名 {detail.registration_count || 0} 人
                   {memberState.is_registered ? ' · 您已报名' : ''}
                 </Text>
               </View>
-            </View>
-          )}
-
-          {contentType === 'event' && (
-            <View className="flex flex-col gap-2 mt-4 pt-4 border-t border-gray-100">
-              {detail.start_time && (
-                <View className="flex flex-row items-center gap-2">
-                  <Clock size={14} color="#6B7280" />
-                  <Text className="block text-xs text-gray-500">{formatTime(detail.start_time)}</Text>
-                </View>
-              )}
-              {detail.location && (
-                <View className="flex flex-row items-center gap-2">
-                  <MapPin size={14} color="#6B7280" />
-                  <Text className="block text-xs text-gray-500">{detail.location}</Text>
-                </View>
-              )}
-              <View className="flex flex-row items-center gap-2">
-                <Users size={14} color="#6B7280" />
-                <Text className="block text-xs text-gray-500">
-                  {detail.current_participants || 0}/{detail.max_participants || '∞'}人
-                </Text>
-              </View>
-            </View>
-          )}
+            )}
+          </View>
         </View>
 
         {isRoadshow && roadshowProjects.length > 0 && (
-          <View className="bg-white px-4 py-5 mb-3">
-            <Text className="block text-base font-semibold text-[#1A1D2E] mb-3">参与路演项目</Text>
-            <View className="flex flex-col gap-4">
+          <View className="bg-white px-3.5 py-3.5 mb-2">
+            <Text className="block text-sm font-semibold text-[#1A1D2E] mb-2.5">参与路演项目</Text>
+            <View className="flex flex-col gap-2.5">
               {roadshowProjects.map((project: any) => (
-                <View key={project.project_id} className="border border-gray-100 rounded-2xl overflow-hidden">
-                  {isCloudStorageImageUrl(project.cover_image) && (
+                <View key={project.project_id} className="border border-gray-100 rounded-xl overflow-hidden">
+                  {isDisplayableImageUrl(project.cover_image) && (
                     <Image src={project.cover_image} mode="aspectFill" className="w-full aspect-video" />
                   )}
-                  <View className="p-4">
+                  <View className="p-3">
                     <Text className="block text-sm font-semibold text-[#1A1D2E]">{project.title}</Text>
                     {memberState.can_score && scoreDimensions.map((dimension: any) => (
-                      <View key={dimension.id} className="mt-3">
+                      <View key={dimension.id} className="mt-2">
                         <Text className="block text-xs text-gray-500 mb-1">{dimension.name}</Text>
                         <StarPicker
                           value={scoreDraft[scoreKey(project.project_id, dimension.id)] || 0}
@@ -450,24 +505,28 @@ const ContentDetailPage = () => {
           </View>
         )}
 
-        <View className={`bg-white px-4 py-5 ${bottomPadding}`}>
-          <Text className="block text-base font-semibold text-[#1A1D2E] mb-3">
-            {contentType === 'talent' ? '过往经历' : '详细内容'}
+        <View className={`bg-white px-3.5 py-3.5 ${bottomPadding}`}>
+          <Text className="block text-sm font-semibold text-[#1A1D2E] mb-2.5">
+            {contentType === 'talent' ? '过往经历' : contentType === 'event' ? '活动详情' : '详细内容'}
           </Text>
           {contentType === 'talent' ? (
             <>
-              <Text className="block text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+              <Text className="block text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
                 {detail.experience || '暂无经历介绍'}
               </Text>
-              {isCloudStorageImageUrl(detail.card_image_url) && (
-                <View className="mt-4">
+              {isDisplayableImageUrl(detail.card_image_url) && (
+                <View className="mt-3">
                   <Text className="block text-sm font-semibold text-[#1A1D2E] mb-2">个人名片</Text>
                   <Image src={detail.card_image_url} mode="widthFix" className="w-full rounded-xl" />
                 </View>
               )}
             </>
           ) : (
-            <RichHtml html={html} />
+            <RichHtml
+              html={html}
+              className="text-xs"
+              emptyText={contentType === 'event' ? '暂无活动图文详情，请在后台活动管理中完善' : '暂无内容'}
+            />
           )}
         </View>
       </ScrollView>

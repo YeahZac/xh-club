@@ -76,7 +76,11 @@ export class MallService {
       return {
         code: 200,
         msg: 'success',
-        data: await this.uploadService.signRowFields(row, ['image_url', 'video_url']),
+        data: await this.uploadService.signDetailMediaFields(
+          row,
+          ['image_url', 'video_url'],
+          ['description'],
+        ),
       };
     } catch (error) {
       this.logger.error('获取商品详情失败', error);

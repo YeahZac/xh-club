@@ -408,7 +408,11 @@ export class AdminService {
     try {
       const row = await queryOne('SELECT * FROM events WHERE id = ?', [id])
       if (!row) throw new HttpException('活动不存在', HttpStatus.NOT_FOUND)
-      const signed = await this.uploadService.signRowFields(row, ['cover_image', 'video_url'])
+      const signed = await this.uploadService.signDetailMediaFields(
+        row,
+        ['cover_image', 'video_url'],
+        ['description', 'content'],
+      )
       return {
         ...signed,
         form_fields: this.normalizeFormFields(row.form_fields),
@@ -797,18 +801,42 @@ export class AdminService {
     }
   }
 
+  async getMallProductById(id: string) {
+    try {
+      const row = await queryOne('SELECT * FROM mall_products WHERE id = ?', [id])
+      if (!row) throw new HttpException('商品不存在', HttpStatus.NOT_FOUND)
+      return this.uploadService.signDetailMediaFields(
+        row,
+        ['image_url', 'video_url', 'cover_image'],
+        ['description'],
+      )
+    } catch (error) {
+      console.error('[AdminService] getMallProductById error:', error)
+      if (error instanceof HttpException) throw error
+      throw new HttpException('获取商品详情失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
   /** ====== 商品管理 ====== */
   async createMallProduct(dto: any) {
     try {
       const imageUrl = assertCloudStorageImageUrl(dto.image_url || dto.cover_image)
       const videoUrl = normalizeOptionalVideoUrl(dto.video_url)
       const result = await queryExecute(
-        `INSERT INTO mall_products (name, description, points_price, stock, image_url, video_url, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [dto.name, dto.description || null, dto.points_price || 0,
-         dto.stock || 0, imageUrl, videoUrl, dto.status || 'active']
+        `INSERT INTO mall_products (name, description, points_price, stock, image_url, video_url, status, category)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          dto.name,
+          dto.description || null,
+          dto.points_price || 0,
+          dto.stock || 0,
+          imageUrl,
+          videoUrl,
+          dto.status || 'active',
+          dto.category || 'gift',
+        ],
       )
-      return await queryOne('SELECT * FROM mall_products WHERE id = ?', [result.insertId])
+      return await this.getMallProductById(String(result.insertId))
     } catch (error) {
       console.error('[AdminService] createMallProduct error:', error)
       if (error instanceof HttpException) throw error
@@ -818,16 +846,29 @@ export class AdminService {
 
   async updateMallProduct(id: string, dto: any) {
     try {
-      const updates = { ...dto }
+      const updates: string[] = []
+      const params: any[] = []
+      const assign = (field: string, value: any) => {
+        updates.push(`${field} = ?`)
+        params.push(value)
+      }
+      if (dto.name !== undefined) assign('name', dto.name)
+      if (dto.description !== undefined) assign('description', dto.description || null)
+      if (dto.points_price !== undefined) assign('points_price', dto.points_price)
+      if (dto.stock !== undefined) assign('stock', dto.stock)
+      if (dto.status !== undefined) assign('status', dto.status)
+      if (dto.category !== undefined) assign('category', dto.category)
       if (dto.image_url !== undefined || dto.cover_image !== undefined) {
-        updates.image_url = assertCloudStorageImageUrl(dto.image_url || dto.cover_image)
-        delete updates.cover_image
+        assign('image_url', assertCloudStorageImageUrl(dto.image_url || dto.cover_image))
       }
       if (dto.video_url !== undefined) {
-        updates.video_url = normalizeOptionalVideoUrl(dto.video_url)
+        assign('video_url', normalizeOptionalVideoUrl(dto.video_url))
       }
-      await queryExecute('UPDATE mall_products SET ? WHERE id = ?', [updates, id])
-      return await queryOne('SELECT * FROM mall_products WHERE id = ?', [id])
+      if (!updates.length) throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
+      updates.push('updated_at = NOW()')
+      params.push(id)
+      await queryExecute(`UPDATE mall_products SET ${updates.join(', ')} WHERE id = ?`, params)
+      return await this.getMallProductById(id)
     } catch (error) {
       console.error('[AdminService] updateMallProduct error:', error)
       if (error instanceof HttpException) throw error

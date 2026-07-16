@@ -935,6 +935,22 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;')
 }
 
+function stripHtml(html) {
+  if (!html) return ''
+  return String(html)
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<\/p>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#039;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function showModal(html, options = {}) {
   const el = document.getElementById('modalContent')
   el.className = `bg-white rounded-2xl shadow-2xl w-full max-h-[85vh] overflow-y-auto fade-in ${options.wide ? 'max-w-4xl' : 'max-w-lg'}`
@@ -1791,7 +1807,8 @@ function renderEventForm(mode, event = null) {
           <div><label class="block text-sm font-medium text-gray-700 mb-1">费用(元)</label><input id="evFee" type="number" value="${escapeHtml(event?.fee ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">活动描述</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">活动详情</label>
+          <p class="text-xs text-gray-400 mb-2">支持图文排版，小程序活动详情页将按富文本展示</p>
           <div id="evDescEditor"></div>
         </div>
         <div class="border-t border-gray-100 pt-4">
@@ -2892,13 +2909,13 @@ async function loadMallProducts() {
     return
   }
   document.getElementById('mallCards').innerHTML = products.map(p => `
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition cursor-pointer" onclick="showMallModal('${p.id}')">
       <div class="h-28 bg-gradient-to-br from-brand-100 to-brand-50 flex items-center justify-center">
         ${p.image_url ? `<img src="${p.image_url}" class="w-full h-full object-cover" onerror="this.style.display='none'">` : `<span class="text-4xl">${p.category === 'gift' ? '🎁' : p.category === 'service' ? '🤝' : p.category === 'activity' ? '🎫' : p.category === 'learning' ? '📚' : '⭐'}</span>`}
       </div>
       <div class="p-4">
-        <p class="font-medium text-navy-800 mb-1">${p.name}</p>
-        <p class="text-xs text-gray-400 mb-2">${p.description || ''}</p>
+        <p class="font-medium text-navy-800 mb-1">${escapeHtml(p.name)}</p>
+        <p class="text-xs text-gray-400 mb-2 line-clamp-2">${escapeHtml(stripHtml(p.description || '') || '暂无详情')}</p>
         <div class="flex items-center justify-between">
           <span class="text-brand-600 font-bold">${p.points_price} 积分</span>
           <span class="text-xs text-gray-400">库存 ${p.stock}</span>
@@ -2908,17 +2925,24 @@ async function loadMallProducts() {
   `).join('')
 }
 
-function showMallModal() {
+async function showMallModal(id) {
+  let product = null
+  if (id) {
+    const res = await api(`/admin/mall-products/${id}`)
+    if (res.code !== 200 || !res.data) return toast(res.msg || '加载商品失败', 'error')
+    product = res.data
+  }
+  const isEdit = !!product
   showModal(`
-    <div class="p-6">
-      <h3 class="text-lg font-bold text-navy-800 mb-6">添加商品</h3>
+    <div class="p-6" style="max-width:720px">
+      <h3 class="text-lg font-bold text-navy-800 mb-6">${isEdit ? '编辑商品' : '添加商品'}</h3>
       <div class="space-y-4">
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">商品名称</label><input id="mlName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">商品名称</label><input id="mlName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" value="${escapeHtml(product?.name || '')}"></div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">商品图片 <span class="text-red-500">*</span></label>
           <p class="text-xs text-gray-400 mb-2">${mediaHint('product')}</p>
           <div class="flex items-center gap-3">
-            <input id="mlCover" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传商品图片">
+            <input id="mlCover" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传商品图片" value="${escapeHtml(product?.image_url || '')}">
             <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'mlCover', 690, 690)"></label>
           </div>
           ${mediaPreviewBox('product')}
@@ -2927,40 +2951,51 @@ function showMallModal() {
           <label class="block text-sm font-medium text-gray-700 mb-1">商品视频（选填）</label>
           <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，单文件 ≤200MB</p>
           <div class="flex items-center gap-3">
-            <input id="mlVideo" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传商品演示视频">
+            <input id="mlVideo" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传商品演示视频" value="${escapeHtml(product?.video_url || '')}">
             <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" onchange="uploadFile(this, 'mlVideo')"></label>
           </div>
         </div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">描述</label><input id="mlDesc" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">商品详情</label>
+          <p class="text-xs text-gray-400 mb-2">与文章/活动相同的富文本编辑器，小程序商品详情页将按图文展示</p>
+          <div id="mlDescEditor"></div>
+        </div>
         <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">积分价格</label><input id="mlPoints" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">库存</label><input id="mlStock" type="number" value="100" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">积分价格</label><input id="mlPoints" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" value="${escapeHtml(product?.points_price ?? '')}"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">库存</label><input id="mlStock" type="number" value="${escapeHtml(product?.stock ?? 100)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         </div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
-          <button onclick="createMallProduct()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
+          <button onclick="saveMallProduct(${isEdit ? `'${product.id}'` : 'null'})" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">${isEdit ? '保存' : '创建'}</button>
         </div>
       </div>
     </div>
-  `)
+  `, { wide: true })
+  initRichEditor('mlDescEditor', product?.description || '')
 }
 
-async function createMallProduct() {
+async function saveMallProduct(id) {
   if (!assertNoUploading()) return
   const body = {
     name: document.getElementById('mlName').value,
     image_url: document.getElementById('mlCover').value,
     video_url: document.getElementById('mlVideo').value || null,
-    description: document.getElementById('mlDesc').value,
+    description: getRichEditorHtml('mlDescEditor'),
     points_price: parseInt(document.getElementById('mlPoints').value) || 100,
     stock: parseInt(document.getElementById('mlStock').value) || 100,
     status: 'active'
   }
   if (!body.name.trim()) return toast('请输入商品名称', 'error')
   if (!body.image_url.trim()) return toast('商品图片为必填项', 'error')
-  const res = await api('/admin/mall-products', { method: 'POST', body })
-  if (res.code === 200) { toast('商品创建成功'); closeModal(); loadMallProducts(); }
-  else toast(res.msg || '创建失败', 'error')
+  const res = id
+    ? await api(`/admin/mall-products/${id}`, { method: 'PUT', body })
+    : await api('/admin/mall-products', { method: 'POST', body })
+  if (res.code === 200) { toast(id ? '保存成功' : '商品创建成功'); closeModal(); loadMallProducts(); }
+  else toast(res.msg || '保存失败', 'error')
+}
+
+async function createMallProduct() {
+  return saveMallProduct(null)
 }
 
 function switchMallTab(tab) {
