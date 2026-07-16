@@ -2,7 +2,7 @@ import { Controller, Get } from '@nestjs/common'
 import { AdminService } from '@/admin/admin.service'
 import { Public } from '@/auth/public.decorator'
 
-/** 小程序端公开读取邀请奖励规则（图文 + 积分/经验值） */
+/** 小程序端公开读取邀请奖励规则（图文 + 条件 + 多奖励） */
 @Controller('invitation')
 export class InvitationController {
   constructor(private readonly adminService: AdminService) {}
@@ -13,26 +13,52 @@ export class InvitationController {
     const list = await this.adminService.getActiveInvitationRulesForClient()
     const summary = {
       points_value: 0,
+      growth_value: 0,
       experience_value: 0,
+      earnings_value: 0,
+      contribution_value: 0,
+      conditions: [] as Array<{ code: string; label: string }>,
       content: '',
       rules: list,
     }
+
+    const conditionMap = new Map<string, { code: string; label: string }>()
     for (const rule of list) {
-      summary.points_value += Number(rule.points_value || rule.reward_value || 0) || 0
-      summary.experience_value += Number(rule.experience_value || 0) || 0
-      if (!summary.content && rule.content) {
-        summary.content = rule.content
+      summary.points_value += Number(rule.points_value || 0) || 0
+      summary.growth_value += Number(rule.growth_value || rule.experience_value || 0) || 0
+      summary.earnings_value += Number(rule.earnings_value || 0) || 0
+      summary.contribution_value += Number(rule.contribution_value || 0) || 0
+      const conditions = Array.isArray(rule.conditions) ? rule.conditions : []
+      for (const item of conditions) {
+        const key = `${item.code}:${item.label}`
+        if (!conditionMap.has(key)) conditionMap.set(key, item)
       }
     }
-    // 多条规则时拼接图文
-    if (list.length > 1) {
+    summary.experience_value = summary.growth_value
+    summary.earnings_value = Number(summary.earnings_value.toFixed(2))
+    summary.conditions = Array.from(conditionMap.values())
+
+    if (list.length === 1) {
+      summary.content = list[0].content || ''
+    } else if (list.length > 1) {
       summary.content = list
         .map((rule) => {
-          const head = `<p><strong>${rule.rule_name || '邀请奖励'}</strong>（积分 ${Number(rule.points_value || 0)} / 经验 ${Number(rule.experience_value || 0)}）</p>`
-          return `${head}${rule.content || ''}`
+          const rewardBits = [
+            Number(rule.points_value) > 0 ? `积分 ${rule.points_value}` : '',
+            Number(rule.growth_value) > 0 ? `成长值 ${rule.growth_value}` : '',
+            Number(rule.earnings_value) > 0 ? `收益 ¥${rule.earnings_value}` : '',
+            Number(rule.contribution_value) > 0 ? `贡献值 ${rule.contribution_value}` : '',
+          ].filter(Boolean).join(' / ')
+          const condText = (Array.isArray(rule.conditions) ? rule.conditions : [])
+            .map((c: any) => c.label)
+            .join('、')
+          const head = `<p><strong>${rule.rule_name || '邀请奖励'}</strong>${rewardBits ? `（${rewardBits}）` : ''}</p>`
+          const condHtml = condText ? `<p>触发条件：${condText}</p>` : ''
+          return `${head}${condHtml}${rule.content || ''}`
         })
-        .join('')
+        .join('<hr/>')
     }
+
     return { code: 200, msg: 'success', data: summary }
   }
 }

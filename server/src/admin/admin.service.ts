@@ -5,6 +5,13 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2'
 import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url'
 import { signAuthToken } from '@/auth/jwt'
 import { UploadService } from '@/upload/upload.service'
+import {
+  formatInviteRuleRow,
+  hasAnyInviteReward,
+  inferLegacyRewardType,
+  normalizeInviteConditions,
+  normalizeInviteRewards,
+} from '@/invitation/invitation-rule.util'
 
 interface UserRow extends RowDataPacket {
   id: number
@@ -1154,7 +1161,8 @@ export class AdminService {
   /** ====== 邀请奖励规则管理 ====== */
   async getInvitationRewardRules() {
     try {
-      return await queryRows('SELECT * FROM invitation_reward_rules ORDER BY created_at DESC')
+      const rows = await queryRows('SELECT * FROM invitation_reward_rules ORDER BY created_at DESC')
+      return (rows || []).map((row) => formatInviteRuleRow(row))
     } catch (error) {
       console.error('[AdminService] getInvitationRewardRules error:', error)
       throw new HttpException('获取邀请奖励规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
@@ -1163,58 +1171,102 @@ export class AdminService {
 
   async createInvitationRewardRule(dto: any) {
     try {
-      const points = Number(dto.points_value ?? dto.reward_value ?? 0) || 0
-      const experience = Number(dto.experience_value ?? 0) || 0
-      const rewardType = dto.reward_type
-        || (points > 0 && experience > 0 ? 'both' : points > 0 ? 'points' : experience > 0 ? 'contribution' : 'points')
+      if (!String(dto?.rule_name || '').trim()) {
+        throw new HttpException('规则名称不能为空', HttpStatus.BAD_REQUEST)
+      }
+      const conditions = normalizeInviteConditions(dto.conditions)
+      if (!conditions.length) {
+        throw new HttpException('请至少配置一个触发条件', HttpStatus.BAD_REQUEST)
+      }
+      const rewards = normalizeInviteRewards(dto)
+      const rewardType = hasAnyInviteReward(rewards) ? inferLegacyRewardType(rewards) : 'none'
+      const rewardValue = rewards.points_value || rewards.growth_value || rewards.contribution_value || 0
+
       const result = await queryExecute(
         `INSERT INTO invitation_reward_rules
-         (rule_name, rule_type, reward_type, reward_value, points_value, experience_value, content, conditions, max_rewards, is_active, start_date, end_date)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (rule_name, rule_type, reward_type, reward_value, points_value, experience_value, growth_value, earnings_value, contribution_value, content, conditions, max_rewards, is_active, start_date, end_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          dto.rule_name,
+          String(dto.rule_name).trim(),
           dto.rule_type || 'direct',
           rewardType,
-          points || experience,
-          points,
-          experience,
+          rewardValue,
+          rewards.points_value,
+          rewards.growth_value,
+          rewards.growth_value,
+          rewards.earnings_value,
+          rewards.contribution_value,
           dto.content || null,
-          dto.conditions ? JSON.stringify(dto.conditions) : null,
+          JSON.stringify(conditions),
           dto.max_rewards ?? -1,
           dto.is_active !== false,
           dto.start_date || null,
           dto.end_date || null,
         ],
       )
-      return await queryOne('SELECT * FROM invitation_reward_rules WHERE id = ?', [result.insertId])
+      return formatInviteRuleRow(
+        await queryOne('SELECT * FROM invitation_reward_rules WHERE id = ?', [result.insertId]),
+      )
     } catch (error) {
       console.error('[AdminService] createInvitationRewardRule error:', error)
+      if (error instanceof HttpException) throw error
       throw new HttpException('创建邀请奖励规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 
   async updateInvitationRewardRule(id: string, dto: any) {
     try {
-      const payload: Record<string, any> = { ...dto }
-      if (payload.points_value !== undefined) payload.points_value = Number(payload.points_value) || 0
-      if (payload.experience_value !== undefined) payload.experience_value = Number(payload.experience_value) || 0
-      if (payload.points_value !== undefined || payload.experience_value !== undefined) {
-        const points = payload.points_value ?? 0
-        const experience = payload.experience_value ?? 0
-        payload.reward_value = points || experience
-        if (!payload.reward_type) {
-          payload.reward_type = points > 0 && experience > 0
-            ? 'both'
-            : points > 0 ? 'points' : 'contribution'
+      const payload: Record<string, any> = {}
+      if (dto.rule_name !== undefined) {
+        const name = String(dto.rule_name || '').trim()
+        if (!name) throw new HttpException('规则名称不能为空', HttpStatus.BAD_REQUEST)
+        payload.rule_name = name
+      }
+      if (dto.rule_type !== undefined) payload.rule_type = dto.rule_type || 'direct'
+      if (dto.content !== undefined) payload.content = dto.content || null
+      if (dto.max_rewards !== undefined) payload.max_rewards = dto.max_rewards
+      if (dto.is_active !== undefined) payload.is_active = !!dto.is_active
+      if (dto.start_date !== undefined) payload.start_date = dto.start_date || null
+      if (dto.end_date !== undefined) payload.end_date = dto.end_date || null
+
+      if (dto.conditions !== undefined) {
+        const conditions = normalizeInviteConditions(dto.conditions)
+        if (!conditions.length) {
+          throw new HttpException('请至少配置一个触发条件', HttpStatus.BAD_REQUEST)
         }
+        payload.conditions = JSON.stringify(conditions)
       }
-      if (payload.conditions && typeof payload.conditions === 'object') {
-        payload.conditions = JSON.stringify(payload.conditions)
+
+      const rewardTouched = [
+        'points_value',
+        'growth_value',
+        'experience_value',
+        'earnings_value',
+        'contribution_value',
+        'reward_value',
+      ].some((key) => dto[key] !== undefined)
+      if (rewardTouched) {
+        const rewards = normalizeInviteRewards(dto)
+        payload.points_value = rewards.points_value
+        payload.growth_value = rewards.growth_value
+        payload.experience_value = rewards.growth_value
+        payload.earnings_value = rewards.earnings_value
+        payload.contribution_value = rewards.contribution_value
+        payload.reward_value = rewards.points_value || rewards.growth_value || rewards.contribution_value || 0
+        payload.reward_type = hasAnyInviteReward(rewards) ? inferLegacyRewardType(rewards) : 'none'
       }
+
+      if (!Object.keys(payload).length) {
+        throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
+      }
+
       await queryExecute('UPDATE invitation_reward_rules SET ? WHERE id = ?', [payload, id])
-      return await queryOne('SELECT * FROM invitation_reward_rules WHERE id = ?', [id])
+      return formatInviteRuleRow(
+        await queryOne('SELECT * FROM invitation_reward_rules WHERE id = ?', [id]),
+      )
     } catch (error) {
       console.error('[AdminService] updateInvitationRewardRule error:', error)
+      if (error instanceof HttpException) throw error
       throw new HttpException('更新邀请奖励规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
@@ -1229,16 +1281,16 @@ export class AdminService {
     }
   }
 
-  /** 小程序端读取启用中的邀请规则（含图文说明） */
+  /** 小程序端读取启用中的邀请规则（含图文说明、条件、多奖励） */
   async getActiveInvitationRulesForClient() {
     try {
       const rows = await queryRows(
-        `SELECT id, rule_name, rule_type, reward_type, reward_value, points_value, experience_value, content, is_active
+        `SELECT *
          FROM invitation_reward_rules
          WHERE is_active = 1
          ORDER BY id ASC`,
       )
-      const list = rows || []
+      const list = (rows || []).map((row) => formatInviteRuleRow(row))
       return Promise.all(
         list.map(async (row: any) => ({
           ...row,

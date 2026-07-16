@@ -785,8 +785,8 @@
       <div class="bg-gradient-to-r from-navy-800 to-navy-700 rounded-2xl p-5 mb-6 text-white">
         <h3 class="font-bold text-lg">邀请奖励规则配置</h3>
         <p class="text-sm text-white/80 mt-2 leading-relaxed">
-          在此配置「积分值 / 经验值」与图文规则说明。小程序首页「会员推荐」二级页会读取本页<strong>已启用</strong>规则：
-          顶部展示奖励数值，下方展示图文说明；每位会员还有唯一推荐码、推荐人数与推荐人员列表。
+          配置「触发条件（可增删）」与「奖励（积分 / 成长值 / 收益 / 贡献值，均可选填）」，并补充图文说明。
+          小程序首页「会员推荐」会读取<strong>已启用</strong>规则：展示推荐码、推荐人数、推荐人员列表、条件与奖励说明。
         </p>
       </div>
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
@@ -4257,6 +4257,31 @@ async function deleteMemberLevel(id) {
 }
 
 // ===== 邀请奖励 =====
+const INVITE_CONDITION_PRESETS = [
+  { code: 'invitee_register_login', label: '新会员输入推荐码并登录小程序' },
+  { code: 'invitee_deal', label: '邀请的新会员成交项目后' },
+  { code: 'invitee_event', label: '新会员参加活动后' },
+  { code: 'invitee_paid_member', label: '新会员成为付费会员后' },
+  { code: 'invitee_talent', label: '新会员完成人才入驻后' },
+  { code: 'invitee_mall_order', label: '新会员完成商城兑换/下单后' },
+]
+let _invDraftConditions = []
+
+function formatInviteRewardText(r) {
+  const bits = []
+  if (Number(r.points_value) > 0) bits.push(`积分 ${r.points_value}`)
+  if (Number(r.growth_value || r.experience_value) > 0) bits.push(`成长值 ${r.growth_value || r.experience_value}`)
+  if (Number(r.earnings_value) > 0) bits.push(`收益 ¥${r.earnings_value}`)
+  if (Number(r.contribution_value) > 0) bits.push(`贡献值 ${r.contribution_value}`)
+  return bits.length ? bits.join(' · ') : '未配置奖励数值'
+}
+
+function formatInviteConditionText(r) {
+  const list = Array.isArray(r.conditions) ? r.conditions : []
+  if (!list.length) return '未配置触发条件'
+  return list.map(item => item.label || item.code).join('；')
+}
+
 async function loadInvitationRules() {
   const res = await api('/admin/invitation-rules')
   const list = document.getElementById('invitationRulesList')
@@ -4266,11 +4291,8 @@ async function loadInvitationRules() {
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
             <p class="font-medium text-navy-800">${escapeHtml(r.rule_name || '')}</p>
-            <p class="text-xs text-gray-400 mt-1">
-              积分值: <span class="text-brand-600 font-medium">${Number(r.points_value ?? r.reward_value ?? 0)}</span>
-              · 经验值: <span class="text-brand-600 font-medium">${Number(r.experience_value ?? 0)}</span>
-              · 状态: ${r.is_active ? '启用' : '禁用'}
-            </p>
+            <p class="text-xs text-gray-500 mt-1"><span class="text-gray-400">触发条件：</span>${escapeHtml(formatInviteConditionText(r))}</p>
+            <p class="text-xs text-brand-600 mt-1 font-medium">${escapeHtml(formatInviteRewardText(r))} · ${r.is_active ? '启用' : '禁用'}</p>
             ${r.content ? `<div class="mt-2 text-xs text-gray-500 line-clamp-2 prose prose-sm max-w-none">${r.content}</div>` : '<p class="text-xs text-gray-300 mt-2">暂无图文说明</p>'}
           </div>
           <div class="flex gap-2 shrink-0">
@@ -4286,35 +4308,122 @@ async function loadInvitationRules() {
   }
 }
 
+function renderInvConditionDraftList() {
+  const box = document.getElementById('invConditionList')
+  if (!box) return
+  if (!_invDraftConditions.length) {
+    box.innerHTML = '<p class="text-xs text-gray-400 py-2">尚未添加条件，请从下方选择或自定义添加</p>'
+    return
+  }
+  box.innerHTML = _invDraftConditions.map((item, index) => `
+    <div class="flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 rounded-lg">
+      <span class="text-sm text-navy-800">${escapeHtml(item.label)}</span>
+      <button type="button" onclick="removeInvCondition(${index})" class="text-xs text-red-600 hover:bg-red-50 px-2 py-1 rounded">删除</button>
+    </div>
+  `).join('')
+}
+
+function addInvConditionFromPreset() {
+  const sel = document.getElementById('invConditionPreset')
+  if (!sel || !sel.value) return toast('请选择条件', 'error')
+  const preset = INVITE_CONDITION_PRESETS.find(item => item.code === sel.value)
+  if (!preset) return
+  if (_invDraftConditions.some(item => item.code === preset.code)) {
+    return toast('该条件已添加', 'error')
+  }
+  _invDraftConditions.push({ code: preset.code, label: preset.label })
+  sel.value = ''
+  renderInvConditionDraftList()
+}
+
+function addInvCustomCondition() {
+  const input = document.getElementById('invCustomCondition')
+  const label = (input?.value || '').trim()
+  if (!label) return toast('请输入自定义条件', 'error')
+  if (_invDraftConditions.some(item => item.label === label)) {
+    return toast('该条件已添加', 'error')
+  }
+  _invDraftConditions.push({ code: 'custom', label })
+  input.value = ''
+  renderInvConditionDraftList()
+}
+
+function removeInvCondition(index) {
+  _invDraftConditions.splice(index, 1)
+  renderInvConditionDraftList()
+}
+
 function showAddInvitationRuleModal(rule) {
   const isEdit = !!(rule && rule.id)
+  _invDraftConditions = Array.isArray(rule?.conditions) && rule.conditions.length
+    ? rule.conditions.map(item => ({ code: item.code || 'custom', label: item.label || item.code }))
+    : [{ code: 'invitee_register_login', label: '新会员输入推荐码并登录小程序' }]
+
+  const presetOptions = INVITE_CONDITION_PRESETS
+    .map(item => `<option value="${item.code}">${item.label}</option>`)
+    .join('')
+
   showModal(`
-    <div class="p-6 max-h-[90vh] overflow-y-auto" style="max-width:760px">
+    <div class="p-6 max-h-[90vh] overflow-y-auto" style="max-width:820px">
       <h3 class="text-lg font-bold text-navy-800 mb-1">${isEdit ? '编辑' : '新增'}邀请奖励规则</h3>
-      <p class="text-xs text-gray-400 mb-4">图文说明将直接展示在小程序「会员推荐」页；积分值 / 经验值会汇总展示在页面顶部。</p>
-      <div class="space-y-4">
+      <p class="text-xs text-gray-400 mb-4">触发条件可增删；奖励（积分/成长值/收益/贡献值）均可选填，支持同时配置多项。小程序「会员推荐」页会读取已启用规则。</p>
+      <div class="space-y-5">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">规则名称 *</label>
-          <input id="invRuleName" value="${escapeHtml(rule?.rule_name || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 邀请好友注册奖励">
+          <input id="invRuleName" value="${escapeHtml(rule?.rule_name || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 邀请注册奖励">
         </div>
-        <div class="grid grid-cols-2 gap-3">
+
+        <div class="border border-gray-100 rounded-2xl p-4 space-y-3">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">积分值 *</label>
-            <input id="invPointsValue" type="number" min="0" value="${Number(rule?.points_value ?? rule?.reward_value ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 100">
-            <p class="text-xs text-gray-400 mt-1">成功邀请好友后奖励的积分数量</p>
+            <p class="text-sm font-semibold text-navy-800">触发条件 *</p>
+            <p class="text-xs text-gray-400 mt-0.5">满足所选条件后，邀请人可获得下方奖励</p>
           </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">经验值 *</label>
-            <input id="invExperienceValue" type="number" min="0" value="${Number(rule?.experience_value ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 50">
-            <p class="text-xs text-gray-400 mt-1">成功邀请好友后奖励的经验数量</p>
+          <div id="invConditionList" class="space-y-2"></div>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <select id="invConditionPreset" class="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+              <option value="">选择预设条件...</option>
+              ${presetOptions}
+            </select>
+            <button type="button" onclick="addInvConditionFromPreset()" class="px-4 py-2 bg-navy-100 text-navy-700 rounded-xl text-sm">添加条件</button>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input id="invCustomCondition" class="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none" placeholder="自定义条件，如：新会员完成首次发帖后">
+            <button type="button" onclick="addInvCustomCondition()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">添加自定义</button>
           </div>
         </div>
+
+        <div class="border border-gray-100 rounded-2xl p-4 space-y-3">
+          <div>
+            <p class="text-sm font-semibold text-navy-800">邀请成功可获得（均可选填）</p>
+            <p class="text-xs text-gray-400 mt-0.5">可同时填写多项；不填表示该奖励为 0</p>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">积分</label>
+              <input id="invPointsValue" type="number" min="0" step="1" value="${Number(rule?.points_value ?? 0)}" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如 100">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">成长值</label>
+              <input id="invGrowthValue" type="number" min="0" step="1" value="${Number(rule?.growth_value ?? rule?.experience_value ?? 0)}" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如 50">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">收益（元）</label>
+              <input id="invEarningsValue" type="number" min="0" step="0.01" value="${Number(rule?.earnings_value ?? 0)}" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如 20">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">贡献值</label>
+              <input id="invContributionValue" type="number" min="0" step="1" value="${Number(rule?.contribution_value ?? 0)}" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如 30">
+            </div>
+          </div>
+        </div>
+
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">规则说明（图文，必填）*</label>
-          <p class="text-xs text-gray-400 mb-2">支持标题、加粗、颜色、图片、表情、附件。请写清奖励条件、发放规则与注意事项。</p>
-          <div id="invRuleContent" class="bg-white border border-gray-200 rounded-xl overflow-hidden" style="min-height:280px"></div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">规则说明（图文）</label>
+          <p class="text-xs text-gray-400 mb-2">支持标题、排版、图片、表情、附件，将展示在小程序会员推荐页</p>
+          <div id="invRuleContent" class="bg-white border border-gray-200 rounded-xl overflow-hidden" style="min-height:240px"></div>
         </div>
-        <div class="flex justify-end gap-3 pt-2">
+
+        <div class="flex justify-end gap-3 pt-1">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
           <button onclick="saveInvitationRule(${isEdit ? rule.id : 'null'})" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
         </div>
@@ -4322,6 +4431,7 @@ function showAddInvitationRuleModal(rule) {
     </div>
   `, { wide: true })
   setTimeout(() => {
+    renderInvConditionDraftList()
     initRichEditor('invRuleContent', rule?.content || '')
   }, 80)
 }
@@ -4337,13 +4447,15 @@ async function saveInvitationRule(id) {
   const body = {
     rule_name: document.getElementById('invRuleName').value.trim(),
     rule_type: 'direct',
+    conditions: _invDraftConditions.slice(),
     points_value: parseInt(document.getElementById('invPointsValue').value, 10) || 0,
-    experience_value: parseInt(document.getElementById('invExperienceValue').value, 10) || 0,
+    growth_value: parseInt(document.getElementById('invGrowthValue').value, 10) || 0,
+    earnings_value: parseFloat(document.getElementById('invEarningsValue').value) || 0,
+    contribution_value: parseInt(document.getElementById('invContributionValue').value, 10) || 0,
     content: getRichEditorHtml('invRuleContent'),
   }
   if (!body.rule_name) return toast('请填写规则名称', 'error')
-  if (body.points_value <= 0 && body.experience_value <= 0) return toast('请至少配置积分值或经验值', 'error')
-  if (!body.content || body.content === '<p><br></p>') return toast('请填写规则图文说明', 'error')
+  if (!body.conditions.length) return toast('请至少添加一个触发条件', 'error')
 
   const res = id
     ? await api(`/admin/invitation-rules/${id}`, { method: 'PUT', body })

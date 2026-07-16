@@ -37,9 +37,12 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['business_opportunities', 'form_fields', 'JSON NULL'],
   // 会员推荐码
   ['members', 'invite_code', 'VARCHAR(32) NULL'],
-  // 邀请奖励：积分值 / 经验值 / 图文说明
+  // 邀请奖励：积分 / 成长值 / 收益 / 贡献值 / 图文
   ['invitation_reward_rules', 'points_value', 'INT NOT NULL DEFAULT 0'],
   ['invitation_reward_rules', 'experience_value', 'INT NOT NULL DEFAULT 0'],
+  ['invitation_reward_rules', 'growth_value', 'INT NOT NULL DEFAULT 0'],
+  ['invitation_reward_rules', 'earnings_value', 'DECIMAL(14,2) NOT NULL DEFAULT 0'],
+  ['invitation_reward_rules', 'contribution_value', 'INT NOT NULL DEFAULT 0'],
   ['invitation_reward_rules', 'content', 'MEDIUMTEXT NULL'],
 ]
 
@@ -169,6 +172,9 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       reward_value INT NOT NULL DEFAULT 0,
       points_value INT NOT NULL DEFAULT 0,
       experience_value INT NOT NULL DEFAULT 0,
+      growth_value INT NOT NULL DEFAULT 0,
+      earnings_value DECIMAL(14,2) NOT NULL DEFAULT 0,
+      contribution_value INT NOT NULL DEFAULT 0,
       content MEDIUMTEXT NULL,
       conditions JSON NULL,
       max_rewards INT DEFAULT -1,
