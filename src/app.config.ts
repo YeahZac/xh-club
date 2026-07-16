@@ -1,6 +1,7 @@
 export default defineAppConfig({
   pages: [
     'pages/index/index',
+    'pages/webview/index',
     'pages/event-register/index',
     'pages/content-detail/index',
     'pages/talent-settle/index',

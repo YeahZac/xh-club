@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/carousel"
 import { Button } from "@/components/ui/button"
 import { getResponseList } from "@/lib/api-response"
+import { openContentDetail, openExternalUrl, openMiniProgram, pickId } from "@/lib/content-navigation"
 import { Network } from "@/network"
 
 /* ── Types ── */
@@ -59,12 +60,13 @@ interface HomepageFeedItem {
 /* ── Carousel Dots ── */
 const CarouselDots = ({ total }: { total: number }) => {
   const { current } = useCarousel()
+  if (total <= 1) return null
   return (
-    <View className="flex flex-row justify-center gap-1 mt-3">
+    <View className="absolute bottom-3 left-0 right-0 flex flex-row justify-center gap-1.5 z-20 pointer-events-none">
       {Array.from({ length: total }).map((_, i) => (
         <View
           key={i}
-          className={`h-1 rounded-full transition-all ${i === current ? 'w-5 bg-[#C9A96E]' : 'w-1 bg-gray-300'}`}
+          className={`h-1.5 rounded-full transition-all ${i === current ? 'w-4 bg-white' : 'w-1.5 bg-white/50'}`}
         />
       ))}
     </View>
@@ -180,72 +182,48 @@ const IndexPage = () => {
   }
 
   const openFeedItem = (item: HomepageFeedItem) => {
-    if (item.detail_type === 'product') {
-      Taro.navigateTo({ url: `/pages/mall/product-detail/index?id=${item.detail_id}` })
-      return
-    }
-    const type = item.detail_type || 'project'
-    Taro.navigateTo({ url: `/pages/content-detail/index?type=${type}&id=${item.detail_id}` })
+    openContentDetail(item.detail_type || item.content_type, item.detail_id || item.item_id)
   }
 
   const leftFeed = feedItems.filter((_, index) => index % 2 === 0)
   const rightFeed = feedItems.filter((_, index) => index % 2 === 1)
 
   const handleBannerClick = (banner: BannerItem) => {
-    console.log('[首页] Banner点击:', banner.link_type, banner.link_config)
     const config = banner.link_config || {}
     switch (banner.link_type) {
       case 'article':
-        if (config.article_id) {
-          Taro.navigateTo({ url: `/pages/content-detail/index?type=article&id=${config.article_id}` })
-        }
+        openContentDetail('article', pickId(config.article_id, banner.link_id))
         break
       case 'event':
-        if (config.event_id) {
-          Taro.navigateTo({ url: `/pages/content-detail/index?type=event&id=${config.event_id}` })
-        }
+        openContentDetail('event', pickId(config.event_id, banner.link_id))
         break
       case 'project':
-        if (config.project_id) {
-          Taro.navigateTo({ url: `/pages/content-detail/index?type=project&id=${config.project_id}` })
-        }
+        openContentDetail('project', pickId(config.project_id, banner.link_id))
         break
       case 'financing':
       case 'roadshow':
       case 'resource':
-        if (config.business_id) {
-          Taro.navigateTo({ url: `/pages/content-detail/index?type=business&id=${config.business_id}` })
+        if (pickId(config.business_id, banner.link_id)) {
+          openContentDetail('business', pickId(config.business_id, banner.link_id))
         } else {
           Taro.switchTab({ url: '/pages/business/index' })
         }
         break
       case 'product':
-        if (config.product_id) {
-          Taro.navigateTo({ url: `/pages/mall/product-detail/index?id=${config.product_id}` })
+        if (pickId(config.product_id, banner.link_id)) {
+          openContentDetail('product', pickId(config.product_id, banner.link_id))
         } else {
           Taro.switchTab({ url: '/pages/mall/index' })
         }
         break
       case 'link':
-        if (config.url) {
-          Taro.setClipboardData({
-            data: config.url,
-            success: () => Taro.showToast({ title: '链接已复制', icon: 'none' })
-          })
-        }
+        openExternalUrl(String(config.url || ''))
         break
       case 'miniapp':
-        if (config.appid && config.path) {
-          Taro.navigateToMiniProgram({
-            appId: config.appid,
-            path: config.path,
-          })
-        }
+        openMiniProgram(String(config.appid || ''), String(config.path || ''))
         break
       default:
-        if (banner.link_id) {
-          Taro.showToast({ title: '暂不支持该跳转类型', icon: 'none' })
-        }
+        Taro.showToast({ title: '暂不支持该跳转类型', icon: 'none' })
         break
     }
   }
@@ -277,7 +255,7 @@ const IndexPage = () => {
   return (
     <ScrollView scrollY className="h-full bg-[#F5F6FA]">
       {/* ── Custom Header ── */}
-      <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pb-5">
+      <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pb-4">
         <View style={{ height: `${statusBarHeight}px` }} />
         {isMiniApp && (
           <View className="flex flex-row items-center justify-between mb-3">
@@ -315,15 +293,14 @@ const IndexPage = () => {
 
       {/* ── Banner Carousel ── */}
       {banners.length > 0 && (
-        <View className="px-4 -mt-2">
+        <View className="px-4 pt-3">
           <Carousel
             key={banners.map((item) => item.id).join('-')}
             opts={{ autoplay: true, interval: 4000, duration: 500, loop: true }}
             className="w-full"
           >
-            {/* 小程序端 Swiper 依赖明确高度；aspect + 绝对填充比 h-full 更稳 */}
             <View
-              className="relative w-full overflow-hidden rounded-2xl"
+              className="relative w-full overflow-hidden rounded-2xl shadow-md"
               style={{ paddingBottom: `${(28 / 69) * 100}%` }}
             >
               <View className="absolute inset-0">
@@ -344,11 +321,11 @@ const IndexPage = () => {
                           />
                         )}
                         {loadedBannerImages.has(banner.id) ? (
-                          <View className="absolute left-0 bottom-0 right-0 p-4" style={{ background: 'linear-gradient(transparent, rgba(27,42,74,0.85))' }}>
+                          <View className="absolute left-0 bottom-0 right-0 p-4 pb-8" style={{ background: 'linear-gradient(transparent, rgba(27,42,74,0.85))' }}>
                             <Text className="block text-white text-base font-bold">{banner.title}</Text>
                           </View>
                         ) : (
-                          <View className="h-full flex flex-col justify-end p-5">
+                          <View className="h-full flex flex-col justify-end p-5 pb-8">
                             <View className="absolute -right-6 -top-6 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
                             <View className="absolute left-0 bottom-0 right-0 h-1 bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8]" />
                             <Text className="block text-white text-lg font-bold mb-1 relative z-10">{banner.title}</Text>
@@ -362,8 +339,8 @@ const IndexPage = () => {
                   ))}
                 </CarouselContent>
               </View>
+              <CarouselDots total={banners.length} />
             </View>
-            <CarouselDots total={banners.length} />
           </Carousel>
         </View>
       )}
@@ -426,7 +403,7 @@ const IndexPage = () => {
                       <View className="p-3">
                         <Text className="block text-sm font-semibold text-[#1A1D2E] leading-snug">{item.title}</Text>
                         <View className="flex flex-row items-center justify-between mt-2">
-                          <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-[10px] px-2 py-0">
+                          <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-xs font-medium px-2.5 py-1">
                             {item.content_type_label || item.content_type}
                           </Badge>
                           <View className="flex flex-row items-center gap-1">

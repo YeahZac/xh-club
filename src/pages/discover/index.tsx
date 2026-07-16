@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { getResponseList } from "@/lib/api-response"
+import { openContentDetail } from "@/lib/content-navigation"
 import { Network } from "@/network"
 
 interface EventFormField {
@@ -357,7 +358,11 @@ const DiscoverPage = () => {
             <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 220px)' }}>
               <View className="grid grid-cols-2 gap-3 pb-8">
                 {products.map((item) => (
-                  <Card key={item.id} className="shadow-sm border-0">
+                  <Card
+                    key={item.id}
+                    className="shadow-sm border-0"
+                    onClick={() => openContentDetail('product', item.id)}
+                  >
                     <View className="bg-gradient-to-br from-[#FAF6F1] to-[#F5F0E8] aspect-square flex items-center justify-center">
                       {isCloudStorageImageUrl(item.image_url) ? (
                         <Image src={item.image_url} mode="aspectFill" className="w-full h-full" />
