@@ -1,6 +1,6 @@
 import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common'
 import { queryRows } from '@/storage/database/mysql-client'
-import { normalizeMediaUrl } from '@/utils/media-url'
+import { UploadService } from '@/upload/upload.service'
 
 function parseLinkConfig(value: unknown): Record<string, unknown> {
   if (!value) return {}
@@ -17,6 +17,8 @@ function parseLinkConfig(value: unknown): Record<string, unknown> {
 
 @Controller('banners')
 export class BannersController {
+  constructor(private readonly uploadService: UploadService) {}
+
   @Get()
   async getBanners() {
     try {
@@ -28,14 +30,17 @@ export class BannersController {
            AND (end_time IS NULL OR end_time >= NOW())
          ORDER BY sort_order ASC`
       )
+      const data = await Promise.all(
+        rows.map(async (row: any) => ({
+          ...row,
+          image_url: await this.uploadService.signMediaUrl(row.image_url),
+          link_config: parseLinkConfig(row.link_config),
+        })),
+      )
       return {
         code: 200,
         msg: 'success',
-        data: rows.map((row: any) => ({
-          ...row,
-          image_url: normalizeMediaUrl(row.image_url),
-          link_config: parseLinkConfig(row.link_config),
-        })),
+        data,
       }
     } catch (error) {
       console.error('[BannersController] getBanners error:', error)

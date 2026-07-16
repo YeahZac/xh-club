@@ -2,7 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { queryRows, queryOne, queryExecute, withTransaction } from '@/storage/database/mysql-client';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
-import { isCloudStorageUrl } from '@/utils/media-url';
+import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url';
+import { UploadService } from '@/upload/upload.service';
 
 export interface ProductRow extends RowDataPacket {
   id: string;
@@ -34,6 +35,8 @@ export interface MemberRow extends RowDataPacket {
 export class MallService {
   private readonly logger = new Logger(MallService.name);
 
+  constructor(private readonly uploadService: UploadService) {}
+
   // ==================== 商品管理 ====================
 
   async getProducts(category?: string) {
@@ -43,13 +46,21 @@ export class MallService {
           'SELECT * FROM mall_products WHERE status = ? AND category = ? ORDER BY sort_order DESC',
           ['active', category]
         );
-        return { code: 200, msg: 'success', data: rows };
+        return {
+          code: 200,
+          msg: 'success',
+          data: await this.uploadService.signRowsFields(rows, ['image_url', 'video_url']),
+        };
       }
       const rows = await queryRows<ProductRow>(
         'SELECT * FROM mall_products WHERE status = ? ORDER BY sort_order DESC',
         ['active']
       );
-      return { code: 200, msg: 'success', data: rows };
+      return {
+        code: 200,
+        msg: 'success',
+        data: await this.uploadService.signRowsFields(rows, ['image_url', 'video_url']),
+      };
     } catch (error) {
       this.logger.error('获取商品列表失败', error);
       return { code: 500, msg: '获取商品列表失败', data: null };
@@ -62,7 +73,11 @@ export class MallService {
       if (!row) {
         return { code: 404, msg: '商品不存在', data: null };
       }
-      return { code: 200, msg: 'success', data: row };
+      return {
+        code: 200,
+        msg: 'success',
+        data: await this.uploadService.signRowFields(row, ['image_url', 'video_url']),
+      };
     } catch (error) {
       this.logger.error('获取商品详情失败', error);
       return { code: 500, msg: '获取商品详情失败', data: null };
@@ -91,12 +106,17 @@ export class MallService {
       const result = await queryExecute(
         `INSERT INTO mall_products (name, description, image_url, video_url, points_price, cash_price, stock, category, enable_distribution, distribution_rate, status, sort_order)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0)`,
-        [data.name, data.description || null, data.image_url, data.video_url || null,
+        [data.name, data.description || null, canonicalizeCloudStorageUrl(data.image_url),
+         data.video_url ? canonicalizeCloudStorageUrl(data.video_url) : null,
          data.points_price, data.cash_price || '0', data.stock, data.category,
          data.enable_distribution || false, data.distribution_rate || '0']
       );
       const row = await queryOne<ProductRow>('SELECT * FROM mall_products WHERE id = ?', [result.insertId]);
-      return { code: 200, msg: '创建成功', data: row };
+      return {
+        code: 200,
+        msg: '创建成功',
+        data: row ? await this.uploadService.signRowFields(row, ['image_url', 'video_url']) : row,
+      };
     } catch (error) {
       this.logger.error('创建商品失败', error);
       return { code: 500, msg: '创建商品失败', data: null };

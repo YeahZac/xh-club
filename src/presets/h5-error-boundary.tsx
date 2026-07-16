@@ -160,7 +160,32 @@ export const showH5ErrorOverlay = (
   console.error('[H5ErrorOverlay] Showing error overlay:', error, options);
 };
 
+const isIgnorableMediaError = (event: ErrorEvent) => {
+  const target = event.target;
+  // 资源加载失败（img/video 等）会以 EventTarget 形式出现，且通常没有 event.error
+  if (target && target !== window) {
+    const tag = ((target as Element).tagName || '').toUpperCase();
+    if (
+      tag === 'IMG' ||
+      tag === 'VIDEO' ||
+      tag === 'AUDIO' ||
+      tag === 'SOURCE' ||
+      tag.includes('IMAGE')
+    ) {
+      return true;
+    }
+  }
+  // Taro H5 Image.onError 常抛出空 message 的 ErrorEvent
+  if (!event.error && !event.message) {
+    return true;
+  }
+  return false;
+};
+
 const handleWindowError = (event: ErrorEvent) => {
+  if (isIgnorableMediaError(event)) {
+    return;
+  }
   const error =
     event.error || new Error(event.message || 'Unknown H5 runtime error');
   showH5ErrorOverlay(error, { source: 'window.error' });

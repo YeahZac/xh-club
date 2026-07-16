@@ -2,8 +2,9 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { queryRows, queryOne, queryExecute, getConnectionStatus, testConnection, getPool } from '@/storage/database/mysql-client'
 import * as bcrypt from 'bcryptjs'
 import { RowDataPacket, ResultSetHeader } from 'mysql2'
-import { normalizeMediaUrl } from '@/utils/media-url'
+import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url'
 import { signAuthToken } from '@/auth/jwt'
+import { UploadService } from '@/upload/upload.service'
 
 interface UserRow extends RowDataPacket {
   id: number
@@ -42,34 +43,27 @@ function parseJsonObject(value: unknown): Record<string, unknown> {
   }
 }
 
-function normalizeBannerRow(row: any) {
-  if (!row) return row
-  return {
-    ...row,
-    image_url: normalizeMediaUrl(row.image_url),
-    link_config: parseJsonObject(row.link_config),
-  }
-}
-
 function assertCloudStorageImageUrl(value: unknown): string {
   const url = typeof value === 'string' ? value.trim() : ''
-  if (!/^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)\//i.test(url)) {
+  if (!isCloudStorageUrl(url)) {
     throw new HttpException('封面图片为必填项，且必须使用微信云托管对象存储 URL', HttpStatus.BAD_REQUEST)
   }
-  return url
+  return canonicalizeCloudStorageUrl(url)
 }
 
 function normalizeOptionalVideoUrl(value: unknown): string | null {
   if (value === undefined || value === null || value === '') return null
   const url = typeof value === 'string' ? value.trim() : ''
-  if (!/^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)\//i.test(url)) {
+  if (!isCloudStorageUrl(url)) {
     throw new HttpException('视频必须使用微信云托管对象存储 URL', HttpStatus.BAD_REQUEST)
   }
-  return url
+  return canonicalizeCloudStorageUrl(url)
 }
 
 @Injectable()
 export class AdminService {
+  constructor(private readonly uploadService: UploadService) {}
+
   /** 执行原始 SQL */
   async executeRaw(sql: string): Promise<any> {
     const pool = getPool()
@@ -210,10 +204,20 @@ export class AdminService {
   }
 
   /** ====== Banner 管理 ====== */
+  private async normalizeBannerRow(row: any) {
+    if (!row) return row
+    return {
+      ...row,
+      image_url: await this.uploadService.signMediaUrl(row.image_url),
+      link_config: parseJsonObject(row.link_config),
+    }
+  }
+
+  /** ====== Banner 管理 ====== */
   async getBanners() {
     try {
       const rows = await queryRows('SELECT * FROM banners ORDER BY sort_order ASC')
-      return rows.map(normalizeBannerRow)
+      return Promise.all(rows.map((row) => this.normalizeBannerRow(row)))
     } catch (error) {
       console.error('[AdminService] getBanners error:', error)
       throw new HttpException('获取 Banner 列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
@@ -230,7 +234,7 @@ export class AdminService {
          dto.link_config ? JSON.stringify(dto.link_config) : null,
          dto.sort_order || 0, dto.is_active !== false, dto.start_time || null, dto.end_time || null]
       )
-      return normalizeBannerRow(await queryOne('SELECT * FROM banners WHERE id = ?', [result.insertId]))
+      return this.normalizeBannerRow(await queryOne('SELECT * FROM banners WHERE id = ?', [result.insertId]))
     } catch (error) {
       console.error('[AdminService] createBanner error:', error)
       if (error instanceof HttpException) throw error
@@ -255,7 +259,7 @@ export class AdminService {
         throw new HttpException('没有可更新的 Banner 字段', HttpStatus.BAD_REQUEST)
       }
       await queryExecute('UPDATE banners SET ? WHERE id = ?', [updates, id])
-      return normalizeBannerRow(await queryOne('SELECT * FROM banners WHERE id = ?', [id]))
+      return this.normalizeBannerRow(await queryOne('SELECT * FROM banners WHERE id = ?', [id]))
     } catch (error) {
       console.error('[AdminService] updateBanner error:', error)
       if (error instanceof HttpException) throw error
@@ -315,7 +319,8 @@ export class AdminService {
   /** ====== 活动管理 ====== */
   async getAllEvents(query: any) {
     try {
-      return await queryRows('SELECT * FROM events ORDER BY created_at DESC')
+      const rows = await queryRows('SELECT * FROM events ORDER BY created_at DESC')
+      return this.uploadService.signRowsFields(rows, ['cover_image', 'video_url'])
     } catch (error) {
       console.error('[AdminService] getAllEvents error:', error)
       throw new HttpException('获取活动列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
@@ -354,7 +359,8 @@ export class AdminService {
   /** ====== 项目管理 ====== */
   async getAllProjects(query: any) {
     try {
-      return await queryRows('SELECT * FROM projects ORDER BY created_at DESC')
+      const rows = await queryRows('SELECT * FROM projects ORDER BY created_at DESC')
+      return this.uploadService.signRowsFields(rows, ['cover_image', 'video_url'])
     } catch (error) {
       console.error('[AdminService] getAllProjects error:', error)
       return []
@@ -440,7 +446,8 @@ export class AdminService {
   /** ====== 文章管理 ====== */
   async getAllArticles(query?: any) {
     try {
-      return await queryRows('SELECT * FROM articles ORDER BY created_at DESC')
+      const rows = await queryRows('SELECT * FROM articles ORDER BY created_at DESC')
+      return this.uploadService.signRowsFields(rows, ['cover_image', 'video_url'])
     } catch (error) {
       return []
     }
@@ -522,7 +529,8 @@ export class AdminService {
   /** ====== 商品列表 ====== */
   async getMallProducts() {
     try {
-      return await queryRows('SELECT * FROM mall_products ORDER BY created_at DESC')
+      const rows = await queryRows('SELECT * FROM mall_products ORDER BY created_at DESC')
+      return this.uploadService.signRowsFields(rows, ['image_url', 'video_url', 'cover_image'])
     } catch (error) {
       console.error('[AdminService] getMallProducts error:', error)
       throw new HttpException('获取商品列表失败', HttpStatus.INTERNAL_SERVER_ERROR)

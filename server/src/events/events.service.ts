@@ -1,9 +1,12 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
-import { isCloudStorageUrl } from '@/utils/media-url'
+import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url'
+import { UploadService } from '@/upload/upload.service'
 
 @Injectable()
 export class EventsService {
+  constructor(private readonly uploadService: UploadService) {}
+
   private client() { return getSupabaseClient() }
 
   /** 获取活动列表 */
@@ -25,7 +28,8 @@ export class EventsService {
     const { data, error, count } = await query
     if (error) throw new HttpException(`查询失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
 
-    return { list: data || [], total: count || 0, page, pageSize }
+    const list = await this.uploadService.signRowsFields(data || [], ['cover_image', 'video_url'])
+    return { list, total: count || 0, page, pageSize }
   }
 
   /** 获取活动详情 */
@@ -44,7 +48,8 @@ export class EventsService {
       .select('member_id, status, created_at, members(id, name, avatar, company_name)')
       .eq('event_id', id)
 
-    return { ...data, registrations: registrations || [] }
+    const signed = await this.uploadService.signRowFields(data, ['cover_image', 'video_url'])
+    return { ...signed, registrations: registrations || [] }
   }
 
   /** 报名活动 */
@@ -137,7 +142,8 @@ export class EventsService {
     const { data, error, count } = await query
     if (error) throw new HttpException(`查询失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
 
-    return { list: data || [], total: count || 0, page, pageSize }
+    const list = await this.uploadService.signRowsFields(data || [], ['cover_image', 'video_url'])
+    return { list, total: count || 0, page, pageSize }
   }
 
   /** 获取项目详情 */
@@ -162,7 +168,8 @@ export class EventsService {
       .select('*')
       .eq('project_id', id)
 
-    return { ...data, financing: financingData || [], roadshows: roadshowData || [] }
+    const signed = await this.uploadService.signRowFields(data, ['cover_image', 'video_url'])
+    return { ...signed, financing: financingData || [], roadshows: roadshowData || [] }
   }
 
   /** 创建项目 */
@@ -179,8 +186,8 @@ export class EventsService {
       .insert({
         title: dto.title,
         description: dto.description,
-        cover_image: dto.cover_image || null,
-        video_url: dto.video_url || null,
+        cover_image: canonicalizeCloudStorageUrl(dto.cover_image) || null,
+        video_url: dto.video_url ? canonicalizeCloudStorageUrl(dto.video_url) : null,
         industry: dto.industry,
         stage: dto.stage || 'seed',
         amount_min: dto.amount_min || null,
@@ -195,7 +202,7 @@ export class EventsService {
       .single()
 
     if (error) throw new HttpException(`创建失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
-    return data
+    return this.uploadService.signRowFields(data, ['cover_image', 'video_url'])
   }
 
   /** 获取资源供需列表 */

@@ -1,9 +1,12 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { getSupabaseClient } from '../storage/database/supabase-compat';
-import { isCloudStorageUrl } from '@/utils/media-url';
+import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url';
+import { UploadService } from '@/upload/upload.service';
 
 @Injectable()
 export class ArticlesService {
+  constructor(private readonly uploadService: UploadService) {}
+
   private client() { return getSupabaseClient() }
 
   async findAll() {
@@ -13,7 +16,7 @@ export class ArticlesService {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return this.uploadService.signRowsFields(data || [], ['cover_image', 'video_url']);
   }
 
   async findOne(id: string) {
@@ -24,32 +27,44 @@ export class ArticlesService {
       .single();
 
     if (error) throw error;
-    return data;
+    return this.uploadService.signRowFields(data, ['cover_image', 'video_url']);
   }
 
   async create(data: any) {
     this.validateMedia(data, true);
+    const payload = {
+      ...data,
+      cover_image: canonicalizeCloudStorageUrl(data.cover_image),
+      video_url: data.video_url ? canonicalizeCloudStorageUrl(data.video_url) : null,
+    };
     const { data: article, error } = await this.client()
       .from('articles')
-      .insert([data])
+      .insert([payload])
       .select()
       .single();
 
     if (error) throw error;
-    return article;
+    return this.uploadService.signRowFields(article, ['cover_image', 'video_url']);
   }
 
   async update(id: string, data: any) {
     this.validateMedia(data, false);
+    const payload = { ...data, updated_at: new Date() };
+    if (data.cover_image !== undefined) {
+      payload.cover_image = canonicalizeCloudStorageUrl(data.cover_image);
+    }
+    if (data.video_url !== undefined) {
+      payload.video_url = data.video_url ? canonicalizeCloudStorageUrl(data.video_url) : null;
+    }
     const { data: article, error } = await this.client()
       .from('articles')
-      .update({ ...data, updated_at: new Date() })
+      .update(payload)
       .eq('id', id)
       .select()
       .single();
 
     if (error) throw error;
-    return article;
+    return this.uploadService.signRowFields(article, ['cover_image', 'video_url']);
   }
 
   async delete(id: string) {

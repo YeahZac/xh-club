@@ -158,6 +158,7 @@ const IndexPage = () => {
   const [loadFailed, setLoadFailed] = useState(false)
   const [failedBannerImages, setFailedBannerImages] = useState<Set<string>>(() => new Set())
   const [loadedBannerImages, setLoadedBannerImages] = useState<Set<string>>(() => new Set())
+  const [failedCoverImages, setFailedCoverImages] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
     console.log('[首页] API domain:', PROJECT_DOMAIN)
@@ -321,6 +322,14 @@ const IndexPage = () => {
     })
   }
 
+  const handleCoverImageError = (itemId: string) => {
+    setFailedCoverImages(current => {
+      const next = new Set(current)
+      next.add(itemId)
+      return next
+    })
+  }
+
   return (
     <ScrollView scrollY className="h-full bg-[#F5F6FA]">
       {/* ── Custom Header ── */}
@@ -444,8 +453,13 @@ const IndexPage = () => {
             <View className="flex flex-row gap-3 pr-4">
               {roadshows.map((item) => (
                 <Card key={item.id} className="min-w-[260px] shadow-sm border-0 overflow-hidden flex-shrink-0">
-                  {isCloudStorageImageUrl(item.cover_image) && (
-                    <Image src={item.cover_image} mode="aspectFill" className="w-full aspect-video" />
+                  {isCloudStorageImageUrl(item.cover_image) && !failedCoverImages.has(item.id) && (
+                    <Image
+                      src={item.cover_image}
+                      mode="aspectFill"
+                      className="w-full aspect-video"
+                      onError={() => handleCoverImageError(item.id)}
+                    />
                   )}
                   <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] p-4 relative overflow-hidden">
                     <View className="absolute -right-4 -bottom-4 w-20 h-20 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
