@@ -597,6 +597,39 @@ export class AdminService {
     }
   }
 
+  async updateProject(id: string, dto: any) {
+    try {
+      const existing = await queryOne('SELECT id FROM projects WHERE id = ?', [id])
+      if (!existing) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
+
+      const updates: string[] = []
+      const params: any[] = []
+      const assign = (column: string, value: unknown) => {
+        updates.push(`${column} = ?`)
+        params.push(value)
+      }
+
+      if (dto.title !== undefined) assign('title', dto.title)
+      if (dto.description !== undefined) assign('description', dto.description || null)
+      if (dto.cover_image !== undefined) assign('cover_image', assertCloudStorageImageUrl(dto.cover_image))
+      if (dto.video_url !== undefined) assign('video_url', normalizeOptionalVideoUrl(dto.video_url))
+      if (dto.industry !== undefined) assign('industry', dto.industry || null)
+      if (dto.stage !== undefined) assign('stage', dto.stage || 'seed')
+      if (dto.amount_max !== undefined) assign('amount_max', dto.amount_max || null)
+      if (dto.status !== undefined) assign('status', dto.status || 'draft')
+
+      if (!updates.length) throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
+      params.push(id)
+      await queryExecute(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`, params)
+      const row = await queryOne('SELECT * FROM projects WHERE id = ?', [id])
+      return this.uploadService.signRowFields(row, ['cover_image', 'video_url'])
+    } catch (error) {
+      console.error('[AdminService] updateProject error:', error)
+      if (error instanceof HttpException) throw error
+      throw new HttpException('更新项目失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
   async deleteProject(id: string) {
     try {
       await queryExecute('DELETE FROM projects WHERE id = ?', [id])

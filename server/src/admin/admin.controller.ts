@@ -1190,6 +1190,13 @@ export class AdminController {
     return { code: 200, msg: '创建成功', data: result }
   }
 
+  @Put('projects/:id')
+  async updateProject(@Param('id') id: string, @Body() dto: any) {
+    console.log('[AdminController] PUT /api/admin/projects/:id')
+    const result = await this.adminService.updateProject(id, dto)
+    return { code: 200, msg: '更新成功', data: result }
+  }
+
   @Delete('projects/:id')
   async deleteProject(@Param('id') id: string) {
     console.log('[AdminController] DELETE /api/admin/projects/:id')

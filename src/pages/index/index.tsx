@@ -277,12 +277,12 @@ const IndexPage = () => {
     switch (banner.link_type) {
       case 'article':
         if (config.article_id) {
-          Taro.showToast({ title: '文章详情开发中', icon: 'none' })
+          Taro.navigateTo({ url: `/pages/content-detail/index?type=article&id=${config.article_id}` })
         }
         break
       case 'event':
         if (config.event_id) {
-          Taro.switchTab({ url: '/pages/discover/index' })
+          Taro.navigateTo({ url: `/pages/content-detail/index?type=event&id=${config.event_id}` })
         }
         break
       case 'link':
@@ -472,7 +472,11 @@ const IndexPage = () => {
           <ScrollView scrollX className="pl-4">
             <View className="flex flex-row gap-3 pr-4">
               {roadshows.map((item) => (
-                <Card key={item.id} className="min-w-[260px] shadow-sm border-0 overflow-hidden flex-shrink-0">
+                <Card
+                  key={item.id}
+                  className="min-w-[260px] shadow-sm border-0 overflow-hidden flex-shrink-0"
+                  onClick={() => Taro.navigateTo({ url: `/pages/content-detail/index?type=project&id=${item.id}` })}
+                >
                   {isCloudStorageImageUrl(item.cover_image) && !failedCoverImages.has(item.id) && (
                     <Image
                       src={item.cover_image}

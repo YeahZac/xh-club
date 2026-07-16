@@ -1,0 +1,16 @@
+---
+description: 后端相关改动完成后提交并推送到 GitHub
+globs: server/**/*,deploy/**/*
+alwaysApply: false
+---
+
+# 后端改动必须推送 GitHub
+
+当本次会话修改了后端相关代码（包括但不限于 `server/`、`deploy/`、管理台 `server/src/admin-panel/`、以及为配合后端而改动的小程序接口调用）并完成功能后：
+
+1. 主动 `git add` 相关文件并创建符合 Commitlint 的 commit（`feat:` / `fix:` 等）
+2. 推送到 GitHub 远程仓库当前跟踪分支（通常是 `origin/main`）
+3. 推送前确认分支与 `git status`，不要 force push
+4. 推送成功后向用户回报 commit hash 与远程仓库
+
+用户已明确要求：**以后每次改动了后端相关的代码都要进行推送。**

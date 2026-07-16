@@ -14,6 +14,7 @@ import { AuthModule } from './auth/auth.module'
 import { BannersModule } from './banners/banners.module'
 import { EventRegistrationModule } from './event-registration/event-registration.module'
 import { HomepageModule } from './homepage/homepage.module'
+import { BusinessModule } from './business/business.module'
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { HomepageModule } from './homepage/homepage.module'
     BannersModule,
     EventRegistrationModule,
     HomepageModule,
+    BusinessModule,
   ],
   controllers: [AppController],
   providers: [AppService],

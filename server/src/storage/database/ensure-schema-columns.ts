@@ -16,6 +16,45 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['articles', 'tags', 'JSON NULL'],
   ['mall_products', 'image_url', 'VARCHAR(500) NULL'],
   ['mall_products', 'video_url', 'VARCHAR(500) NULL'],
+  // 商机管理（兼容旧 business_opportunities 表结构）
+  ['business_opportunities', 'summary', 'TEXT NULL'],
+  ['business_opportunities', 'content', 'MEDIUMTEXT NULL'],
+  ['business_opportunities', 'cover_image', 'VARCHAR(500) NULL'],
+  ['business_opportunities', 'industry', 'VARCHAR(64) NULL'],
+  ['business_opportunities', 'region', 'VARCHAR(64) NULL'],
+  ['business_opportunities', 'amount_min', 'DECIMAL(14,2) NULL'],
+  ['business_opportunities', 'amount_max', 'DECIMAL(14,2) NULL'],
+  ['business_opportunities', 'stage', 'VARCHAR(32) NULL'],
+  ['business_opportunities', 'contact_info', 'VARCHAR(255) NULL'],
+  ['business_opportunities', 'sort_order', 'INT NOT NULL DEFAULT 0'],
+]
+
+const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
+  {
+    name: 'business_opportunities',
+    sql: `CREATE TABLE IF NOT EXISTS business_opportunities (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      category VARCHAR(32) NOT NULL COMMENT 'roadshow|financing|resource',
+      summary TEXT NULL,
+      content MEDIUMTEXT NULL,
+      cover_image VARCHAR(500) NULL,
+      industry VARCHAR(64) NULL,
+      region VARCHAR(64) NULL,
+      amount_min DECIMAL(14,2) NULL,
+      amount_max DECIMAL(14,2) NULL,
+      stage VARCHAR(32) NULL,
+      contact_info VARCHAR(255) NULL,
+      status VARCHAR(32) NOT NULL DEFAULT 'published',
+      sort_order INT NOT NULL DEFAULT 0,
+      view_count INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_business_category (category),
+      INDEX idx_business_status (status),
+      INDEX idx_business_sort (sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
 ]
 
 function isDuplicateColumnError(message?: string): boolean {
@@ -26,6 +65,15 @@ function isDuplicateColumnError(message?: string): boolean {
 export async function ensureSchemaColumns(): Promise<void> {
   const pool = getPool()
   if (!pool) return
+
+  for (const table of TABLES_TO_ENSURE) {
+    try {
+      await pool.query(table.sql)
+      console.log(`[MySQL] 已确保表 ${table.name} 存在`)
+    } catch (error: any) {
+      console.warn(`[MySQL] 确保表 ${table.name} 失败:`, error?.message || error)
+    }
+  }
 
   for (const [table, column, definition] of COLUMNS_TO_ENSURE) {
     try {
@@ -39,5 +87,20 @@ export async function ensureSchemaColumns(): Promise<void> {
       }
       console.warn(`[MySQL] 补齐列 ${table}.${column} 失败:`, error?.message || error)
     }
+  }
+
+  // 旧商机表 user_id 为 NOT NULL，放开以便管理台直接创建
+  try {
+    await pool.query('ALTER TABLE `business_opportunities` MODIFY COLUMN `user_id` INT NULL')
+  } catch (error: any) {
+    const msg = String(error?.message || '')
+    if (
+      msg.includes('Unknown column') ||
+      msg.includes("doesn't exist") ||
+      error?.code === 'ER_NO_SUCH_TABLE'
+    ) {
+      return
+    }
+    console.warn('[MySQL] 调整 business_opportunities.user_id 失败:', error?.message || error)
   }
 }

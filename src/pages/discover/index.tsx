@@ -64,7 +64,7 @@ interface ProductItem {
 }
 
 const eventTypeMap: Record<string, string> = {
-  salon: '专题沙龙', roadshow: '路演日', annual: '年度大会', training: '培训', meeting: '定期例会',
+  other: '其他活动', roadshow: '项目路演', salon: '专题沙龙', annual: '年度大会', training: '培训', meeting: '定期例会',
 }
 
 const levelMap: Record<string, { label: string; color: string }> = {
@@ -232,7 +232,11 @@ const DiscoverPage = () => {
             <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 220px)' }}>
               <View className="flex flex-col gap-4 pb-8">
                 {events.map((item) => (
-                  <Card key={item.id} className="shadow-sm border-0 overflow-hidden">
+                  <Card
+                    key={item.id}
+                    className="shadow-sm border-0 overflow-hidden"
+                    onClick={() => Taro.navigateTo({ url: `/pages/content-detail/index?type=event&id=${item.id}` })}
+                  >
                     {isCloudStorageImageUrl(item.cover_image) ? (
                       <View className="relative">
                         <Image src={item.cover_image} mode="aspectFill" className="w-full aspect-[69/29]" />
@@ -268,7 +272,10 @@ const DiscoverPage = () => {
                         <Button
                           size="sm"
                           className="bg-[#1B2A4A] text-white text-xs h-8 rounded-lg"
-                          onClick={() => handleEventRegistration(item.id)}
+                          onClick={(e) => {
+                            e?.stopPropagation?.()
+                            handleEventRegistration(item.id)
+                          }}
                         >
                           立即报名
                         </Button>

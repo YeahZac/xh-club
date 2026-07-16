@@ -2,46 +2,31 @@ import { useState, useEffect } from "react"
 import { Image, View, Text, ScrollView } from "@tarojs/components"
 import Taro from "@tarojs/taro"
 import {
-  Search, MapPin,
-  ListFilter, Eye
+  Search, MapPin, ListFilter, Eye
 } from "lucide-react-taro"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { getResponseList } from "@/lib/api-response"
+import { stripHtml } from "@/lib/rich-html"
 import { Network } from "@/network"
 
-/* ── Types ── */
-interface ProjectItem {
+interface BusinessItem {
   id: string
   title: string
-  description: string
-  cover_image: string
-  industry: string
-  stage: string
-  amount_min: number
-  amount_max: number
-  amount_raised: number
-  status: string
-  owner_name: string
-  owner_company: string
-  view_count: number
-  is_featured: boolean
-  created_at: string
-}
-
-interface ResourceItem {
-  id: string
-  title: string
-  type: string
+  summary?: string
+  content?: string
+  cover_image?: string
   category: string
-  industry: string
-  description: string
-  region: string
-  member_name: string
-  member_company: string
-  created_at: string
+  industry?: string
+  region?: string
+  amount_min?: number
+  amount_max?: number
+  stage?: string
+  view_count?: number
+  status: string
+  created_at?: string
 }
 
 const stageMap: Record<string, string> = {
@@ -55,17 +40,23 @@ const industryMap: Record<string, string> = {
   service: '综合服务',
 }
 
-const isCloudStorageImageUrl = (url: string) =>
-  /^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)/i.test(url)
+const categoryMap: Record<string, string> = {
+  roadshow: '项目路演',
+  financing: '融资招募',
+  resource: '资源对接',
+}
+
+const isCloudStorageImageUrl = (url?: string) =>
+  !!url && /^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)/i.test(url)
 
 const BusinessPage = () => {
   const [activeTab, setActiveTab] = useState("roadshow")
   const isMiniApp = ([Taro.ENV_TYPE.WEAPP, Taro.ENV_TYPE.TT] as string[]).includes(Taro.getEnv() as string)
   const statusBarHeight = isMiniApp ? (Taro.getWindowInfo().statusBarHeight || 22) : 44
 
-  const [projects, setProjects] = useState<ProjectItem[]>([])
-  const [financing, setFinancing] = useState<ProjectItem[]>([])
-  const [resources, setResources] = useState<ResourceItem[]>([])
+  const [roadshowList, setRoadshowList] = useState<BusinessItem[]>([])
+  const [financingList, setFinancingList] = useState<BusinessItem[]>([])
+  const [resourceList, setResourceList] = useState<BusinessItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -75,17 +66,18 @@ const BusinessPage = () => {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [projectsRes, resourcesRes] = await Promise.all([
-        Network.request({ url: '/api/projects' }),
-        Network.request({ url: '/api/community/resources' }),
+      const [roadshowRes, financingRes, resourceRes] = await Promise.all([
+        Network.request({ url: '/api/business?category=roadshow&pageSize=50' }),
+        Network.request({ url: '/api/business?category=financing&pageSize=50' }),
+        Network.request({ url: '/api/business?category=resource&pageSize=50' }),
       ])
-      console.log('[商机页] projects:', projectsRes?.data)
-      console.log('[商机页] resources:', resourcesRes?.data)
+      console.log('[商机页] roadshow:', roadshowRes?.data)
+      console.log('[商机页] financing:', financingRes?.data)
+      console.log('[商机页] resource:', resourceRes?.data)
 
-      const projectList = getResponseList<ProjectItem>(projectsRes?.data?.data)
-      setProjects(projectList.slice(0, 20))
-      setFinancing(projectList.slice(0, 10))
-      setResources(getResponseList<ResourceItem>(resourcesRes?.data?.data).slice(0, 20))
+      setRoadshowList(getResponseList<BusinessItem>(roadshowRes?.data?.data))
+      setFinancingList(getResponseList<BusinessItem>(financingRes?.data?.data))
+      setResourceList(getResponseList<BusinessItem>(resourceRes?.data?.data))
     } catch (err) {
       console.error('[商机页] 加载失败:', err)
     } finally {
@@ -93,20 +85,81 @@ const BusinessPage = () => {
     }
   }
 
-  const formatAmount = (min: number, max: number) => {
-    if (!min && !max) return '面议'
+  const formatAmount = (min?: number, max?: number) => {
+    if (!min && !max) return ''
     if (min && max) return `${min / 10000}-${max / 10000}万`
-    return `${(min || max) / 10000}万`
+    return `${((min || max) || 0) / 10000}万`
   }
 
-  const calcProgress = (raised: number, min: number, max: number) => {
-    const target = max || min || 1
-    return Math.min(Math.round((raised / target) * 100), 100)
+  const getSummary = (item: BusinessItem) => {
+    if (item.summary) return item.summary
+    return stripHtml(item.content).slice(0, 60)
+  }
+
+  const openDetail = (id: string) => {
+    Taro.navigateTo({ url: `/pages/content-detail/index?type=business&id=${id}` })
+  }
+
+  const renderBusinessCard = (item: BusinessItem, variant: 'roadshow' | 'financing' | 'resource') => {
+    const gradient =
+      variant === 'roadshow'
+        ? 'from-[#1B2A4A] to-[#3B5998]'
+        : variant === 'financing'
+          ? 'from-[#2D4A7A] to-[#4A6FA5]'
+          : 'from-[#1B2A4A] to-[#2D4A7A]'
+
+    return (
+      <Card
+        key={item.id}
+        className="shadow-sm border-0 overflow-hidden"
+        onClick={() => openDetail(item.id)}
+      >
+        {isCloudStorageImageUrl(item.cover_image) && (
+          <Image src={item.cover_image!} mode="aspectFill" className="w-full aspect-video" />
+        )}
+        <View className={`bg-gradient-to-br ${gradient} p-5 relative overflow-hidden`}>
+          <View className="absolute -right-8 -top-8 w-28 h-28 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
+          <View className="flex flex-row items-center justify-between mb-3">
+            <Badge className="bg-[#C9A96E] text-white text-[10px] px-2 py-0">
+              {stageMap[item.stage || ''] || categoryMap[item.category] || item.category}
+            </Badge>
+            <View className="flex flex-row items-center gap-1">
+              <Eye size={12} color="rgba(255,255,255,0.7)" />
+              <Text className="block text-[10px]" style={{ color: 'rgba(255,255,255,0.7)' }}>{item.view_count || 0}次浏览</Text>
+            </View>
+          </View>
+          <Text className="block text-white font-bold text-base mb-1">{item.title}</Text>
+          <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>{getSummary(item)}</Text>
+        </View>
+        <CardContent className="p-4">
+          <View className="flex flex-row items-center justify-between mb-3">
+            <View className="flex flex-row items-center gap-2">
+              {item.industry && (
+                <Badge className="bg-gray-100 text-gray-600 text-[10px] px-1 py-0">
+                  {industryMap[item.industry] || item.industry}
+                </Badge>
+              )}
+              {item.region && (
+                <View className="flex flex-row items-center gap-1">
+                  <MapPin size={10} color="#9CA3AF" />
+                  <Text className="block text-xs text-gray-400">{item.region}</Text>
+                </View>
+              )}
+            </View>
+            {formatAmount(item.amount_min, item.amount_max) && (
+              <Text className="block text-sm font-bold text-[#C9A96E]">{formatAmount(item.amount_min, item.amount_max)}</Text>
+            )}
+          </View>
+          <Button size="sm" className="w-full bg-[#1B2A4A] text-white text-xs h-8 rounded-lg">
+            了解详情
+          </Button>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
     <View className="flex flex-col h-full bg-[#F5F6FA]">
-      {/* ── Header ── */}
       <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pb-4">
         <View style={{ height: `${statusBarHeight}px` }} />
         {isMiniApp && <Text className="block text-xl font-bold text-white mb-3">商机</Text>}
@@ -121,7 +174,6 @@ const BusinessPage = () => {
         </View>
       </View>
 
-      {/* ── Tabs ── */}
       <View className="px-4 -mt-3">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-white rounded-xl shadow-sm w-full flex flex-row justify-around p-1 h-auto">
@@ -136,50 +188,11 @@ const BusinessPage = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Roadshow Tab */}
           <TabsContent value="roadshow">
             <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 220px)' }}>
               <View className="flex flex-col gap-4 pb-8">
-                {projects.map((item) => (
-                  <Card key={item.id} className="shadow-sm border-0 overflow-hidden">
-                    {isCloudStorageImageUrl(item.cover_image) && (
-                      <Image src={item.cover_image} mode="aspectFill" className="w-full aspect-video" />
-                    )}
-                    <View className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] p-5 relative overflow-hidden">
-                      <View className="absolute -right-8 -top-8 w-28 h-28 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                      <View className="absolute right-4 bottom-2 w-16 h-16 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                      <View className="flex flex-row items-center justify-between mb-3">
-                        <Badge className="bg-[#C9A96E] text-white text-[10px] px-2 py-0">{stageMap[item.stage] || item.stage}</Badge>
-                        <View className="flex flex-row items-center gap-1">
-                          <Eye size={12} color="rgba(255,255,255,0.7)" />
-                          <Text className="block text-[10px]" style={{ color: 'rgba(255,255,255,0.7)' }}>{item.view_count || 0}人关注</Text>
-                        </View>
-                      </View>
-                      <Text className="block text-white font-bold text-base mb-1">{item.title}</Text>
-                      <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>{item.description?.slice(0, 50) || ''}</Text>
-                    </View>
-                    <CardContent className="p-4">
-                      <View className="flex flex-row items-center justify-between mb-3">
-                        <Text className="block text-sm font-semibold text-[#1A1D2E]">{item.owner_company || ''}</Text>
-                        <Badge className="bg-gray-100 text-gray-600 text-[10px] px-1 py-0">{industryMap[item.industry] || item.industry || '综合'}</Badge>
-                      </View>
-                      <View className="mb-3">
-                        <View className="flex flex-row items-center justify-between mb-1">
-                          <Text className="block text-xs text-gray-500">融资进度</Text>
-                          <Text className="block text-xs font-semibold text-[#C9A96E]">{calcProgress(item.amount_raised, item.amount_min, item.amount_max)}%</Text>
-                        </View>
-                        <View className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <View className="h-full bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8] rounded-full" style={{ width: `${calcProgress(item.amount_raised, item.amount_min, item.amount_max)}%` }} />
-                        </View>
-                      </View>
-                      <View className="flex flex-row items-center justify-between">
-                        <Text className="block text-sm font-bold text-[#C9A96E]">融资{formatAmount(item.amount_min, item.amount_max)}</Text>
-                        <Button size="sm" className="bg-[#1B2A4A] text-white text-xs h-7 rounded-lg">了解详情</Button>
-                      </View>
-                    </CardContent>
-                  </Card>
-                ))}
-                {projects.length === 0 && !loading && (
+                {roadshowList.map((item) => renderBusinessCard(item, 'roadshow'))}
+                {roadshowList.length === 0 && !loading && (
                   <View className="flex items-center justify-center py-16">
                     <Text className="block text-sm text-gray-400">暂无路演项目</Text>
                   </View>
@@ -188,90 +201,26 @@ const BusinessPage = () => {
             </ScrollView>
           </TabsContent>
 
-          {/* Financing Tab */}
           <TabsContent value="financing">
             <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 220px)' }}>
               <View className="flex flex-col gap-4 pb-8">
-                {financing.map((item) => (
-                  <Card key={item.id} className="shadow-sm border-0 overflow-hidden">
-                    {isCloudStorageImageUrl(item.cover_image) && (
-                      <Image src={item.cover_image} mode="aspectFill" className="w-full aspect-video" />
-                    )}
-                    <View className="bg-gradient-to-br from-[#2D4A7A] to-[#4A6FA5] p-5 relative overflow-hidden">
-                      <View className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                      <View className="flex flex-row items-center justify-between mb-2">
-                        <Badge className="bg-[#C9A96E] text-white text-[10px] px-2 py-0">{stageMap[item.stage] || item.stage}</Badge>
-                      </View>
-                      <Text className="block text-white font-bold text-base mb-1">{item.title}</Text>
-                      <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>{item.description?.slice(0, 50) || ''}</Text>
-                    </View>
-                    <CardContent className="p-4">
-                      <View className="flex flex-row items-center justify-between mb-3">
-                        <Text className="block text-sm font-semibold text-[#1A1D2E]">{item.owner_company || ''}</Text>
-                        <Badge className="bg-gray-100 text-gray-600 text-[10px] px-1 py-0">{industryMap[item.industry] || item.industry}</Badge>
-                      </View>
-                      <View className="flex flex-row items-center justify-between">
-                        <View>
-                          <Text className="block text-xs text-gray-400">目标金额</Text>
-                          <Text className="block text-sm font-bold text-[#1A1D2E]">{formatAmount(item.amount_min, item.amount_max)}</Text>
-                        </View>
-                        <View className="text-right">
-                          <Text className="block text-xs text-gray-400">已融</Text>
-                          <Text className="block text-sm font-bold text-[#C9A96E]">{calcProgress(item.amount_raised, item.amount_min, item.amount_max)}%</Text>
-                        </View>
-                      </View>
-                      <View className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mt-2">
-                        <View className="h-full bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8] rounded-full" style={{ width: `${calcProgress(item.amount_raised, item.amount_min, item.amount_max)}%` }} />
-                      </View>
-                    </CardContent>
-                  </Card>
-                ))}
-                {financing.length === 0 && !loading && (
+                {financingList.map((item) => renderBusinessCard(item, 'financing'))}
+                {financingList.length === 0 && !loading && (
                   <View className="flex items-center justify-center py-16">
-                    <Text className="block text-sm text-gray-400">暂无融资项目</Text>
+                    <Text className="block text-sm text-gray-400">暂无融资招募</Text>
                   </View>
                 )}
               </View>
             </ScrollView>
           </TabsContent>
 
-          {/* Resource Tab */}
           <TabsContent value="resource">
             <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 220px)' }}>
-              <View className="flex flex-col gap-3 pb-8">
-                {resources.map((item) => (
-                  <Card key={item.id} className="shadow-sm border-0">
-                    <CardContent className="p-4">
-                      <View className="flex flex-row items-start justify-between mb-2">
-                        <View className="flex-1 mr-3">
-                          <View className="flex flex-row items-center gap-2 mb-1">
-                            <Badge className={`${item.type === 'demand' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'} text-[10px] px-1 py-0`}>
-                              {item.type === 'demand' ? '需求' : '供给'}
-                            </Badge>
-                            <Badge className="bg-gray-100 text-gray-500 text-[10px] px-1 py-0">{industryMap[item.industry] || item.industry || '综合'}</Badge>
-                          </View>
-                          <Text className="block text-sm font-semibold text-[#1A1D2E]">{item.title}</Text>
-                          {item.description && <Text className="block text-xs text-gray-500 mt-1">{item.description.slice(0, 60)}</Text>}
-                        </View>
-                      </View>
-                      <View className="flex flex-row items-center gap-2 pt-2 border-t border-[#E8EAF0]">
-                        <Text className="block text-xs text-gray-400">{item.member_name || '匿名'}</Text>
-                        <Text className="block text-xs text-gray-300">·</Text>
-                        <Text className="block text-xs text-gray-400">{item.member_company || ''}</Text>
-                        {item.region && (
-                          <>
-                            <Text className="block text-xs text-gray-300">·</Text>
-                            <MapPin size={10} color="#9CA3AF" />
-                            <Text className="block text-xs text-gray-400">{item.region}</Text>
-                          </>
-                        )}
-                      </View>
-                    </CardContent>
-                  </Card>
-                ))}
-                {resources.length === 0 && !loading && (
+              <View className="flex flex-col gap-4 pb-8">
+                {resourceList.map((item) => renderBusinessCard(item, 'resource'))}
+                {resourceList.length === 0 && !loading && (
                   <View className="flex items-center justify-center py-16">
-                    <Text className="block text-sm text-gray-400">暂无资源信息</Text>
+                    <Text className="block text-sm text-gray-400">暂无资源对接</Text>
                   </View>
                 )}
               </View>

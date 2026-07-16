@@ -24,26 +24,28 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE KEY uk_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 商机表
+-- 商机表（管理台商机管理：项目路演 / 融资招募 / 资源对接）
 CREATE TABLE IF NOT EXISTS business_opportunities (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
-  description TEXT,
-  category VARCHAR(64),
-  type VARCHAR(32) DEFAULT 'supply',
-  status VARCHAR(32) DEFAULT 'pending',
-  user_id INT NOT NULL,
-  contact_name VARCHAR(64),
-  contact_phone VARCHAR(32),
-  contact_wechat VARCHAR(64),
-  view_count INT DEFAULT 0,
-  is_featured BOOLEAN DEFAULT FALSE,
-  featured_at TIMESTAMP NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_user_id (user_id),
-  INDEX idx_status (status),
-  INDEX idx_category (category)
+  category VARCHAR(32) NOT NULL COMMENT 'roadshow|financing|resource',
+  summary TEXT NULL,
+  content MEDIUMTEXT NULL,
+  cover_image VARCHAR(500) NULL,
+  industry VARCHAR(64) NULL,
+  region VARCHAR(64) NULL,
+  amount_min DECIMAL(14,2) NULL,
+  amount_max DECIMAL(14,2) NULL,
+  stage VARCHAR(32) NULL,
+  contact_info VARCHAR(255) NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'published',
+  sort_order INT NOT NULL DEFAULT 0,
+  view_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_business_category (category),
+  INDEX idx_business_status (status),
+  INDEX idx_business_sort (sort_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 商机图片表

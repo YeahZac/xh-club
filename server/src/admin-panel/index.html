@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>星河百谷 · 管理后台</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -43,6 +45,13 @@
       display: inline-block !important;
       accent-color: #e74c3c;
     }
+    .ql-toolbar.ql-snow { border-radius: 12px 12px 0 0; border-color: #e5e7eb; }
+    .ql-container.ql-snow { border-radius: 0 0 12px 12px; border-color: #e5e7eb; min-height: 220px; font-size: 14px; }
+    .ql-editor { min-height: 220px; }
+    .ql-editor img { max-width: 100%; border-radius: 8px; }
+    .emoji-popover { position: absolute; z-index: 80; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 8px; width: 280px; max-height: 180px; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,.12); display: none; }
+    .emoji-popover button { font-size: 18px; width: 32px; height: 32px; border-radius: 8px; }
+    .emoji-popover button:hover { background: #f3f4f6; }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -109,6 +118,10 @@
       <a onclick="switchPage('projects')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="projects">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
         项目管理
+      </a>
+      <a onclick="switchPage('business')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="business">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        商机管理
       </a>
       <a onclick="switchPage('banners')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="banners">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -360,6 +373,45 @@
       </div>
       <div id="projectCards" class="grid grid-cols-3 gap-6">
         <p class="text-gray-400 col-span-3 text-center py-12">加载中...</p>
+      </div>
+    </div>
+
+    <!-- ====== 商机管理 ====== -->
+    <div data-page="business" class="p-8 fade-in">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+          <select id="bizCategoryFilter" onchange="loadBusiness()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+            <option value="">全部分类</option>
+            <option value="roadshow">项目路演</option>
+            <option value="financing">融资招募</option>
+            <option value="resource">资源对接</option>
+          </select>
+          <select id="bizStatusFilter" onchange="loadBusiness()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+            <option value="">全部状态</option>
+            <option value="published">已发布</option>
+            <option value="draft">草稿</option>
+          </select>
+        </div>
+        <button onclick="showBusinessModal()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          新增商机
+        </button>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table class="w-full">
+          <thead class="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">标题</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">分类</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">状态</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">浏览</th>
+              <th class="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">操作</th>
+            </tr>
+          </thead>
+          <tbody id="businessTableBody" class="divide-y divide-gray-50">
+            <tr><td colspan="5" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -717,6 +769,8 @@ function closeModal() {
     }
   })
   Object.keys(uploadTasks || {}).forEach((targetId) => clearUploadTaskUi(targetId))
+  destroyRichEditors()
+  document.querySelectorAll('[id^="emojiPopover_"]').forEach((el) => el.remove())
   document.getElementById('modalOverlay').classList.add('hidden')
 }
 
@@ -728,10 +782,161 @@ const uploadTasks = {}
 const LEVEL_MAP = { normal: '普通', silver: '银卡', gold: '金卡', diamond: '钻石' }
 const STATUS_MAP = { active: '已激活', pending: '待审批', frozen: '已冻结', exited: '已退出' }
 const STATUS_COLORS = { active: 'bg-green-100 text-green-700', pending: 'bg-yellow-100 text-yellow-700', frozen: 'bg-red-100 text-red-700', exited: 'bg-gray-100 text-gray-500' }
-const EVENT_TYPE_MAP = { salon: '专题沙龙', roadshow: '路演日', annual: '年度大会', training: '培训', meeting: '定期例会' }
+const EVENT_TYPE_MAP = { other: '其他活动', roadshow: '项目路演', salon: '专题沙龙', annual: '年度大会', training: '培训', meeting: '定期例会' }
+const BUSINESS_CATEGORY_MAP = { roadshow: '项目路演', financing: '融资招募', resource: '资源对接' }
 const CATEGORY_MAP = { rights: '会员权益', service: '商务服务', gift: '商务礼品', activity: '活动权益', learning: '学习成长' }
 const STAGE_MAP = { seed: '种子期', angel: '天使轮', a: 'A轮', b: 'B轮', c: 'C轮', ip: 'IPO', bootstrapped: '自有资金' }
 const INDUSTRY_MAP = { tech: '科技互联网', finance: '金融资本', manufacture: '先进制造', realestate: '房地产建筑', health: '大健康', education: '教育培训', media: '文化传媒', law: '法律服务', agriculture: '现代农业', trade: '跨境贸易', food: '餐饮消费', energy: '环保能源', service: '综合服务' }
+
+// ===== 富文本编辑器（Quill）=====
+const richEditors = {}
+const EMOJI_LIST = ['😀','😁','😂','🤣','😊','😍','😘','😎','🤔','👍','👏','🙏','🔥','✨','🎉','❤️','💯','✅','📌','📎','📄','🖼️','💼','🚀','⭐','💡']
+
+function destroyRichEditors() {
+  Object.keys(richEditors).forEach((key) => {
+    try { delete richEditors[key] } catch (e) {}
+  })
+}
+
+function getRichEditorHtml(editorId) {
+  const editor = richEditors[editorId]
+  if (!editor) return ''
+  const html = editor.root.innerHTML || ''
+  return html === '<p><br></p>' ? '' : html
+}
+
+function uploadEditorAsset(file, kind) {
+  return new Promise((resolve, reject) => {
+    if (!token) return reject(new Error('请先登录'))
+    const fd = new FormData()
+    fd.append('file', file)
+    const endpoint = kind === 'file' ? '/api/upload/document' : '/api/upload/image'
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', endpoint)
+    xhr.setRequestHeader('Authorization', 'Bearer ' + token)
+    xhr.onload = () => {
+      try {
+        const res = JSON.parse(xhr.responseText || '{}')
+        if (xhr.status >= 200 && xhr.status < 300 && res.code === 200 && res.data?.url) {
+          resolve(res.data)
+        } else {
+          reject(new Error(res.msg || '上传失败'))
+        }
+      } catch (e) {
+        reject(e)
+      }
+    }
+    xhr.onerror = () => reject(new Error('上传网络错误'))
+    xhr.send(fd)
+  })
+}
+
+function initRichEditor(editorId, html) {
+  const host = document.getElementById(editorId)
+  if (!host || typeof Quill === 'undefined') return null
+  if (richEditors[editorId]) {
+    try { host.innerHTML = '' } catch (e) {}
+    delete richEditors[editorId]
+  }
+  host.innerHTML = ''
+  const quill = new Quill(host, {
+    theme: 'snow',
+    placeholder: '请输入内容，支持排版、图片、表情、附件...',
+    modules: {
+      toolbar: {
+        container: [
+          [{ header: [1, 2, 3, false] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          [{ align: [] }],
+          ['link', 'image', 'emoji', 'attachment'],
+          ['clean']
+        ],
+        handlers: {
+          image() {
+            const input = document.createElement('input')
+            input.type = 'file'
+            input.accept = 'image/*,image/gif'
+            input.onchange = async () => {
+              const file = input.files && input.files[0]
+              if (!file) return
+              try {
+                toast('图片上传中...', 'info')
+                const data = await uploadEditorAsset(file, 'image')
+                const range = quill.getSelection(true)
+                quill.insertEmbed(range.index, 'image', data.url, 'user')
+                quill.setSelection(range.index + 1)
+                toast('图片已插入')
+              } catch (e) {
+                toast(e.message || '图片上传失败', 'error')
+              }
+            }
+            input.click()
+          },
+          emoji() {
+            const toolbar = host.previousElementSibling
+            let pop = document.getElementById('emojiPopover_' + editorId)
+            if (!pop) {
+              pop = document.createElement('div')
+              pop.id = 'emojiPopover_' + editorId
+              pop.className = 'emoji-popover'
+              pop.innerHTML = EMOJI_LIST.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('')
+              document.body.appendChild(pop)
+              pop.addEventListener('click', (ev) => {
+                const btn = ev.target.closest('button[data-emoji]')
+                if (!btn) return
+                const range = quill.getSelection(true)
+                quill.insertText(range.index, btn.dataset.emoji, 'user')
+                quill.setSelection(range.index + btn.dataset.emoji.length)
+                pop.style.display = 'none'
+              })
+            }
+            const rect = (toolbar || host).getBoundingClientRect()
+            pop.style.left = Math.max(16, rect.left) + 'px'
+            pop.style.top = (rect.bottom + 8 + window.scrollY) + 'px'
+            pop.style.display = pop.style.display === 'block' ? 'none' : 'block'
+          },
+          attachment() {
+            const input = document.createElement('input')
+            input.type = 'file'
+            input.onchange = async () => {
+              const file = input.files && input.files[0]
+              if (!file) return
+              try {
+                toast('文件上传中...', 'info')
+                const data = await uploadEditorAsset(file, 'file')
+                const range = quill.getSelection(true)
+                const name = data.fileName || file.name || '附件'
+                quill.insertText(range.index, name, 'link', data.url, 'user')
+                quill.setSelection(range.index + name.length)
+                toast('附件已插入')
+              } catch (e) {
+                toast(e.message || '附件上传失败', 'error')
+              }
+            }
+            input.click()
+          }
+        }
+      }
+    }
+  })
+
+  // 自定义 toolbar 图标文案
+  setTimeout(() => {
+    const emojiBtn = host.parentElement?.querySelector('.ql-emoji')
+    const attachBtn = host.parentElement?.querySelector('.ql-attachment')
+    if (emojiBtn && !emojiBtn.dataset.ready) { emojiBtn.dataset.ready = '1'; emojiBtn.innerHTML = '😊'; emojiBtn.title = '表情' }
+    if (attachBtn && !attachBtn.dataset.ready) { attachBtn.dataset.ready = '1'; attachBtn.innerHTML = '📎'; attachBtn.title = '插入文件' }
+  }, 0)
+
+  if (html) {
+    quill.root.innerHTML = html
+  }
+  richEditors[editorId] = quill
+  return quill
+}
+
+
 
 // ===== 登录/登出 =====
 // 页面加载时检查函数是否可用
@@ -896,10 +1101,10 @@ function switchPage(page) {
     const navItem = document.querySelector(`[data-nav="${page}"]`)
     if (navItem) navItem.classList.add('active')
   }
-  const titles = { dashboard: '数据看板', homepage: '首页管理', members: '会员管理', events: '活动管理', projects: '项目管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
+  const titles = { dashboard: '数据看板', homepage: '首页管理', members: '会员管理', events: '活动管理', projects: '项目管理', business: '商机管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
   document.getElementById('pageTitle').textContent = titles[page] || page
   // 加载数据（role-edit页面不加载数据）
-  const loaders = { dashboard: loadDashboard, homepage: loadHomepage, members: loadMembers, events: loadEvents, projects: loadProjects, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, memberLevels: loadMemberLevels, invitations: loadInvitationRules, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
+  const loaders = { dashboard: loadDashboard, homepage: loadHomepage, members: loadMembers, events: loadEvents, projects: loadProjects, business: loadBusiness, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, memberLevels: loadMemberLevels, invitations: loadInvitationRules, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
   if (loaders[page]) loaders[page]()
 }
 
@@ -1309,7 +1514,7 @@ function renderEventForm(mode, event = null) {
           </div>
         </div>
         <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">活动类型</label><select id="evType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="salon">专题沙龙</option><option value="roadshow">路演日</option><option value="annual">年度大会</option><option value="training">培训</option><option value="meeting">定期例会</option></select></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">活动分类</label><select id="evType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="other">其他活动</option><option value="roadshow">项目路演</option><option value="salon">专题沙龙</option><option value="annual">年度大会</option><option value="training">培训</option><option value="meeting">定期例会</option></select></div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">状态</label><select id="evStatus" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="open">报名中</option><option value="draft">草稿</option><option value="full">已满员</option><option value="ended">已结束</option></select></div>
         </div>
         <div class="grid grid-cols-2 gap-4">
@@ -1321,7 +1526,10 @@ function renderEventForm(mode, event = null) {
           <div><label class="block text-sm font-medium text-gray-700 mb-1">人数上限</label><input id="evMax" type="number" value="${escapeHtml(event?.max_participants ?? 100)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">费用(元)</label><input id="evFee" type="number" value="${escapeHtml(event?.fee ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         </div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">活动描述</label><textarea id="evDesc" rows="3" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动描述...">${escapeHtml(event?.description || '')}</textarea></div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">活动描述</label>
+          <div id="evDescEditor"></div>
+        </div>
         <div class="border-t border-gray-100 pt-4">
           <div class="flex items-center justify-between mb-3">
             <label class="text-sm font-medium text-gray-700">报名表单字段（可选）</label>
@@ -1343,6 +1551,7 @@ function showEventModal() {
   _formFields = []
   showModal(renderEventForm('create'), { wide: true })
   renderFormFields()
+  initRichEditor('evDescEditor', '')
 }
 
 async function showEventDetail(id) {
@@ -1359,9 +1568,10 @@ async function showEventDetail(id) {
     showModal(renderEventForm('edit', event), { wide: true })
     const typeEl = document.getElementById('evType')
     const statusEl = document.getElementById('evStatus')
-    if (typeEl) typeEl.value = event.event_type || 'salon'
+    if (typeEl) typeEl.value = event.event_type || 'other'
     if (statusEl) statusEl.value = event.status || 'open'
     renderFormFields()
+    initRichEditor('evDescEditor', event.description || '')
   } catch (error) {
     toast(error.message || '加载活动详情失败', 'error')
   }
@@ -1475,7 +1685,7 @@ function buildEventPayload(statusFallback = 'open') {
     location: document.getElementById('evLocation').value,
     max_participants: parseInt(document.getElementById('evMax').value) || 100,
     fee: parseInt(document.getElementById('evFee').value) || 0,
-    description: document.getElementById('evDesc').value,
+    description: getRichEditorHtml('evDescEditor'),
     form_fields: formFields.length > 0 ? formFields : null,
   }
 }
@@ -1563,14 +1773,18 @@ function showProjectModal() {
           <div><label class="block text-sm font-medium text-gray-700 mb-1">融资金额(万)</label><input id="pjAmount" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">联系方式</label><input id="pjContact" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         </div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">项目描述</label><textarea id="pjDesc" rows="3" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></textarea></div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">项目描述</label>
+          <div id="pjDescEditor"></div>
+        </div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
           <button onclick="createProject()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
         </div>
       </div>
     </div>
-  `)
+  `, { wide: true })
+  initRichEditor('pjDescEditor', '')
 }
 
 async function createProject() {
@@ -1582,7 +1796,7 @@ async function createProject() {
     industry: document.getElementById('pjIndustry').value,
     stage: document.getElementById('pjStage').value,
     amount_max: parseInt(document.getElementById('pjAmount').value) * 10000,
-    description: document.getElementById('pjDesc').value,
+    description: getRichEditorHtml('pjDescEditor'),
     status: 'active'
   }
   if (!body.title.trim()) return toast('请输入项目名称', 'error')
@@ -1590,6 +1804,109 @@ async function createProject() {
   const res = await api('/admin/projects', { method: 'POST', body })
   if (res.code === 200) { toast('项目创建成功'); closeModal(); loadProjects(); }
   else toast(res.msg || '创建失败', 'error')
+}
+
+
+// ===== 商机管理 =====
+async function loadBusiness() {
+  const category = document.getElementById('bizCategoryFilter')?.value || ''
+  const status = document.getElementById('bizStatusFilter')?.value || ''
+  const qs = new URLSearchParams()
+  if (category) qs.set('category', category)
+  if (status) qs.set('status', status)
+  const res = await api('/admin/business' + (qs.toString() ? `?${qs}` : ''))
+  if (res.code !== 200) return
+  const list = Array.isArray(res.data) ? res.data : []
+  if (!list.length) {
+    document.getElementById('businessTableBody').innerHTML = '<tr><td colspan="5" class="px-6 py-12 text-center text-gray-400">暂无商机</td></tr>'
+    return
+  }
+  document.getElementById('businessTableBody').innerHTML = list.map((item) => `
+    <tr class="hover:bg-gray-50">
+      <td class="px-6 py-4 font-medium text-navy-800">${escapeHtml(item.title)}</td>
+      <td class="px-6 py-4 text-sm">${escapeHtml(BUSINESS_CATEGORY_MAP[item.category] || item.category)}</td>
+      <td class="px-6 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${item.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">${item.status === 'published' ? '已发布' : '草稿'}</span></td>
+      <td class="px-6 py-4 text-sm text-gray-500">${item.view_count || 0}</td>
+      <td class="px-6 py-4 text-center">
+        <button onclick="showBusinessModal('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 mr-2">编辑</button>
+        <button onclick="deleteBusiness('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200">删除</button>
+      </td>
+    </tr>
+  `).join('')
+}
+
+async function showBusinessModal(editId) {
+  let item = null
+  if (editId) {
+    const res = await api(`/admin/business/${editId}`)
+    if (res.code === 200) item = res.data
+  }
+  showModal(`
+    <div class="p-6" style="max-width:760px">
+      <h3 class="text-lg font-bold text-navy-800 mb-6">${editId ? '编辑商机' : '新增商机'}</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">标题 *</label><input id="bizTitle" value="${escapeHtml(item?.title || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">分类 *</label>
+            <select id="bizCategory" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+              <option value="roadshow" ${(!item || item?.category==='roadshow')?'selected':''}>项目路演</option>
+              <option value="financing" ${item?.category==='financing'?'selected':''}>融资招募</option>
+              <option value="resource" ${item?.category==='resource'?'selected':''}>资源对接</option>
+            </select>
+          </div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">状态</label>
+            <select id="bizStatus" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+              <option value="published" ${(!item || item?.status==='published')?'selected':''}>发布</option>
+              <option value="draft" ${item?.status==='draft'?'selected':''}>草稿</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">封面图（选填）</label>
+          <div class="flex items-center gap-3">
+            <input id="bizCover" value="${escapeHtml(item?.cover_image || '')}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传封面">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'bizCover')"></label>
+          </div>
+        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">摘要</label><textarea id="bizSummary" rows="2" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${escapeHtml(item?.summary || '')}</textarea></div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">详细内容</label>
+          <div id="bizContentEditor"></div>
+        </div>
+        <div class="flex justify-end gap-3 pt-4">
+          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+          <button onclick="saveBusiness('${editId || ''}')" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+        </div>
+      </div>
+    </div>
+  `, { wide: true })
+  initRichEditor('bizContentEditor', item?.content || '')
+}
+
+async function saveBusiness(editId) {
+  if (!assertNoUploading()) return
+  const cover = document.getElementById('bizCover').value.trim()
+  const body = {
+    title: document.getElementById('bizTitle').value,
+    category: document.getElementById('bizCategory').value,
+    status: document.getElementById('bizStatus').value,
+    cover_image: cover || null,
+    summary: document.getElementById('bizSummary').value,
+    content: getRichEditorHtml('bizContentEditor'),
+  }
+  if (!body.title.trim()) return toast('请输入标题', 'error')
+  const url = editId ? `/admin/business/${editId}` : '/admin/business'
+  const method = editId ? 'PUT' : 'POST'
+  const res = await api(url, { method, body })
+  if (res.code === 200) { toast(editId ? '更新成功' : '创建成功'); closeModal(); loadBusiness(); }
+  else toast(res.msg || '操作失败', 'error')
+}
+
+async function deleteBusiness(id) {
+  if (!confirm('确认删除该商机？')) return
+  const res = await api(`/admin/business/${id}`, { method: 'DELETE' })
+  if (res.code === 200) { toast('已删除'); loadBusiness(); }
+  else toast(res.msg || '删除失败', 'error')
 }
 
 // ===== Banner管理 =====
@@ -2239,7 +2556,7 @@ async function showArticleModal(editId) {
     if (res.code === 200) article = res.data
   }
   showModal(`
-    <div class="p-6" style="max-width:640px">
+    <div class="p-6" style="max-width:720px">
       <h3 class="text-lg font-bold text-navy-800 mb-6">${editId ? '编辑文章' : '新建文章'}</h3>
       <div class="space-y-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">标题 *</label><input id="artTitle" value="${article?.title || ''}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
@@ -2280,7 +2597,10 @@ async function showArticleModal(editId) {
           </div>
         </div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">摘要</label><textarea id="artSummary" rows="2" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400 resize-none">${article?.summary || ''}</textarea></div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">正文内容</label><textarea id="artContent" rows="8" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400 resize-y">${article?.content || ''}</textarea></div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">正文内容</label>
+          <div id="artContentEditor"></div>
+        </div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">标签（逗号分隔）</label><input id="artTags" value="${(article?.tags || []).join(', ')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="商会, 活动, 合作"></div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
@@ -2288,9 +2608,10 @@ async function showArticleModal(editId) {
         </div>
       </div>
     </div>
-  `)
+  `, { wide: true })
   syncExistingMediaTask('artCover', '已上传封面')
   syncExistingMediaTask('artVideo', '已上传视频')
+  initRichEditor('artContentEditor', article?.content || '')
 }
 
 async function saveArticle(editId) {
@@ -2304,7 +2625,7 @@ async function saveArticle(editId) {
     cover_image: document.getElementById('artCover').value,
     video_url: document.getElementById('artVideo').value || null,
     summary: document.getElementById('artSummary').value,
-    content: document.getElementById('artContent').value,
+    content: getRichEditorHtml('artContentEditor'),
     tags: tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : []
   }
   if (!body.title) return toast('请输入标题', 'error')
