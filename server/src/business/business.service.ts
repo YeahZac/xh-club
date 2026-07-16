@@ -419,11 +419,11 @@ export class BusinessService {
 
   /** 用户发布时，需求方固定为当前登录会员（优先绑定其人才档案） */
   private async resolveMemberDemandParty(memberId: string | number) {
-    const talent = await queryOne<{ id: number; real_name?: string }>(
+    const talent = await queryOne(
       'SELECT id, real_name FROM talent_applications WHERE member_id = ? ORDER BY id DESC LIMIT 1',
       [memberId],
     )
-    const member = await queryOne<{ name?: string; phone?: string }>(
+    const member = await queryOne(
       'SELECT name, phone FROM members WHERE id = ?',
       [memberId],
     )

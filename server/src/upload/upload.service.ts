@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as COS from 'cos-nodejs-sdk-v5';
 import {
@@ -8,6 +9,21 @@ import {
 } from '@/utils/media-url';
 
 const DEFAULT_SIGNED_URL_EXPIRES = 7200;
+
+type MediaLibraryType = 'image' | 'video' | 'document' | 'all';
+
+const LIBRARY_PREFIXES: Record<MediaLibraryType, string[]> = {
+  image: ['images/', 'member/', 'avatars/', 'uploads/'],
+  video: ['videos/'],
+  document: ['documents/', 'uploads/'],
+  all: ['images/', 'videos/', 'documents/', 'member/', 'avatars/', 'uploads/'],
+};
+
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']);
+const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v']);
+const DOCUMENT_EXTS = new Set([
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'zip', 'rar', '7z',
+]);
 
 @Injectable()
 export class UploadService {
@@ -28,6 +44,87 @@ export class UploadService {
     const raw = Number(process.env.COS_SIGNED_URL_EXPIRES || DEFAULT_SIGNED_URL_EXPIRES);
     if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_SIGNED_URL_EXPIRES;
     return Math.floor(raw);
+  }
+
+  private getExtension(fileName: string, mimeType?: string): string {
+    const fromName = fileName.match(/\.([a-zA-Z0-9]{1,10})$/)?.[1]?.toLowerCase();
+    if (fromName) return fromName;
+    if (mimeType?.startsWith('image/')) return mimeType.split('/')[1] || 'jpg';
+    if (mimeType?.startsWith('video/')) {
+      if (mimeType.includes('quicktime')) return 'mov';
+      return mimeType.split('/')[1] || 'mp4';
+    }
+    return 'bin';
+  }
+
+  private matchLibraryType(key: string, type: MediaLibraryType): boolean {
+    const ext = key.split('.').pop()?.toLowerCase() || '';
+    if (type === 'all') {
+      return IMAGE_EXTS.has(ext) || VIDEO_EXTS.has(ext) || DOCUMENT_EXTS.has(ext);
+    }
+    if (type === 'image') return IMAGE_EXTS.has(ext);
+    if (type === 'video') return VIDEO_EXTS.has(ext);
+    return DOCUMENT_EXTS.has(ext) || (!IMAGE_EXTS.has(ext) && !VIDEO_EXTS.has(ext));
+  }
+
+  private buildCanonicalUrl(key: string, bucket?: string, region?: string): string {
+    const b = bucket || this.bucket;
+    const r = region || this.region;
+    return `https://${b}.cos.${r}.myqcloud.com/${key}`;
+  }
+
+  private async readFileBuffer(file: Express.Multer.File): Promise<Buffer> {
+    if (file.buffer) return file.buffer;
+    if (file.path) return fs.promises.readFile(file.path);
+    throw new Error('无法获取文件内容');
+  }
+
+  private async objectExists(key: string): Promise<boolean> {
+    if (!this.cos || !this.bucket) return false;
+    return new Promise((resolve) => {
+      this.cos!.headObject(
+        {
+          Bucket: this.bucket,
+          Region: this.region,
+          Key: key,
+        },
+        (err) => resolve(!err),
+      );
+    });
+  }
+
+  private async listBucketPage(prefix: string, marker = '', maxKeys = 100): Promise<{
+    contents: Array<{ Key?: string; Size?: string | number; LastModified?: string; ETag?: string }>;
+    nextMarker: string;
+    isTruncated: boolean;
+  }> {
+    if (!this.cos || !this.bucket) {
+      throw new Error('云存储未初始化');
+    }
+    return new Promise((resolve, reject) => {
+      this.cos!.getBucket(
+        {
+          Bucket: this.bucket,
+          Region: this.region,
+          Prefix: prefix,
+          Marker: marker || undefined,
+          MaxKeys: maxKeys,
+        },
+        (err, data) => {
+          if (err) return reject(err);
+          resolve({
+            contents: (data?.Contents || []) as Array<{
+              Key?: string;
+              Size?: string | number;
+              LastModified?: string;
+              ETag?: string;
+            }>,
+            nextMarker: data?.NextMarker || data?.Contents?.at(-1)?.Key || '',
+            isTruncated: Boolean(data?.IsTruncated),
+          });
+        },
+      );
+    });
   }
 
   /**
@@ -274,14 +371,106 @@ export class UploadService {
   }
 
   /**
-   * 上传文件到微信云托管对象存储
+   * 列出 COS 中已有媒体，供管理台媒体库复用
+   */
+  async listMediaLibrary(params: {
+    type?: string;
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    await this.ensureCOSInitialized();
+    if (!this.cos || !this.bucket) {
+      throw new Error('云存储未初始化，请确认服务部署在微信云托管环境中');
+    }
+
+    const type = (['image', 'video', 'document', 'all'].includes(String(params.type || ''))
+      ? String(params.type)
+      : 'image') as MediaLibraryType;
+    const keyword = String(params.keyword || '').trim().toLowerCase();
+    const page = Math.max(1, Number(params.page) || 1);
+    const pageSize = Math.max(1, Math.min(60, Number(params.pageSize) || 24));
+    const prefixes = LIBRARY_PREFIXES[type];
+    const seen = new Set<string>();
+    const collected: Array<{
+      key: string;
+      size: number;
+      lastModified: string;
+    }> = [];
+
+    for (const prefix of prefixes) {
+      let marker = '';
+      for (let round = 0; round < 4; round += 1) {
+        const pageData = await this.listBucketPage(prefix, marker, 100);
+        for (const item of pageData.contents) {
+          const key = item.Key || '';
+          if (!key || key.endsWith('/') || seen.has(key)) continue;
+          if (!this.matchLibraryType(key, type)) continue;
+          if (keyword && !key.toLowerCase().includes(keyword)) continue;
+          seen.add(key);
+          collected.push({
+            key,
+            size: Number(item.Size || 0),
+            lastModified: item.LastModified || '',
+          });
+        }
+        if (!pageData.isTruncated) break;
+        marker = pageData.nextMarker;
+        if (!marker) break;
+      }
+    }
+
+    collected.sort((a, b) => {
+      const ta = a.lastModified ? new Date(a.lastModified).getTime() : 0;
+      const tb = b.lastModified ? new Date(b.lastModified).getTime() : 0;
+      return tb - ta;
+    });
+
+    const total = collected.length;
+    const start = (page - 1) * pageSize;
+    const slice = collected.slice(start, start + pageSize);
+    const list = await Promise.all(
+      slice.map(async (item) => {
+        const canonicalUrl = this.buildCanonicalUrl(item.key);
+        const previewUrl = await this.signMediaUrl(canonicalUrl);
+        const fileName = item.key.split('/').pop() || item.key;
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
+        let mediaType: MediaLibraryType = 'document';
+        if (IMAGE_EXTS.has(ext)) mediaType = 'image';
+        else if (VIDEO_EXTS.has(ext)) mediaType = 'video';
+        return {
+          key: item.key,
+          fileName,
+          size: item.size,
+          lastModified: item.lastModified,
+          mediaType,
+          url: canonicalUrl,
+          canonicalUrl,
+          previewUrl: previewUrl || canonicalUrl,
+        };
+      }),
+    );
+
+    return {
+      list,
+      total,
+      page,
+      pageSize,
+      hasMore: start + pageSize < total,
+    };
+  }
+
+  /**
+   * 上传文件到微信云托管对象存储（相同内容哈希复用，避免重复占空间）
    */
   async uploadFile(file: Express.Multer.File, folder: string = 'uploads'): Promise<{
     fileId: string;
     url: string;
+    canonicalUrl: string;
     fileName: string;
     size: number;
     mimeType: string;
+    reused?: boolean;
   }> {
     await this.ensureCOSInitialized();
 
@@ -290,49 +479,43 @@ export class UploadService {
     }
 
     try {
-      // 生成唯一的存储路径
-      const timestamp = Date.now();
-      const randomStr = Math.random().toString(36).substring(2, 8);
       const originalName = file.originalname || 'file';
-      const extension = originalName.match(/\.([a-zA-Z0-9]{1,10})$/)?.[1]?.toLowerCase() || 'bin';
-      const key = `${folder}/${timestamp}_${randomStr}.${extension}`;
+      const extension = this.getExtension(originalName, file.mimetype);
+      const body = await this.readFileBuffer(file);
+      const hash = crypto.createHash('md5').update(body).digest('hex');
+      const key = `${folder}/${hash}.${extension}`;
+      const canonicalUrl = this.buildCanonicalUrl(key);
+      const fileId = `cloud://${key}`;
+      const exists = await this.objectExists(key);
 
-      // 获取文件内容
-      let body: Buffer | fs.ReadStream;
-      if (file.buffer) {
-        body = file.buffer;
-      } else if (file.path) {
-        body = fs.createReadStream(file.path);
+      if (!exists) {
+        await new Promise<void>((resolve, reject) => {
+          this.cos!.putObject({
+            Bucket: this.bucket,
+            Region: this.region,
+            Key: key,
+            Body: body,
+            ContentType: file.mimetype,
+          }, (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+        this.logger.log(`文件上传成功: ${key}`);
       } else {
-        throw new Error('无法获取文件内容');
+        this.logger.log(`文件内容已存在，复用: ${key}`);
       }
 
-      // 上传到 COS
-      await new Promise<void>((resolve, reject) => {
-        this.cos!.putObject({
-          Bucket: this.bucket,
-          Region: this.region,
-          Key: key,
-          Body: body,
-        }, (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-
-      // 返回规范对象地址 + 预签名可访问地址
-      const canonicalUrl = `https://${this.bucket}.cos.${this.region}.myqcloud.com/${key}`;
-      const fileId = `cloud://${key}`;
       const signedUrl = await this.signMediaUrl(canonicalUrl);
-
-      this.logger.log(`文件上传成功: ${key}`);
 
       return {
         fileId,
         url: signedUrl || canonicalUrl,
+        canonicalUrl,
         fileName: originalName,
-        size: file.size,
+        size: file.size || body.length,
         mimeType: file.mimetype,
+        reused: exists,
       };
     } catch (error) {
       this.logger.error('文件上传失败:', error);
@@ -412,9 +595,11 @@ export class UploadService {
   async uploadImage(file: Express.Multer.File, folder: string = 'images'): Promise<{
     fileId: string;
     url: string;
+    canonicalUrl: string;
     fileName: string;
     size: number;
     mimeType: string;
+    reused?: boolean;
   }> {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.mimetype)) {
@@ -448,9 +633,11 @@ export class UploadService {
   async uploadAvatar(file: Express.Multer.File, userId: string): Promise<{
     fileId: string;
     url: string;
+    canonicalUrl: string;
     fileName: string;
     size: number;
     mimeType: string;
+    reused?: boolean;
   }> {
     return this.uploadImage(file, `avatars/${userId}`);
   }
@@ -461,9 +648,11 @@ export class UploadService {
   async uploadDocument(file: Express.Multer.File, folder: string = 'documents'): Promise<{
     fileId: string;
     url: string;
+    canonicalUrl: string;
     fileName: string;
     size: number;
     mimeType: string;
+    reused?: boolean;
   }> {
     const maxSize = 50 * 1024 * 1024;
     if (file.size > maxSize) {

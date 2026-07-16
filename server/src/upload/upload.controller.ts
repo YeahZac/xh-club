@@ -98,6 +98,26 @@ export class UploadController {
     };
   }
 
+  @Get('library')
+  async listLibrary(
+    @Query('type') type?: string,
+    @Query('keyword') keyword?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    const data = await this.uploadService.listMediaLibrary({
+      type,
+      keyword,
+      page: page ? Number(page) : 1,
+      pageSize: pageSize ? Number(pageSize) : 24,
+    });
+    return {
+      code: 200,
+      msg: 'success',
+      data,
+    };
+  }
+
   @Get('url')
   async getFileUrl(
     @Query('fileId') fileId: string,
