@@ -4,7 +4,7 @@ import Taro from "@tarojs/taro"
 import {
   User, Award, TrendingUp, ChevronRight, Settings, Shield,
   FileText, Users, Gift, ShoppingBag, Star, Wallet, ChartBar, LogOut, Crown,
-  DollarSign, UserPlus, Camera, BadgeCheck
+  DollarSign, UserPlus, Camera, BadgeCheck, SquarePen
 } from "lucide-react-taro"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -213,6 +213,7 @@ const ProfilePage = () => {
     {
       title: '其他',
       items: [
+        { icon: SquarePen, label: '我的动态', color: '#F59E0B', action: 'my-posts' },
         { icon: BadgeCheck, label: '人才入驻', color: '#C9A96E', action: 'talent' },
         { icon: Shield, label: '隐私设置', color: '#6B7280' },
         { icon: Settings, label: '系统设置', color: '#6B7280' },
@@ -431,6 +432,13 @@ const ProfilePage = () => {
                       loadSubordinates()
                     } else if (item.action === 'mall') {
                       Taro.switchTab({ url: '/pages/mall/index' })
+                    } else if (item.action === 'my-posts') {
+                      const memberId = Taro.getStorageSync('member_id')
+                      if (!memberId) {
+                        Taro.showToast({ title: '请先登录', icon: 'none' })
+                        return
+                      }
+                      Taro.navigateTo({ url: '/pages/my-posts/index' })
                     } else if (item.action === 'talent') {
                       const memberId = Taro.getStorageSync('member_id')
                       if (!memberId) {

@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { getResponseList } from "@/lib/api-response"
 import { openContentDetail, openExternalUrl, openMiniProgram, pickId } from "@/lib/content-navigation"
+import { isDisplayableImageUrl } from "@/lib/media-url"
 import { Network } from "@/network"
 
 /* ── Types ── */
@@ -73,24 +74,28 @@ const CarouselDots = ({ total }: { total: number }) => {
   )
 }
 
-const QUICK_ENTRIES = [
-  { label: "项目路演", icon: Presentation, tint: "#EDF0F4", color: "#1B2A4A", path: "/pages/business/index" },
-  { label: "融资招募", icon: TrendingUp, tint: "#EEF1F6", color: "#2D4A7A", path: "/pages/business/index" },
-  { label: "会员推荐", icon: UserPlus, tint: "#FAF6F1", color: "#C9A96E", path: "" },
-  { label: "活动报名", icon: CalendarDays, tint: "#ECFDF5", color: "#10B981", path: "/pages/discover/index" },
-  { label: "人才查询", icon: UserSearch, tint: "#F0F0FE", color: "#6366F1", path: "/pages/discover/index" },
-  { label: "项目查询", icon: Search, tint: "#FDF2F8", color: "#EC4899", path: "/pages/business/index" },
-  { label: "发布动态", icon: SquarePen, tint: "#FFFBEB", color: "#F59E0B", path: "" },
+type QuickEntry = {
+  label: string
+  icon: typeof Presentation
+  tint: string
+  color: string
+  path: string
+  /** Tab 页：写入 storage 后 switchTab；子页：navigateTo */
+  navType?: 'switchTab' | 'navigate'
+  tabStorageKey?: string
+  tabValue?: string
+}
+
+const QUICK_ENTRIES: QuickEntry[] = [
+  { label: "项目路演", icon: Presentation, tint: "#EDF0F4", color: "#1B2A4A", path: "/pages/business/index", tabStorageKey: "business_initial_tab", tabValue: "roadshow" },
+  { label: "融资招募", icon: TrendingUp, tint: "#EEF1F6", color: "#2D4A7A", path: "/pages/business/index", tabStorageKey: "business_initial_tab", tabValue: "financing" },
+  { label: "会员推荐", icon: UserPlus, tint: "#FAF6F1", color: "#C9A96E", path: "/pages/invite/index", navType: "navigate" },
+  { label: "活动报名", icon: CalendarDays, tint: "#ECFDF5", color: "#10B981", path: "/pages/discover/index", tabStorageKey: "discover_initial_tab", tabValue: "events" },
+  { label: "人才查询", icon: UserSearch, tint: "#F0F0FE", color: "#6366F1", path: "/pages/discover/index", tabStorageKey: "discover_initial_tab", tabValue: "talents" },
+  { label: "项目查询", icon: Search, tint: "#FDF2F8", color: "#EC4899", path: "/pages/business/index", tabStorageKey: "business_initial_tab", tabValue: "all" },
+  { label: "发布动态", icon: SquarePen, tint: "#FFFBEB", color: "#F59E0B", path: "/pages/publish-post/index", navType: "navigate" },
   { label: "我的收益", icon: Wallet, tint: "#FEF2F2", color: "#EF4444", path: "/pages/profile/index" },
 ]
-
-const isCloudStorageImageUrl = (url: string) => {
-  if (!url || typeof url !== 'string') return false
-  const value = url.trim()
-  if (!/^https:\/\//i.test(value)) return false
-  // 兼容 COS / 云托管临时域名 / 带签名 query 的 URL
-  return /(?:\.myqcloud\.com|\.tcb\.qcloud\.la)(?:\/|\?|$)/i.test(value)
-}
 
 /** 与管理台 MEDIA_SPECS 上传比例一致 */
 const FEED_COVER_ASPECT: Record<string, string> = {
@@ -119,7 +124,6 @@ const IndexPage = () => {
   const [failedFeedImages, setFailedFeedImages] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
-    console.log('[首页] API domain:', PROJECT_DOMAIN)
     loadHomeData()
   }, [])
 
@@ -190,7 +194,10 @@ const IndexPage = () => {
 
   const handleBannerClick = (banner: BannerItem) => {
     const config = banner.link_config || {}
-    switch (banner.link_type) {
+    const linkType = String(banner.link_type || '').trim()
+    console.log('[首页] Banner 点击:', { id: banner.id, linkType, link_id: banner.link_id, config })
+
+    switch (linkType) {
       case 'article':
         openContentDetail('article', pickId(config.article_id, banner.link_id))
         break
@@ -203,18 +210,11 @@ const IndexPage = () => {
       case 'financing':
       case 'roadshow':
       case 'resource':
-        if (pickId(config.business_id, banner.link_id)) {
-          openContentDetail('business', pickId(config.business_id, banner.link_id))
-        } else {
-          Taro.switchTab({ url: '/pages/business/index' })
-        }
+      case 'business':
+        openContentDetail('business', pickId(config.business_id, banner.link_id))
         break
       case 'product':
-        if (pickId(config.product_id, banner.link_id)) {
-          openContentDetail('product', pickId(config.product_id, banner.link_id))
-        } else {
-          Taro.switchTab({ url: '/pages/mall/index' })
-        }
+        openContentDetail('product', pickId(config.product_id, banner.link_id))
         break
       case 'link':
         openExternalUrl(String(config.url || ''))
@@ -228,12 +228,31 @@ const IndexPage = () => {
     }
   }
 
-  const handleQuickEntryClick = (path: string) => {
-    if (!path) {
+  const handleQuickEntryClick = (entry: QuickEntry) => {
+    if (!entry.path) {
       Taro.showToast({ title: '功能建设中，敬请期待', icon: 'none' })
       return
     }
-    Taro.switchTab({ url: path })
+    if (entry.tabStorageKey && entry.tabValue) {
+      Taro.setStorageSync(entry.tabStorageKey, entry.tabValue)
+    }
+    if (entry.navType === 'navigate') {
+      Taro.navigateTo({
+        url: entry.path,
+        fail: (err) => {
+          console.error('[首页] 打开页面失败:', entry.path, err)
+          Taro.showToast({ title: '页面打开失败，请重新编译小程序', icon: 'none' })
+        },
+      })
+      return
+    }
+    Taro.switchTab({
+      url: entry.path,
+      fail: (err) => {
+        console.error('[首页] 切换 Tab 失败:', entry.path, err)
+        Taro.showToast({ title: '切换失败', icon: 'none' })
+      },
+    })
   }
 
   const handleBannerImageError = (bannerId: string) => {
@@ -255,28 +274,28 @@ const IndexPage = () => {
   return (
     <ScrollView scrollY className="h-full bg-[#F5F6FA]">
       {/* ── Custom Header ── */}
-      <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pb-4">
+      <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-3.5 pb-3">
         <View style={{ height: `${statusBarHeight}px` }} />
         {isMiniApp && (
-          <View className="flex flex-row items-center justify-between mb-3">
-            <View className="flex flex-row items-center gap-2">
-              <Text className="block text-xl font-bold text-white">星河百谷</Text>
-              <Text className="block text-xs text-[#E8D5A8] bg-[#F4EEE2] px-2 py-0 rounded-full">商会会员平台</Text>
+          <View className="flex flex-row items-center justify-between mb-2">
+            <View className="flex flex-row items-center gap-1.5">
+              <Text className="block text-lg font-bold text-white">星河百谷</Text>
+              <Text className="block text-xs text-[#C9A96E] bg-white/10 px-1.5 py-0 rounded">商会会员平台</Text>
             </View>
             <View className="relative" onClick={() => Taro.navigateTo({ url: '/pages/message/index' })}>
-              <Bell size={20} color="#ffffff" />
-              <View className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+              <Bell size={18} color="#ffffff" />
+              <View className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
             </View>
           </View>
         )}
         {/* Search Bar */}
         <View
           style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-          className="rounded-xl px-3 py-2 flex flex-row items-center gap-2"
+          className="rounded-lg px-2.5 py-1.5 flex flex-row items-center gap-1.5"
           onClick={() => Taro.showToast({ title: '搜索功能建设中', icon: 'none' })}
         >
-          <Search size={16} color="rgba(255,255,255,0.6)" />
-          <Text className="block text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>搜索项目、人才、资源...</Text>
+          <Search size={14} color="rgba(255,255,255,0.6)" />
+          <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>搜索项目、人才、资源...</Text>
           {!isMiniApp && (
             <View
               className="ml-auto"
@@ -285,7 +304,7 @@ const IndexPage = () => {
                 Taro.navigateTo({ url: '/pages/message/index' })
               }}
             >
-              <Bell size={18} color="#ffffff" />
+              <Bell size={16} color="#ffffff" />
             </View>
           )}
         </View>
@@ -293,25 +312,22 @@ const IndexPage = () => {
 
       {/* ── Banner Carousel ── */}
       {banners.length > 0 && (
-        <View className="px-4 pt-3">
+        <View className="px-3.5 pt-2.5">
           <Carousel
             key={banners.map((item) => item.id).join('-')}
             opts={{ autoplay: true, interval: 4000, duration: 500, loop: true }}
             className="w-full"
           >
             <View
-              className="relative w-full overflow-hidden rounded-2xl shadow-md"
+              className="relative w-full overflow-hidden rounded-xl shadow-sm"
               style={{ paddingBottom: `${(28 / 69) * 100}%` }}
             >
               <View className="absolute inset-0">
                 <CarouselContent className="h-full">
                   {banners.map((banner) => (
                     <CarouselItem key={banner.id} className="h-full">
-                      <View
-                        className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] relative overflow-hidden h-full w-full"
-                        onClick={() => handleBannerClick(banner)}
-                      >
-                        {isCloudStorageImageUrl(banner.image_url) && !failedBannerImages.has(banner.id) && (
+                      <View className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] relative overflow-hidden h-full w-full">
+                        {isDisplayableImageUrl(banner.image_url) && !failedBannerImages.has(banner.id) && (
                           <Image
                             src={banner.image_url}
                             mode="aspectFill"
@@ -321,19 +337,27 @@ const IndexPage = () => {
                           />
                         )}
                         {loadedBannerImages.has(banner.id) ? (
-                          <View className="absolute left-0 bottom-0 right-0 p-4 pb-8" style={{ background: 'linear-gradient(transparent, rgba(27,42,74,0.85))' }}>
-                            <Text className="block text-white text-base font-bold">{banner.title}</Text>
+                          <View
+                            className="absolute left-0 bottom-0 right-0 px-3 py-2.5 pb-6 z-10"
+                            style={{ background: 'linear-gradient(transparent, rgba(27,42,74,0.85))' }}
+                          >
+                            <Text className="block text-white text-sm font-semibold">{banner.title}</Text>
                           </View>
                         ) : (
-                          <View className="h-full flex flex-col justify-end p-5 pb-8">
-                            <View className="absolute -right-6 -top-6 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                            <View className="absolute left-0 bottom-0 right-0 h-1 bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8]" />
-                            <Text className="block text-white text-lg font-bold mb-1 relative z-10">{banner.title}</Text>
-                            <View className="rounded-lg px-3 py-1 self-start relative z-10" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                          <View className="h-full flex flex-col justify-end p-3.5 pb-6">
+                            <View className="absolute left-0 bottom-0 right-0 h-0.5 bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8]" />
+                            <Text className="block text-white text-sm font-semibold mb-1 relative z-10">{banner.title}</Text>
+                            <View className="rounded px-2 py-0.5 self-start relative z-10" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
                               <Text className="block text-white text-xs font-medium">立即参与 →</Text>
                             </View>
                           </View>
                         )}
+                        {/* 最上层透明点击区：微信 Swiper/Image 容易吞掉父级 onClick */}
+                        <View
+                          className="absolute inset-0 z-40"
+                          style={{ backgroundColor: 'rgba(0,0,0,0.001)' }}
+                          onClick={() => handleBannerClick(banner)}
+                        />
                       </View>
                     </CarouselItem>
                   ))}
@@ -346,19 +370,19 @@ const IndexPage = () => {
       )}
 
       {/* ── Quick Entry Grid ── */}
-      <View className="px-4 mt-5">
-        <View className="bg-white rounded-2xl p-4 shadow-sm">
-          <View className="grid grid-cols-4 gap-y-4">
+      <View className="px-3.5 mt-3">
+        <View className="bg-white rounded-xl p-3 shadow-sm">
+          <View className="grid grid-cols-4 gap-y-3">
             {QUICK_ENTRIES.map((entry) => (
               <View
                 key={entry.label}
                 className="flex flex-col items-center gap-1"
-                onClick={() => handleQuickEntryClick(entry.path)}
+                onClick={() => handleQuickEntryClick(entry)}
               >
-                <View className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ backgroundColor: entry.tint }}>
-                  <entry.icon size={22} color={entry.color} />
+                <View className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: entry.tint }}>
+                  <entry.icon size={18} color={entry.color} />
                 </View>
-                <Text className="block text-xs text-[#1A1D2E] font-medium">{entry.label}</Text>
+                <Text className="block text-xs text-[#1A1D2E]">{entry.label}</Text>
               </View>
             ))}
           </View>
@@ -367,23 +391,23 @@ const IndexPage = () => {
 
       {/* ── Homepage Waterfall Feed ── */}
       {feedItems.length > 0 && (
-        <View className="mt-6 px-4">
-          <View className="flex flex-row items-center gap-2 mb-3">
-            <View className="w-1 h-5 bg-[#C9A96E] rounded-full" />
-            <Text className="block text-base font-semibold text-[#1A1D2E]">精选内容</Text>
-            <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-[10px] px-1 py-0">{feedItems.length}</Badge>
+        <View className="mt-4 px-3.5">
+          <View className="flex flex-row items-center gap-1.5 mb-2">
+            <View className="w-0.5 h-3.5 bg-[#C9A96E] rounded-full" />
+            <Text className="block text-sm font-semibold text-[#1A1D2E]">精选内容</Text>
+            <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-xs px-1 py-0">{feedItems.length}</Badge>
           </View>
-          <View className="flex flex-row gap-3 items-start">
+          <View className="flex flex-row gap-2 items-start">
             {[leftFeed, rightFeed].map((column, colIdx) => (
-              <View key={colIdx} className="flex-1 flex flex-col gap-3">
+              <View key={colIdx} className="flex-1 flex flex-col gap-2">
                 {column.map((item) => {
                   const key = String(item.id)
-                  const coverOk = isCloudStorageImageUrl(item.cover_image || '') && !failedFeedImages.has(key)
+                  const coverOk = isDisplayableImageUrl(item.cover_image || '') && !failedFeedImages.has(key)
                   const aspectClass = getFeedCoverAspect(item)
                   return (
                     <View
                       key={key}
-                      className="bg-white rounded-2xl overflow-hidden shadow-sm"
+                      className="bg-white rounded-xl overflow-hidden shadow-sm"
                       onClick={() => openFeedItem(item)}
                     >
                       {coverOk ? (
@@ -396,18 +420,18 @@ const IndexPage = () => {
                           />
                         </View>
                       ) : (
-                        <View className={`w-full ${aspectClass} bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] flex items-center justify-center px-3`}>
-                          <Text className="block text-white text-sm font-semibold text-center">{item.title}</Text>
+                        <View className={`w-full ${aspectClass} bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] flex items-center justify-center px-2`}>
+                          <Text className="block text-white text-xs font-semibold text-center">{item.title}</Text>
                         </View>
                       )}
-                      <View className="p-3">
-                        <Text className="block text-sm font-semibold text-[#1A1D2E] leading-snug">{item.title}</Text>
-                        <View className="flex flex-row items-center justify-between mt-2">
-                          <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-xs font-medium px-2.5 py-1">
+                      <View className="p-2">
+                        <Text className="block text-xs font-semibold text-[#1A1D2E] leading-snug line-clamp-2">{item.title}</Text>
+                        <View className="flex flex-row items-center justify-between mt-1.5">
+                          <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-xs px-1.5 py-0">
                             {item.content_type_label || item.content_type}
                           </Badge>
-                          <View className="flex flex-row items-center gap-1">
-                            <Eye size={12} color="#9CA3AF" />
+                          <View className="flex flex-row items-center gap-0.5">
+                            <Eye size={11} color="#9CA3AF" />
                             <Text className="block text-xs text-gray-400">{item.view_count || 0}</Text>
                           </View>
                         </View>
@@ -423,15 +447,15 @@ const IndexPage = () => {
 
       {/* ── Loading State ── */}
       {loading && (
-        <View className="flex items-center justify-center py-20">
-          <Text className="block text-sm text-gray-400">加载中...</Text>
+        <View className="flex items-center justify-center py-12">
+          <Text className="block text-xs text-gray-400">加载中...</Text>
         </View>
       )}
 
       {/* ── Empty State ── */}
       {!loading && banners.length === 0 && feedItems.length === 0 && (
-        <View className="flex flex-col items-center justify-center gap-3 py-20">
-          <Text className="block text-sm text-gray-400">
+        <View className="flex flex-col items-center justify-center gap-2 py-12">
+          <Text className="block text-xs text-gray-400">
             {loadFailed ? '内容加载失败，请检查网络后重试' : '暂无数据，请在后台配置Banner和内容'}
           </Text>
           {loadFailed && (
@@ -443,7 +467,7 @@ const IndexPage = () => {
       )}
 
       {/* Bottom padding for TabBar */}
-      <View className="h-16" />
+      <View className="h-14" />
     </ScrollView>
   )
 }

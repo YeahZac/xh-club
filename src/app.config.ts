@@ -6,6 +6,8 @@ export default defineAppConfig({
     'pages/content-detail/index',
     'pages/talent-settle/index',
     'pages/invite/index',
+    'pages/publish-post/index',
+    'pages/my-posts/index',
     'pages/admin/index',
     'pages/message/index',
     'pages/business/index',

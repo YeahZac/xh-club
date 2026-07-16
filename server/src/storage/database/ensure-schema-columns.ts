@@ -38,6 +38,12 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['business_opportunities', 'start_time', 'TIMESTAMP NULL'],
   ['business_opportunities', 'end_time', 'TIMESTAMP NULL'],
   ['business_opportunities', 'form_fields', 'JSON NULL'],
+  ['business_opportunities', 'contact_phone', 'VARCHAR(32) NULL'],
+  ['business_opportunities', 'demand_talent_id', 'INT NULL'],
+  ['business_opportunities', 'source', `VARCHAR(16) NOT NULL DEFAULT 'admin'`],
+  ['business_opportunities', 'audit_status', `VARCHAR(16) NOT NULL DEFAULT 'approved'`],
+  ['business_opportunities', 'reject_reason', 'VARCHAR(500) NULL'],
+  ['business_opportunities', 'user_id', 'INT NULL'],
   // 会员推荐码
   ['members', 'invite_code', 'VARCHAR(32) NULL'],
   // 邀请奖励：积分 / 成长值 / 收益 / 贡献值 / 图文
@@ -271,5 +277,24 @@ export async function ensureSchemaColumns(): Promise<void> {
         console.warn(`[MySQL] 调整 ${table}.${column} 为 MEDIUMTEXT 失败:`, error?.message || error)
       }
     }
+  }
+
+  // 通知表（用户商机审核等）
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS notifications (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      member_id INT NOT NULL,
+      type VARCHAR(32) NOT NULL DEFAULT 'system',
+      title VARCHAR(255) NOT NULL,
+      content TEXT NULL,
+      is_read TINYINT(1) NOT NULL DEFAULT 0,
+      link VARCHAR(500) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_notifications_member (member_id),
+      INDEX idx_notifications_type (type),
+      INDEX idx_notifications_read (is_read)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`)
+  } catch (error: any) {
+    console.warn('[MySQL] 确保 notifications 表失败:', error?.message || error)
   }
 }

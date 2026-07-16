@@ -470,6 +470,20 @@ const ContentDetailPage = () => {
                 </Text>
               </View>
             )}
+            {contentType === 'business' && (detail.category === 'financing' || detail.category === 'resource') && (
+              <>
+                {detail.contact_phone && (
+                  <View className="flex flex-row items-center gap-1.5">
+                    <Text className="block text-xs text-gray-500">电话：{detail.contact_phone}</Text>
+                  </View>
+                )}
+                {detail.demand_talent_name && (
+                  <View className="flex flex-row items-center gap-1.5">
+                    <Text className="block text-xs text-gray-500">需求方：{detail.demand_talent_name}</Text>
+                  </View>
+                )}
+              </>
+            )}
           </View>
         </View>
 

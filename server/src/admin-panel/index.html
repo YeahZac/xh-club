@@ -496,7 +496,7 @@
     <!-- ====== 商机管理 ====== -->
     <div data-page="business" class="p-8 fade-in">
       <div class="flex items-center justify-between mb-6">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 flex-wrap">
           <select id="bizCategoryFilter" onchange="loadBusiness()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
             <option value="">全部分类</option>
             <option value="roadshow">项目路演</option>
@@ -504,9 +504,20 @@
             <option value="resource">资源对接</option>
           </select>
           <select id="bizStatusFilter" onchange="loadBusiness()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
-            <option value="">全部状态</option>
+            <option value="">全部发布状态</option>
             <option value="published">已发布</option>
             <option value="draft">草稿</option>
+          </select>
+          <select id="bizAuditFilter" onchange="loadBusiness()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+            <option value="">全部审核</option>
+            <option value="pending">待审核</option>
+            <option value="approved">已通过</option>
+            <option value="rejected">未通过</option>
+          </select>
+          <select id="bizSourceFilter" onchange="loadBusiness()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+            <option value="">全部来源</option>
+            <option value="admin">管理员上传</option>
+            <option value="user">用户上传</option>
           </select>
         </div>
         <button onclick="showBusinessModal()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition flex items-center gap-2">
@@ -518,15 +529,17 @@
         <table class="w-full">
           <thead class="bg-gray-50 border-b border-gray-100">
             <tr>
-              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">标题</th>
-              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">分类</th>
-              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">状态</th>
-              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">浏览</th>
-              <th class="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">操作</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">标题</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">分类</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">需求方</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">来源</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">审核状态</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">浏览</th>
+              <th class="px-4 py-4 text-center text-xs font-semibold text-gray-500 uppercase">操作</th>
             </tr>
           </thead>
           <tbody id="businessTableBody" class="divide-y divide-gray-50">
-            <tr><td colspan="5" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
+            <tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -2121,8 +2134,9 @@ function parseBizFormFields(value) {
 function toggleBizRoadshowFields() {
   const category = document.getElementById('bizCategory')?.value
   const panel = document.getElementById('bizRoadshowPanel')
-  if (!panel) return
-  panel.classList.toggle('hidden', category !== 'roadshow')
+  const extra = document.getElementById('bizExtraFields')
+  if (panel) panel.classList.toggle('hidden', category !== 'roadshow')
+  if (extra) extra.classList.toggle('hidden', category !== 'financing' && category !== 'resource')
 }
 
 function renderBizFormFields() {
@@ -2373,28 +2387,80 @@ function filterBizProjectOptions(keyword) {
 async function loadBusiness() {
   const category = document.getElementById('bizCategoryFilter')?.value || ''
   const status = document.getElementById('bizStatusFilter')?.value || ''
+  const audit = document.getElementById('bizAuditFilter')?.value || ''
+  const source = document.getElementById('bizSourceFilter')?.value || ''
   const qs = new URLSearchParams()
   if (category) qs.set('category', category)
   if (status) qs.set('status', status)
+  if (audit) qs.set('audit_status', audit)
+  if (source) qs.set('source', source)
   const res = await api('/admin/business' + (qs.toString() ? `?${qs}` : ''))
   if (res.code !== 200) return
   const list = Array.isArray(res.data) ? res.data : []
   if (!list.length) {
-    document.getElementById('businessTableBody').innerHTML = '<tr><td colspan="5" class="px-6 py-12 text-center text-gray-400">暂无商机</td></tr>'
+    document.getElementById('businessTableBody').innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">暂无商机</td></tr>'
     return
   }
-  document.getElementById('businessTableBody').innerHTML = list.map((item) => `
+  document.getElementById('businessTableBody').innerHTML = list.map((item) => {
+    const audit = item.audit_status || 'approved'
+    const auditCls = audit === 'pending'
+      ? 'bg-amber-100 text-amber-700'
+      : audit === 'rejected'
+        ? 'bg-red-100 text-red-700'
+        : 'bg-green-100 text-green-700'
+    const auditBtn = audit === 'pending'
+      ? `<button onclick="auditBusiness('${item.id}','approved')" class="px-2.5 py-1 text-xs rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 mr-1">通过</button>
+         <button onclick="rejectBusiness('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 mr-1">拒绝</button>`
+      : audit === 'rejected'
+        ? `<button onclick="auditBusiness('${item.id}','approved')" class="px-2.5 py-1 text-xs rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 mr-1">通过</button>`
+        : ''
+    return `
     <tr class="hover:bg-gray-50">
-      <td class="px-6 py-4 font-medium text-navy-800">${escapeHtml(item.title)}</td>
-      <td class="px-6 py-4 text-sm">${escapeHtml(BUSINESS_CATEGORY_MAP[item.category] || item.category)}</td>
-      <td class="px-6 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${item.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">${item.status === 'published' ? '已发布' : '草稿'}</span></td>
-      <td class="px-6 py-4 text-sm text-gray-500">${item.view_count || 0}</td>
-      <td class="px-6 py-4 text-center">
-        <button onclick="showBusinessModal('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 mr-2">编辑</button>
+      <td class="px-4 py-4 font-medium text-navy-800">${escapeHtml(item.title)}</td>
+      <td class="px-4 py-4 text-sm">${escapeHtml(BUSINESS_CATEGORY_MAP[item.category] || item.category)}</td>
+      <td class="px-4 py-4 text-sm text-gray-600">${escapeHtml(item.demand_talent_name || '-')}</td>
+      <td class="px-4 py-4 text-sm">${escapeHtml(item.source_label || (item.source === 'user' ? '用户上传' : '管理员上传'))}</td>
+      <td class="px-4 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${auditCls}">${escapeHtml(item.audit_status_label || audit)}</span></td>
+      <td class="px-4 py-4 text-sm text-gray-500">${item.view_count || 0}</td>
+      <td class="px-4 py-4 text-center whitespace-nowrap">
+        ${auditBtn}
+        <button onclick="showBusinessModal('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 mr-1">编辑</button>
         <button onclick="deleteBusiness('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200">删除</button>
       </td>
-    </tr>
-  `).join('')
+    </tr>`
+  }).join('')
+}
+
+async function auditBusiness(id, auditStatus, rejectReason) {
+  const body = { audit_status: auditStatus }
+  if (rejectReason) body.reject_reason = rejectReason
+  const res = await api(`/admin/business/${id}/audit`, { method: 'POST', body })
+  if (res.code === 200) { toast('审核完成'); loadBusiness() }
+  else toast(res.msg || '审核失败', 'error')
+}
+
+async function rejectBusiness(id) {
+  const reason = prompt('请输入拒绝原因（可选）', '内容不符合发布规范')
+  if (reason === null) return
+  await auditBusiness(id, 'rejected', reason)
+}
+
+let _bizTalentOptions = []
+async function ensureBizTalentCache() {
+  if (_bizTalentOptions.length) return _bizTalentOptions
+  const res = await api('/admin/talents?status=approved')
+  _bizTalentOptions = Array.isArray(res.data) ? res.data : (res.data?.list || [])
+  return _bizTalentOptions
+}
+
+function renderBizTalentOptions(selectedId) {
+  const opts = ['<option value="">不选择</option>']
+  for (const t of _bizTalentOptions) {
+    const id = t.id
+    const name = t.real_name || t.name || `人才#${id}`
+    opts.push(`<option value="${id}" ${String(selectedId) === String(id) ? 'selected' : ''}>${escapeHtml(name)}</option>`)
+  }
+  return opts.join('')
 }
 
 async function showBusinessModal(editId) {
@@ -2426,6 +2492,7 @@ async function showBusinessModal(editId) {
     _bizRoadshowDimensions = [{ name: '项目创新性', sort_order: 0 }, { name: '团队能力', sort_order: 1 }, { name: '市场前景', sort_order: 2 }]
   }
   await ensureBizProjectsCache()
+  await ensureBizTalentCache()
   const summaryHtml = item?.score_summary ? renderRoadshowSummaryPanel(item.score_summary) : ''
   showModal(`
     <div class="p-6" style="max-width:860px">
@@ -2447,6 +2514,18 @@ async function showBusinessModal(editId) {
             <select id="bizStatus" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
               <option value="published" ${(!item || item?.status==='published')?'selected':''}>发布</option>
               <option value="draft" ${item?.status==='draft'?'selected':''}>草稿</option>
+            </select>
+          </div>
+        </div>
+        <div id="bizExtraFields" class="${(item?.category==='financing' || item?.category==='resource') ? '' : 'hidden'} grid grid-cols-2 gap-4 border border-gray-100 rounded-2xl p-4 bg-gray-50/60">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">电话号码（选填）</label>
+            <input id="bizContactPhone" value="${escapeHtml(item?.contact_phone || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="联系电话">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">需求方（选填）</label>
+            <select id="bizDemandTalent" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+              ${renderBizTalentOptions(item?.demand_talent_id)}
             </select>
           </div>
         </div>
@@ -2521,6 +2600,8 @@ async function saveBusiness(editId) {
     cover_image: cover,
     summary: document.getElementById('bizSummary').value,
     content: getRichEditorHtml('bizContentEditor'),
+    contact_phone: document.getElementById('bizContactPhone')?.value || null,
+    demand_talent_id: document.getElementById('bizDemandTalent')?.value || null,
   }
   if (!body.title.trim()) return toast('请输入标题', 'error')
   if (!cover) return toast('商机封面图片为必填项', 'error')

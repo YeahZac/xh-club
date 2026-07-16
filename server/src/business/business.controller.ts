@@ -30,6 +30,34 @@ export class BusinessController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Get('my')
+  @UseGuards(MemberAuthGuard)
+  async myList(@Req() request: any) {
+    const result = await this.businessService.listMine(request.user.sub)
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post('submit')
+  @UseGuards(MemberAuthGuard)
+  async submit(@Req() request: any, @Body() body: any) {
+    const result = await this.businessService.submitByMember(request.user.sub, body)
+    return { code: 200, msg: '提交成功，等待审核', data: result }
+  }
+
+  @Put('my/:id')
+  @UseGuards(MemberAuthGuard)
+  async updateMine(@Param('id') id: string, @Req() request: any, @Body() body: any) {
+    const result = await this.businessService.updateMine(id, request.user.sub, body)
+    return { code: 200, msg: '已更新，等待重新审核', data: result }
+  }
+
+  @Delete('my/:id')
+  @UseGuards(MemberAuthGuard)
+  async removeMine(@Param('id') id: string, @Req() request: any) {
+    const result = await this.businessService.removeMine(id, request.user.sub)
+    return { code: 200, msg: '删除成功', data: result }
+  }
+
   @Post(':id/register')
   @UseGuards(MemberAuthGuard)
   async registerRoadshow(@Param('id') id: string, @Req() request: any, @Body() body: any) {
@@ -78,6 +106,12 @@ export class BusinessAdminController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Post(':id/audit')
+  async audit(@Param('id') id: string, @Body() body: { audit_status: string; reject_reason?: string }) {
+    const result = await this.businessService.audit(id, body)
+    return { code: 200, msg: '审核完成', data: result }
+  }
+
   @Get(':id')
   async detail(@Param('id') id: string) {
     const result = await this.businessService.adminGetById(id)
@@ -86,7 +120,7 @@ export class BusinessAdminController {
 
   @Post()
   async create(@Body() dto: any) {
-    const result = await this.businessService.create(dto)
+    const result = await this.businessService.create(dto, { source: 'admin' })
     return { code: 200, msg: '创建成功', data: result }
   }
 

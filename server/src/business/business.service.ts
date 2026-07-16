@@ -6,9 +6,16 @@ import { RoadshowService } from './roadshow.service'
 
 export const BUSINESS_CATEGORIES = ['roadshow', 'financing', 'resource'] as const
 export type BusinessCategory = (typeof BUSINESS_CATEGORIES)[number]
+export const USER_BUSINESS_CATEGORIES = ['financing', 'resource'] as const
+export const BUSINESS_SOURCES = ['admin', 'user'] as const
+export const BUSINESS_AUDIT_STATUSES = ['pending', 'approved', 'rejected'] as const
 
 function isBusinessCategory(value: unknown): value is BusinessCategory {
   return typeof value === 'string' && (BUSINESS_CATEGORIES as readonly string[]).includes(value)
+}
+
+function isUserBusinessCategory(value: unknown): value is (typeof USER_BUSINESS_CATEGORIES)[number] {
+  return typeof value === 'string' && (USER_BUSINESS_CATEGORIES as readonly string[]).includes(value)
 }
 
 /** MySQL DATETIME 不接受 ISO（含 T/Z），统一转为 `YYYY-MM-DD HH:mm:ss` */
@@ -19,12 +26,10 @@ function toMysqlDateTime(value: unknown): string | null {
   const raw = value instanceof Date ? value.toISOString() : value.trim()
   if (!raw) return null
 
-  // 已是 MySQL 格式
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(raw)) {
     return raw.length === 16 ? `${raw}:00` : raw
   }
 
-  // datetime-local: 2026-07-16T18:53 或 2026-07-16T18:53:00
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
     const normalized = raw.replace('T', ' ')
     return normalized.length === 16 ? `${normalized}:00` : normalized
@@ -43,6 +48,37 @@ export class BusinessService {
     private readonly roadshowService: RoadshowService,
   ) {}
 
+  private formatBusinessRow(row: any) {
+    if (!row) return row
+    const source = row.source || 'admin'
+    const audit = row.audit_status || 'approved'
+    return {
+      ...row,
+      source,
+      audit_status: audit,
+      source_label: source === 'user' ? '用户上传' : '管理员上传',
+      audit_status_label:
+        audit === 'pending' ? '待审核' : audit === 'rejected' ? '未通过' : '已通过',
+      demand_talent_name: row.demand_talent_name || null,
+    }
+  }
+
+  private async notifyMember(
+    memberId: string | number | null | undefined,
+    payload: { type: string; title: string; content: string; link?: string },
+  ) {
+    if (!memberId) return
+    try {
+      await queryExecute(
+        `INSERT INTO notifications (member_id, type, title, content, is_read, link)
+         VALUES (?, ?, ?, ?, 0, ?)`,
+        [memberId, payload.type, payload.title, payload.content, payload.link || null],
+      )
+    } catch (error) {
+      console.warn('[BusinessService] 写入通知失败:', (error as Error)?.message || error)
+    }
+  }
+
   async list(params: { category?: string; status?: string; page?: number; pageSize?: number }) {
     const page = Math.max(1, Number(params.page) || 1)
     const pageSize = Math.max(1, Math.min(100, Number(params.pageSize) || 20))
@@ -51,30 +87,35 @@ export class BusinessService {
     const values: any[] = []
 
     if (params.category && isBusinessCategory(params.category)) {
-      where.push('category = ?')
+      where.push('b.category = ?')
       values.push(params.category)
     }
     if (params.status) {
-      where.push('status = ?')
+      where.push('b.status = ?')
       values.push(params.status)
     } else {
-      where.push(`status = 'published'`)
+      where.push(`b.status = 'published'`)
     }
+    // 仅展示已通过审核（兼容旧数据 audit_status 为空）
+    where.push(`(b.audit_status = 'approved' OR b.audit_status IS NULL OR b.audit_status = '')`)
 
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
     const countRow = await queryOne(
-      `SELECT COUNT(*) AS total FROM business_opportunities ${whereSql}`,
+      `SELECT COUNT(*) AS total FROM business_opportunities b ${whereSql}`,
       values,
     )
     const rows = await queryRows(
-      `SELECT * FROM business_opportunities ${whereSql}
-       ORDER BY sort_order ASC, created_at DESC
+      `SELECT b.*, t.real_name AS demand_talent_name
+       FROM business_opportunities b
+       LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
+       ${whereSql}
+       ORDER BY b.sort_order ASC, b.created_at DESC
        LIMIT ? OFFSET ?`,
       [...values, pageSize, offset],
     )
     const list = await this.uploadService.signRowsFields(rows, ['cover_image'])
     return {
-      list,
+      list: (list || []).map((r) => this.formatBusinessRow(r)),
       total: Number(countRow?.total || 0),
       page,
       pageSize,
@@ -82,11 +123,31 @@ export class BusinessService {
   }
 
   async getById(id: string, memberId?: string | number) {
-    const row = await queryOne('SELECT * FROM business_opportunities WHERE id = ?', [id])
+    const row = await queryOne(
+      `SELECT b.*, t.real_name AS demand_talent_name
+       FROM business_opportunities b
+       LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
+       WHERE b.id = ?`,
+      [id],
+    )
     if (!row) throw new HttpException('商机不存在', HttpStatus.NOT_FOUND)
-    await queryExecute('UPDATE business_opportunities SET view_count = IFNULL(view_count, 0) + 1 WHERE id = ?', [id])
+
+    const audit = row.audit_status || 'approved'
+    const isOwner = memberId != null && String(row.user_id) === String(memberId)
+    const isPublic = row.status === 'published' && (audit === 'approved' || !row.audit_status)
+    if (!isPublic && !isOwner) {
+      throw new HttpException('商机不存在或未通过审核', HttpStatus.NOT_FOUND)
+    }
+
+    if (isPublic) {
+      await queryExecute(
+        'UPDATE business_opportunities SET view_count = IFNULL(view_count, 0) + 1 WHERE id = ?',
+        [id],
+      )
+    }
+
     const signed = await this.uploadService.signDetailMediaFields(
-      row,
+      this.formatBusinessRow(row),
       ['cover_image'],
       ['content', 'description', 'summary'],
     )
@@ -100,22 +161,50 @@ export class BusinessService {
     const where: string[] = []
     const values: any[] = []
     if (query?.category && isBusinessCategory(query.category)) {
-      where.push('category = ?')
+      where.push('b.category = ?')
       values.push(query.category)
     }
     if (query?.status) {
-      where.push('status = ?')
+      where.push('b.status = ?')
       values.push(query.status)
+    }
+    if (query?.audit_status) {
+      where.push('b.audit_status = ?')
+      values.push(query.audit_status)
+    }
+    if (query?.source) {
+      where.push('b.source = ?')
+      values.push(query.source)
     }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
     const rows = await queryRows(
-      `SELECT * FROM business_opportunities ${whereSql} ORDER BY sort_order ASC, created_at DESC`,
+      `SELECT b.*, t.real_name AS demand_talent_name
+       FROM business_opportunities b
+       LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
+       ${whereSql}
+       ORDER BY
+         CASE WHEN b.audit_status = 'pending' THEN 0 ELSE 1 END,
+         b.created_at DESC`,
       values,
     )
-    return this.uploadService.signRowsFields(rows, ['cover_image'])
+    const signed = await this.uploadService.signRowsFields(rows, ['cover_image'])
+    return (signed || []).map((r) => this.formatBusinessRow(r))
   }
 
-  async create(dto: any) {
+  private normalizeContactPhone(category: string, phone: unknown) {
+    if (category !== 'financing' && category !== 'resource') return null
+    const value = String(phone || '').trim()
+    return value || null
+  }
+
+  private normalizeDemandTalentId(category: string, talentId: unknown) {
+    if (category !== 'financing' && category !== 'resource') return null
+    if (talentId == null || talentId === '') return null
+    const id = Number(talentId)
+    return Number.isFinite(id) && id > 0 ? id : null
+  }
+
+  async create(dto: any, options?: { source?: 'admin' | 'user'; memberId?: string | number }) {
     if (!dto?.title?.trim()) throw new HttpException('标题不能为空', HttpStatus.BAD_REQUEST)
     if (!isBusinessCategory(dto.category)) {
       throw new HttpException('分类必须是项目路演/融资招募/资源对接', HttpStatus.BAD_REQUEST)
@@ -123,11 +212,27 @@ export class BusinessService {
     if (!dto.cover_image?.trim()) {
       throw new HttpException('封面图片为必填项', HttpStatus.BAD_REQUEST)
     }
+    const source = options?.source || 'admin'
     const coverImage = assertCloudStorageImageUrl(dto.cover_image, true)
+    const contactPhone = this.normalizeContactPhone(dto.category, dto.contact_phone)
+    const demandTalentId = this.normalizeDemandTalentId(dto.category, dto.demand_talent_id)
+
+    let status = dto.status || 'published'
+    let auditStatus = dto.audit_status || 'approved'
+    if (source === 'user') {
+      if (!isUserBusinessCategory(dto.category)) {
+        throw new HttpException('用户仅可发布融资招募或资源对接', HttpStatus.BAD_REQUEST)
+      }
+      status = 'draft'
+      auditStatus = 'pending'
+    }
+
     const result = await queryExecute(
       `INSERT INTO business_opportunities
-        (title, category, summary, content, cover_image, industry, region, amount_min, amount_max, stage, contact_info, status, sort_order, start_time, end_time, form_fields)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (title, category, summary, content, cover_image, industry, region, amount_min, amount_max, stage,
+         contact_info, contact_phone, demand_talent_id, source, audit_status, reject_reason, user_id,
+         status, sort_order, start_time, end_time, form_fields)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         dto.title.trim(),
         dto.category,
@@ -140,7 +245,13 @@ export class BusinessService {
         dto.amount_max ?? null,
         dto.stage || null,
         dto.contact_info || null,
-        dto.status || 'published',
+        contactPhone,
+        demandTalentId,
+        source,
+        auditStatus,
+        null,
+        options?.memberId || dto.user_id || null,
+        status,
         dto.sort_order || 0,
         dto.start_time ? toMysqlDateTime(dto.start_time) : null,
         dto.end_time ? toMysqlDateTime(dto.end_time) : null,
@@ -160,7 +271,6 @@ export class BusinessService {
       }
       return this.getAdminById(businessId)
     } catch (error) {
-      // 路演配置失败时回滚已创建的商机，避免重复点击产生多条脏数据
       try {
         await queryExecute('DELETE FROM roadshow_scores WHERE business_id = ?', [businessId])
         await queryExecute('DELETE FROM roadshow_registrations WHERE business_id = ?', [businessId])
@@ -175,7 +285,7 @@ export class BusinessService {
   }
 
   async update(id: string, dto: any) {
-    const existing = await queryOne('SELECT id FROM business_opportunities WHERE id = ?', [id])
+    const existing = await queryOne('SELECT * FROM business_opportunities WHERE id = ?', [id])
     if (!existing) throw new HttpException('商机不存在', HttpStatus.NOT_FOUND)
 
     const updates: string[] = []
@@ -206,6 +316,23 @@ export class BusinessService {
     if (dto.amount_max !== undefined) assign('amount_max', dto.amount_max ?? null)
     if (dto.stage !== undefined) assign('stage', dto.stage || null)
     if (dto.contact_info !== undefined) assign('contact_info', dto.contact_info || null)
+    if (dto.contact_phone !== undefined || dto.category !== undefined) {
+      const category = dto.category || existing.category
+      assign(
+        'contact_phone',
+        this.normalizeContactPhone(category, dto.contact_phone !== undefined ? dto.contact_phone : existing.contact_phone),
+      )
+    }
+    if (dto.demand_talent_id !== undefined || dto.category !== undefined) {
+      const category = dto.category || existing.category
+      assign(
+        'demand_talent_id',
+        this.normalizeDemandTalentId(
+          category,
+          dto.demand_talent_id !== undefined ? dto.demand_talent_id : existing.demand_talent_id,
+        ),
+      )
+    }
     if (dto.status !== undefined) assign('status', dto.status || 'published')
     if (dto.sort_order !== undefined) assign('sort_order', dto.sort_order || 0)
     if (dto.start_time !== undefined) assign('start_time', toMysqlDateTime(dto.start_time))
@@ -233,6 +360,95 @@ export class BusinessService {
     return this.getAdminById(id)
   }
 
+  async audit(id: string, dto: { audit_status: string; reject_reason?: string }) {
+    const row = await queryOne('SELECT * FROM business_opportunities WHERE id = ?', [id])
+    if (!row) throw new HttpException('商机不存在', HttpStatus.NOT_FOUND)
+    const status = String(dto.audit_status || '').trim()
+    if (status !== 'approved' && status !== 'rejected') {
+      throw new HttpException('审核状态无效', HttpStatus.BAD_REQUEST)
+    }
+    if (status === 'rejected' && !String(dto.reject_reason || '').trim()) {
+      // reject_reason 可选，给默认文案
+    }
+    const rejectReason =
+      status === 'rejected' ? String(dto.reject_reason || '').trim() || '未通过审核' : null
+
+    await queryExecute(
+      `UPDATE business_opportunities
+       SET audit_status = ?,
+           reject_reason = ?,
+           status = ?,
+           updated_at = NOW()
+       WHERE id = ?`,
+      [status, rejectReason, status === 'approved' ? 'published' : 'draft', id],
+    )
+
+    await this.notifyMember(row.user_id, {
+      type: 'approval',
+      title: status === 'approved' ? '动态审核通过' : '动态审核未通过',
+      content:
+        status === 'approved'
+          ? `您发布的「${row.title}」已通过审核并上架`
+          : `您发布的「${row.title}」未通过审核${rejectReason ? `：${rejectReason}` : ''}`,
+      link: '/pages/my-posts/index',
+    })
+
+    return this.getAdminById(id)
+  }
+
+  async listMine(memberId: string | number) {
+    const rows = await queryRows(
+      `SELECT b.*, t.real_name AS demand_talent_name
+       FROM business_opportunities b
+       LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
+       WHERE b.user_id = ?
+       ORDER BY b.created_at DESC`,
+      [memberId],
+    )
+    const signed = await this.uploadService.signRowsFields(rows, ['cover_image'])
+    return (signed || []).map((r) => this.formatBusinessRow(r))
+  }
+
+  async submitByMember(memberId: string | number, dto: any) {
+    return this.create(dto, { source: 'user', memberId })
+  }
+
+  async updateMine(id: string, memberId: string | number, dto: any) {
+    const existing = await queryOne('SELECT * FROM business_opportunities WHERE id = ?', [id])
+    if (!existing) throw new HttpException('内容不存在', HttpStatus.NOT_FOUND)
+    if (String(existing.user_id) !== String(memberId)) {
+      throw new HttpException('无权编辑该内容', HttpStatus.FORBIDDEN)
+    }
+    if (!isUserBusinessCategory(dto.category || existing.category)) {
+      throw new HttpException('仅可发布融资招募或资源对接', HttpStatus.BAD_REQUEST)
+    }
+
+    const payload = {
+      ...dto,
+      category: dto.category || existing.category,
+      status: 'draft',
+    }
+    // 用户编辑后重新进入待审核
+    const result = await this.update(id, payload)
+    await queryExecute(
+      `UPDATE business_opportunities
+       SET audit_status = 'pending', reject_reason = NULL, status = 'draft', source = 'user', updated_at = NOW()
+       WHERE id = ?`,
+      [id],
+    )
+    return this.getAdminById(id) || result
+  }
+
+  async removeMine(id: string, memberId: string | number) {
+    const existing = await queryOne('SELECT * FROM business_opportunities WHERE id = ?', [id])
+    if (!existing) throw new HttpException('内容不存在', HttpStatus.NOT_FOUND)
+    if (String(existing.user_id) !== String(memberId)) {
+      throw new HttpException('无权删除该内容', HttpStatus.FORBIDDEN)
+    }
+    await queryExecute('DELETE FROM business_opportunities WHERE id = ?', [id])
+    return { success: true }
+  }
+
   async remove(id: string) {
     await queryExecute('DELETE FROM business_opportunities WHERE id = ?', [id])
     return { success: true }
@@ -247,8 +463,19 @@ export class BusinessService {
   }
 
   private async getAdminById(id: string) {
-    const row = await queryOne('SELECT * FROM business_opportunities WHERE id = ?', [id])
+    const row = await queryOne(
+      `SELECT b.*, t.real_name AS demand_talent_name
+       FROM business_opportunities b
+       LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
+       WHERE b.id = ?`,
+      [id],
+    )
     if (!row) throw new HttpException('商机不存在', HttpStatus.NOT_FOUND)
-    return this.uploadService.signRowFields(row, ['cover_image'])
+    const signed = await this.uploadService.signDetailMediaFields(
+      this.formatBusinessRow(row),
+      ['cover_image'],
+      ['content', 'summary'],
+    )
+    return signed
   }
 }
