@@ -5,6 +5,7 @@ export default defineAppConfig({
     'pages/event-register/index',
     'pages/content-detail/index',
     'pages/talent-settle/index',
+    'pages/invite/index',
     'pages/admin/index',
     'pages/message/index',
     'pages/business/index',
