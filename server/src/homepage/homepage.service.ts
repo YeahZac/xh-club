@@ -108,6 +108,9 @@ export class HomepageService {
         [section, meta.display_name, meta.sort_order],
       )
     }
+
+    const { ensureSchemaColumns } = await import('@/storage/database/ensure-schema-columns')
+    await ensureSchemaColumns()
   }
 
   async getConfig(admin = false) {
@@ -199,7 +202,10 @@ export class HomepageService {
     let row: any = null
 
     if (section === 'events') {
-      row = await queryOne('SELECT id, title, cover_image, event_type, view_count, created_at FROM events WHERE id = ?', [itemId])
+      row = await queryOne(
+        'SELECT id, title, cover_image, event_type, IFNULL(view_count, 0) AS view_count, created_at FROM events WHERE id = ?',
+        [itemId],
+      )
     } else if (section === 'products') {
       row = await queryOne(
         `SELECT id, name AS title, image_url AS cover_image, IFNULL(view_count, 0) AS view_count, created_at
@@ -264,6 +270,7 @@ export class HomepageService {
   }
 
   async getCandidates(sectionValue: string, keyword?: string) {
+    await this.ensureHomepageSchema()
     const section = assertSection(sectionValue)
     const kw = String(keyword || '').trim()
     const like = `%${kw}%`

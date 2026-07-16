@@ -10,6 +10,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['projects', 'industry', 'VARCHAR(64) NULL'],
   ['projects', 'stage', `VARCHAR(32) DEFAULT 'seed'`],
   ['projects', 'amount_max', 'DECIMAL(14,2) NULL'],
+  ['projects', 'view_count', 'INT NOT NULL DEFAULT 0'],
   ['articles', 'subtitle', 'VARCHAR(255) NULL'],
   ['articles', 'video_url', 'VARCHAR(500) NULL'],
   ['articles', 'category', `VARCHAR(50) DEFAULT 'news'`],
@@ -30,6 +31,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['business_opportunities', 'stage', 'VARCHAR(32) NULL'],
   ['business_opportunities', 'contact_info', 'VARCHAR(255) NULL'],
   ['business_opportunities', 'sort_order', 'INT NOT NULL DEFAULT 0'],
+  ['business_opportunities', 'view_count', 'INT NOT NULL DEFAULT 0'],
 ]
 
 const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
