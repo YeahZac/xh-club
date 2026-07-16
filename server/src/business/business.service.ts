@@ -91,9 +91,10 @@ export class BusinessService {
     if (!isBusinessCategory(dto.category)) {
       throw new HttpException('分类必须是项目路演/融资招募/资源对接', HttpStatus.BAD_REQUEST)
     }
-    const coverImage = dto.cover_image
-      ? assertCloudStorageImageUrl(dto.cover_image, true)
-      : null
+    if (!dto.cover_image?.trim()) {
+      throw new HttpException('封面图片为必填项', HttpStatus.BAD_REQUEST)
+    }
+    const coverImage = assertCloudStorageImageUrl(dto.cover_image, true)
     const result = await queryExecute(
       `INSERT INTO business_opportunities
         (title, category, summary, content, cover_image, industry, region, amount_min, amount_max, stage, contact_info, status, sort_order, start_time, end_time, form_fields)
@@ -151,7 +152,10 @@ export class BusinessService {
     if (dto.summary !== undefined) assign('summary', dto.summary || null)
     if (dto.content !== undefined) assign('content', dto.content || null)
     if (dto.cover_image !== undefined) {
-      assign('cover_image', dto.cover_image ? assertCloudStorageImageUrl(dto.cover_image, true) : null)
+      if (!String(dto.cover_image || '').trim()) {
+        throw new HttpException('封面图片为必填项', HttpStatus.BAD_REQUEST)
+      }
+      assign('cover_image', assertCloudStorageImageUrl(dto.cover_image, true))
     }
     if (dto.industry !== undefined) assign('industry', dto.industry || null)
     if (dto.region !== undefined) assign('region', dto.region || null)

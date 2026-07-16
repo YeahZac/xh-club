@@ -2397,11 +2397,13 @@ async function showBusinessModal(editId) {
           ${editId ? `<div><p class="text-sm font-medium text-navy-800 mb-2">评分汇总</p>${summaryHtml}</div>` : ''}
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">封面图（选填）</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">封面图片 <span class="text-red-500">*</span></label>
+          <p class="text-xs text-gray-400 mb-2">${mediaHint('business')}</p>
           <div class="flex items-center gap-3">
-            <input id="bizCover" value="${escapeHtml(item?.cover_image || '')}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传封面">
-            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'bizCover', 690, 388)"></label>
+            <input id="bizCover" required value="${escapeHtml(item?.cover_image || '')}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="请上传商机封面">
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'bizCover', 690, 690)"></label>
           </div>
+          ${mediaPreviewBox('business')}
         </div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">摘要</label><textarea id="bizSummary" rows="2" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${escapeHtml(item?.summary || '')}</textarea></div>
         <div>
@@ -2430,11 +2432,12 @@ async function saveBusiness(editId) {
     title: document.getElementById('bizTitle').value,
     category,
     status: document.getElementById('bizStatus').value,
-    cover_image: cover || null,
+    cover_image: cover,
     summary: document.getElementById('bizSummary').value,
     content: getRichEditorHtml('bizContentEditor'),
   }
   if (!body.title.trim()) return toast('请输入标题', 'error')
+  if (!cover) return toast('商机封面图片为必填项', 'error')
   if (category === 'roadshow') {
     const roadshowPayload = collectBizRoadshowPayload()
     if (!roadshowPayload?.roadshow?.projects?.length) return toast('请至少选择一个路演项目', 'error')
@@ -2994,10 +2997,11 @@ const MEDIA_IMAGE_MAX_BYTES = 2 * 1024 * 1024
 const MEDIA_VIDEO_MAX_BYTES = 200 * 1024 * 1024
 const MEDIA_SPECS = {
   banner:  { w: 690, h: 280, label: 'Banner', tip: '手机首页轮播约 343×140，上传 690×280（约 2.46:1）' },
-  event:   { w: 690, h: 290, label: '活动封面', tip: '手机活动卡片约 343×144，上传 690×290（约 2.38:1）' },
+  event:   { w: 690, h: 290, label: '活动封面', tip: '手机发现页列表左侧缩略图约 2.38:1，上传 690×290' },
   project: { w: 690, h: 388, label: '项目封面', tip: '手机项目封面约 343×193，上传 690×388（16:9）' },
   article: { w: 690, h: 388, label: '文章封面', tip: '手机文章封面约 343×193，上传 690×388（16:9）' },
   product: { w: 690, h: 690, label: '商品图', tip: '手机商品主图正方形，上传 690×690（1:1）' },
+  business: { w: 690, h: 690, label: '商机封面', tip: '手机商机列表左侧缩略图为正方形，上传 690×690（1:1）' },
 }
 
 function mediaHint(specKey) {
