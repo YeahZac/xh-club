@@ -622,6 +622,7 @@ export class AdminService {
       params.push(id)
       await queryExecute(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`, params)
       const row = await queryOne('SELECT * FROM projects WHERE id = ?', [id])
+      if (!row) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
       return this.uploadService.signRowFields(row, ['cover_image', 'video_url'])
     } catch (error) {
       console.error('[AdminService] updateProject error:', error)

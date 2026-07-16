@@ -33,7 +33,7 @@ export class BusinessService {
     }
 
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
-    const countRow = await queryOne<{ total: number }>(
+    const countRow = await queryOne(
       `SELECT COUNT(*) AS total FROM business_opportunities ${whereSql}`,
       values,
     )

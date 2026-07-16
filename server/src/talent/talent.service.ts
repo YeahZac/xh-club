@@ -51,8 +51,8 @@ export class TalentService {
   constructor(private readonly uploadService: UploadService) {}
 
   async ensureDefaultIndustries() {
-    const countRow = await queryOne<{ total: number }>('SELECT COUNT(*) AS total FROM industries')
-    if (Number(countRow?.total || 0) > 0) return
+    const countRow = await queryOne('SELECT COUNT(*) AS total FROM industries')
+    if (Number((countRow as any)?.total || 0) > 0) return
     for (const item of DEFAULT_INDUSTRIES) {
       await queryExecute(
         'INSERT INTO industries (code, name, sort_order, status) VALUES (?, ?, ?, ?)',
@@ -145,7 +145,7 @@ export class TalentService {
     }
 
     const whereSql = `WHERE ${where.join(' AND ')}`
-    const countRow = await queryOne<{ total: number }>(
+    const countRow = await queryOne(
       `SELECT COUNT(*) AS total FROM talent_applications t ${whereSql}`,
       values,
     )
