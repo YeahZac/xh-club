@@ -12,6 +12,10 @@ import {
   normalizeInviteConditions,
   normalizeInviteRewards,
 } from '@/invitation/invitation-rule.util'
+import {
+  formatPointsRuleRow,
+  normalizePointsRuleDto,
+} from '@/points/points-rule.util'
 
 interface UserRow extends RowDataPacket {
   id: number
@@ -1308,7 +1312,6 @@ export class AdminService {
   /** ====== 积分规则管理 ====== */
   async getPointsRules() {
     try {
-      const { formatPointsRuleRow } = await import('@/points/points-rule.util')
       const rows = await queryRows('SELECT * FROM points_rules ORDER BY priority DESC, created_at DESC')
       return (rows || []).map((r) => formatPointsRuleRow(r))
     } catch (error) {
@@ -1319,7 +1322,6 @@ export class AdminService {
 
   async createPointsRule(dto: any) {
     try {
-      const { normalizePointsRuleDto, formatPointsRuleRow } = await import('@/points/points-rule.util')
       const data = normalizePointsRuleDto(dto)
       if (data.action_type === 'invite' || data.action_type === 'invite_friend' || data.action_type === 'invite_register') {
         throw new HttpException('邀请积分请在「邀请奖励」模块配置', HttpStatus.BAD_REQUEST)
@@ -1359,7 +1361,6 @@ export class AdminService {
 
   async updatePointsRule(id: string, dto: any) {
     try {
-      const { normalizePointsRuleDto, formatPointsRuleRow } = await import('@/points/points-rule.util')
       const data = normalizePointsRuleDto({ ...dto, action_type: dto.action_type || dto.action })
       if (data.action_type === 'invite' || data.action_type === 'invite_friend' || data.action_type === 'invite_register') {
         throw new HttpException('邀请积分请在「邀请奖励」模块配置', HttpStatus.BAD_REQUEST)
