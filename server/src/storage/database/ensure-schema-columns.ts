@@ -32,6 +32,9 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['business_opportunities', 'contact_info', 'VARCHAR(255) NULL'],
   ['business_opportunities', 'sort_order', 'INT NOT NULL DEFAULT 0'],
   ['business_opportunities', 'view_count', 'INT NOT NULL DEFAULT 0'],
+  ['business_opportunities', 'start_time', 'TIMESTAMP NULL'],
+  ['business_opportunities', 'end_time', 'TIMESTAMP NULL'],
+  ['business_opportunities', 'form_fields', 'JSON NULL'],
 ]
 
 const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
@@ -58,6 +61,57 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       INDEX idx_business_category (category),
       INDEX idx_business_status (status),
       INDEX idx_business_sort (sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
+  {
+    name: 'roadshow_projects',
+    sql: `CREATE TABLE IF NOT EXISTS roadshow_projects (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      business_id INT NOT NULL,
+      project_id INT NOT NULL,
+      cover_image VARCHAR(500) NULL,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_roadshow_project (business_id, project_id),
+      INDEX idx_roadshow_business (business_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
+  {
+    name: 'roadshow_score_dimensions',
+    sql: `CREATE TABLE IF NOT EXISTS roadshow_score_dimensions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      business_id INT NOT NULL,
+      name VARCHAR(64) NOT NULL,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_roadshow_dimension_business (business_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
+  {
+    name: 'roadshow_registrations',
+    sql: `CREATE TABLE IF NOT EXISTS roadshow_registrations (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      business_id INT NOT NULL,
+      member_id INT NOT NULL,
+      form_answers JSON NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_roadshow_registration (business_id, member_id),
+      INDEX idx_roadshow_registration_business (business_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
+  {
+    name: 'roadshow_scores',
+    sql: `CREATE TABLE IF NOT EXISTS roadshow_scores (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      business_id INT NOT NULL,
+      project_id INT NOT NULL,
+      member_id INT NOT NULL,
+      dimension_id INT NOT NULL,
+      stars TINYINT NOT NULL DEFAULT 5,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_roadshow_score (business_id, project_id, member_id, dimension_id),
+      INDEX idx_roadshow_score_business_project (business_id, project_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   },
   {

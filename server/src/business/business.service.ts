@@ -2,6 +2,7 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { queryRows, queryOne, queryExecute } from '@/storage/database/mysql-client'
 import { UploadService } from '@/upload/upload.service'
 import { assertCloudStorageImageUrl } from '@/utils/media-validators'
+import { RoadshowService } from './roadshow.service'
 
 export const BUSINESS_CATEGORIES = ['roadshow', 'financing', 'resource'] as const
 export type BusinessCategory = (typeof BUSINESS_CATEGORIES)[number]
@@ -12,7 +13,10 @@ function isBusinessCategory(value: unknown): value is BusinessCategory {
 
 @Injectable()
 export class BusinessService {
-  constructor(private readonly uploadService: UploadService) {}
+  constructor(
+    private readonly uploadService: UploadService,
+    private readonly roadshowService: RoadshowService,
+  ) {}
 
   async list(params: { category?: string; status?: string; page?: number; pageSize?: number }) {
     const page = Math.max(1, Number(params.page) || 1)
@@ -52,11 +56,15 @@ export class BusinessService {
     }
   }
 
-  async getById(id: string) {
+  async getById(id: string, memberId?: string | number) {
     const row = await queryOne('SELECT * FROM business_opportunities WHERE id = ?', [id])
     if (!row) throw new HttpException('商机不存在', HttpStatus.NOT_FOUND)
     await queryExecute('UPDATE business_opportunities SET view_count = IFNULL(view_count, 0) + 1 WHERE id = ?', [id])
-    return this.uploadService.signRowFields(row, ['cover_image'])
+    const signed = await this.uploadService.signRowFields(row, ['cover_image'])
+    if (signed.category === 'roadshow') {
+      return this.roadshowService.enrichBusinessRow(signed, memberId)
+    }
+    return signed
   }
 
   async adminList(query: any) {
@@ -88,8 +96,8 @@ export class BusinessService {
       : null
     const result = await queryExecute(
       `INSERT INTO business_opportunities
-        (title, category, summary, content, cover_image, industry, region, amount_min, amount_max, stage, contact_info, status, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (title, category, summary, content, cover_image, industry, region, amount_min, amount_max, stage, contact_info, status, sort_order, start_time, end_time, form_fields)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         dto.title.trim(),
         dto.category,
@@ -104,9 +112,22 @@ export class BusinessService {
         dto.contact_info || null,
         dto.status || 'published',
         dto.sort_order || 0,
+        dto.start_time || null,
+        dto.end_time || null,
+        dto.form_fields == null ? null : JSON.stringify(dto.form_fields),
       ],
     )
-    return this.getAdminById(String(result.insertId))
+    const businessId = String(result.insertId)
+    if (dto.category === 'roadshow' && dto.roadshow) {
+      await this.roadshowService.saveConfig(businessId, {
+        start_time: dto.start_time || dto.roadshow.start_time,
+        end_time: dto.end_time || dto.roadshow.end_time,
+        form_fields: dto.form_fields ?? dto.roadshow.form_fields,
+        projects: dto.roadshow.projects,
+        dimensions: dto.roadshow.dimensions,
+      })
+    }
+    return this.getAdminById(businessId)
   }
 
   async update(id: string, dto: any) {
@@ -140,10 +161,28 @@ export class BusinessService {
     if (dto.contact_info !== undefined) assign('contact_info', dto.contact_info || null)
     if (dto.status !== undefined) assign('status', dto.status || 'published')
     if (dto.sort_order !== undefined) assign('sort_order', dto.sort_order || 0)
+    if (dto.start_time !== undefined) assign('start_time', dto.start_time || null)
+    if (dto.end_time !== undefined) assign('end_time', dto.end_time || null)
+    if (dto.form_fields !== undefined) {
+      assign('form_fields', dto.form_fields == null ? null : JSON.stringify(dto.form_fields))
+    }
 
-    if (!updates.length) throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
-    params.push(id)
-    await queryExecute(`UPDATE business_opportunities SET ${updates.join(', ')} WHERE id = ?`, params)
+    if (!updates.length && !dto.roadshow) {
+      throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
+    }
+    if (updates.length) {
+      params.push(id)
+      await queryExecute(`UPDATE business_opportunities SET ${updates.join(', ')} WHERE id = ?`, params)
+    }
+    if (dto.roadshow) {
+      await this.roadshowService.saveConfig(id, {
+        start_time: dto.start_time,
+        end_time: dto.end_time,
+        form_fields: dto.form_fields,
+        projects: dto.roadshow.projects,
+        dimensions: dto.roadshow.dimensions,
+      })
+    }
     return this.getAdminById(id)
   }
 
@@ -153,7 +192,11 @@ export class BusinessService {
   }
 
   async adminGetById(id: string) {
-    return this.getAdminById(id)
+    const row = await this.getAdminById(id)
+    if (row.category === 'roadshow') {
+      return this.roadshowService.getAdminDetail(id)
+    }
+    return row
   }
 
   private async getAdminById(id: string) {

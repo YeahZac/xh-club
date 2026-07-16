@@ -1914,6 +1914,244 @@ async function createProject() {
 
 
 // ===== 商机管理 =====
+let _bizFormFields = []
+let _bizRoadshowProjects = []
+let _bizRoadshowDimensions = []
+let _bizProjectsCache = []
+
+function parseBizFormFields(value) {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed : []
+    } catch { return [] }
+  }
+  return []
+}
+
+function toggleBizRoadshowFields() {
+  const category = document.getElementById('bizCategory')?.value
+  const panel = document.getElementById('bizRoadshowPanel')
+  if (!panel) return
+  panel.classList.toggle('hidden', category !== 'roadshow')
+}
+
+function renderBizFormFields() {
+  const container = document.getElementById('bizFormFieldsList')
+  if (!container) return
+  container.innerHTML = _bizFormFields.map((field, index) => `
+    <div class="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
+      <input value="${escapeHtml(field.label || '')}" onchange="_bizFormFields[${index}].label=this.value" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="字段名称">
+      <select onchange="_bizFormFields[${index}].type=this.value" class="px-3 py-2 border border-gray-200 rounded-lg text-sm">
+        <option value="text" ${field.type==='text'?'selected':''}>单行文本</option>
+        <option value="textarea" ${field.type==='textarea'?'selected':''}>多行文本</option>
+        <option value="number" ${field.type==='number'?'selected':''}>数字</option>
+        <option value="select" ${field.type==='select'?'selected':''}>下拉选择</option>
+      </select>
+      <label class="flex items-center gap-1 text-xs text-gray-600 whitespace-nowrap">
+        <input type="checkbox" ${field.required ? 'checked' : ''} onchange="_bizFormFields[${index}].required=this.checked"> 必填
+      </label>
+      <button onclick="_bizFormFields.splice(${index},1);renderBizFormFields()" class="px-2 py-1 text-xs text-red-600">删除</button>
+    </div>
+    ${field.type === 'select' ? `<input value="${escapeHtml((field.options || []).join(','))}" onchange="_bizFormFields[${index}].options=this.value.split(',').map(s=>s.trim()).filter(Boolean)" class="w-full mt-2 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="选项，逗号分隔">` : ''}
+  `).join('')
+}
+
+function addBizFormField() {
+  _bizFormFields.push({ label: '', type: 'text', required: false })
+  renderBizFormFields()
+}
+
+async function ensureBizProjectsCache() {
+  if (_bizProjectsCache.length) return _bizProjectsCache
+  const res = await api('/admin/projects')
+  _bizProjectsCache = res.code === 200 ? (Array.isArray(res.data) ? res.data : (res.data?.list || [])) : []
+  return _bizProjectsCache
+}
+
+function renderBizRoadshowProjects() {
+  const container = document.getElementById('bizRoadshowProjectsList')
+  if (!container) return
+  const options = _bizProjectsCache.map(p => `<option value="${p.id}">${escapeHtml(p.title)}</option>`).join('')
+  container.innerHTML = _bizRoadshowProjects.map((item, index) => `
+    <div class="border border-gray-100 rounded-xl p-4 space-y-3">
+      <div class="flex items-center gap-3">
+        <div class="flex-1">
+          <label class="block text-xs text-gray-500 mb-1">选择项目 *</label>
+          <select id="bizProjectSelect_${index}" onchange="_bizRoadshowProjects[${index}].project_id=this.value" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
+            <option value="">请选择项目</option>
+            ${options}
+          </select>
+        </div>
+        <button onclick="_bizRoadshowProjects.splice(${index},1);renderBizRoadshowProjects()" class="px-3 py-2 text-xs text-red-600">移除</button>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">路演展示图（可覆盖项目封面）</label>
+        <div class="flex items-center gap-3">
+          <input id="bizProjectCover_${index}" value="${escapeHtml(item.cover_image || '')}" onchange="_bizRoadshowProjects[${index}].cover_image=this.value" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="可上传路演展示图">
+          <label class="px-3 py-2 bg-navy-100 text-navy-700 rounded-lg text-sm cursor-pointer">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'bizProjectCover_${index}', 690, 388)"></label>
+        </div>
+      </div>
+    </div>
+  `).join('')
+  _bizRoadshowProjects.forEach((item, index) => {
+    const sel = document.getElementById(`bizProjectSelect_${index}`)
+    if (sel && item.project_id) sel.value = String(item.project_id)
+  })
+}
+
+function addBizRoadshowProject() {
+  _bizRoadshowProjects.push({ project_id: '', cover_image: '', sort_order: _bizRoadshowProjects.length })
+  renderBizRoadshowProjects()
+}
+
+function renderBizRoadshowDimensions() {
+  const container = document.getElementById('bizRoadshowDimensionsList')
+  if (!container) return
+  container.innerHTML = _bizRoadshowDimensions.map((item, index) => `
+    <div class="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
+      <span class="text-xs text-gray-400 w-10">★ 5星</span>
+      <input value="${escapeHtml(item.name || '')}" onchange="_bizRoadshowDimensions[${index}].name=this.value" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="评分维度名称">
+      <button onclick="_bizRoadshowDimensions.splice(${index},1);renderBizRoadshowDimensions()" class="px-2 py-1 text-xs text-red-600">删除</button>
+    </div>
+  `).join('')
+}
+
+function addBizRoadshowDimension() {
+  _bizRoadshowDimensions.push({ name: '', sort_order: _bizRoadshowDimensions.length })
+  renderBizRoadshowDimensions()
+}
+
+function collectBizRoadshowPayload() {
+  const category = document.getElementById('bizCategory')?.value
+  if (category !== 'roadshow') return null
+  const projects = _bizRoadshowProjects
+    .filter(item => String(item.project_id || '').trim())
+    .map((item, index) => ({
+      project_id: item.project_id,
+      cover_image: item.cover_image || null,
+      sort_order: index,
+    }))
+  const dimensions = _bizRoadshowDimensions
+    .filter(item => String(item.name || '').trim())
+    .map((item, index) => ({
+      id: item.id,
+      name: item.name.trim(),
+      sort_order: index,
+    }))
+  const formFields = _bizFormFields
+    .filter(f => String(f.label || '').trim())
+    .map(f => ({
+      label: f.label.trim(),
+      type: f.type || 'text',
+      required: !!f.required,
+      ...(f.type === 'select' && f.options ? { options: f.options } : {}),
+    }))
+  return {
+    start_time: document.getElementById('bizStartTime')?.value ? new Date(document.getElementById('bizStartTime').value).toISOString() : null,
+    end_time: document.getElementById('bizEndTime')?.value ? new Date(document.getElementById('bizEndTime').value).toISOString() : null,
+    form_fields: formFields.length ? formFields : null,
+    roadshow: { projects, dimensions },
+  }
+}
+
+async function showRoadshowRegistrations(businessId) {
+  const res = await api(`/admin/business/${businessId}/roadshow/registrations`)
+  if (res.code !== 200) return toast(res.msg || '加载失败', 'error')
+  const data = res.data || {}
+  const fields = data.form_fields || []
+  const list = data.list || []
+  const extraHeaders = fields.map(f => `<th class="px-4 py-3 text-left text-xs text-gray-500">${escapeHtml(f.label)}</th>`).join('')
+  const rows = list.length ? list.map(row => `
+    <tr class="border-t border-gray-100">
+      <td class="px-4 py-3 text-sm">${escapeHtml(row.member_name || '-')}</td>
+      <td class="px-4 py-3 text-sm">${escapeHtml(row.member_phone || '-')}</td>
+      ${fields.map(f => `<td class="px-4 py-3 text-sm">${escapeHtml(String((row.form_answers || {})[f.label] ?? '-'))}</td>`).join('')}
+      <td class="px-4 py-3 text-sm text-gray-500">${row.created_at || '-'}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="99" class="px-4 py-8 text-center text-gray-400">暂无报名</td></tr>'
+  showModal(`
+    <div class="p-6" style="max-width:900px">
+      <h3 class="text-lg font-bold text-navy-800 mb-4">路演报名名单 (${list.length})</h3>
+      <div class="overflow-x-auto border border-gray-100 rounded-xl">
+        <table class="min-w-full text-sm">
+          <thead class="bg-gray-50"><tr>
+            <th class="px-4 py-3 text-left text-xs text-gray-500">姓名</th>
+            <th class="px-4 py-3 text-left text-xs text-gray-500">手机号</th>
+            ${extraHeaders}
+            <th class="px-4 py-3 text-left text-xs text-gray-500">报名时间</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `, { wide: true })
+}
+
+function renderRoadshowSummaryPanel(summary) {
+  if (!summary) return '<p class="text-sm text-gray-400">暂无评分数据</p>'
+  const projects = summary.projects || []
+  const rankings = summary.dimension_rankings || []
+  return `
+    <div class="space-y-4">
+      <div class="bg-brand-50 rounded-xl p-4">
+        <p class="text-sm text-navy-800">${escapeHtml(summary.summary_text || '')}</p>
+        <p class="text-sm text-gray-600 mt-2">${escapeHtml(summary.overall_judgement || '')}</p>
+      </div>
+      <div>
+        <p class="text-sm font-medium text-navy-800 mb-2">综合排名</p>
+        ${projects.map(p => `
+          <div class="flex items-center justify-between py-2 border-b border-gray-100 text-sm">
+            <span>#${p.rank} ${escapeHtml(p.title)}</span>
+            <span class="text-brand-600 font-medium">${p.overall_avg || 0} 分</span>
+          </div>
+        `).join('') || '<p class="text-sm text-gray-400">暂无</p>'}
+      </div>
+      <div>
+        <p class="text-sm font-medium text-navy-800 mb-2">维度排名</p>
+        ${rankings.map(dim => `
+          <div class="mb-3">
+            <p class="text-xs text-gray-500 mb-1">${escapeHtml(dim.name)}</p>
+            ${(dim.rankings || []).slice(0, 3).map(item => `
+              <div class="flex items-center justify-between text-sm py-1">
+                <span>#${item.rank} ${escapeHtml(item.title)}</span>
+                <span>${item.avg_stars} 星</span>
+              </div>
+            `).join('') || '<p class="text-xs text-gray-400">暂无</p>'}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `
+}
+
+function toDatetimeLocalValue(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mm = String(date.getMinutes()).padStart(2, '0')
+  return `${y}-${m}-${d}T${hh}:${mm}`
+}
+
+function filterBizProjectOptions(keyword) {
+  const kw = String(keyword || '').trim().toLowerCase()
+  const filtered = kw
+    ? _bizProjectsCache.filter(p => String(p.title || '').toLowerCase().includes(kw))
+    : _bizProjectsCache
+  document.querySelectorAll('[id^="bizProjectSelect_"]').forEach((sel, index) => {
+    const current = _bizRoadshowProjects[index]?.project_id || sel.value
+    sel.innerHTML = '<option value="">请选择项目</option>' + filtered.map(p =>
+      `<option value="${p.id}" ${String(p.id) === String(current) ? 'selected' : ''}>${escapeHtml(p.title)}</option>`
+    ).join('')
+  })
+}
+
 async function loadBusiness() {
   const category = document.getElementById('bizCategoryFilter')?.value || ''
   const status = document.getElementById('bizStatusFilter')?.value || ''
@@ -1947,14 +2185,41 @@ async function showBusinessModal(editId) {
     const res = await api(`/admin/business/${editId}`)
     if (res.code === 200) item = res.data
   }
+  _bizFormFields = parseBizFormFields(item?.form_fields).map(f => ({
+    label: f.label || '',
+    type: f.type || 'text',
+    required: !!f.required,
+    options: f.options || [],
+  }))
+  _bizRoadshowProjects = (item?.roadshow_projects || []).map((p, index) => ({
+    project_id: p.project_id,
+    cover_image: p.cover_image || '',
+    sort_order: p.sort_order ?? index,
+  }))
+  _bizRoadshowDimensions = (item?.score_dimensions || []).map((d, index) => ({
+    id: d.id,
+    name: d.name || '',
+    sort_order: d.sort_order ?? index,
+  }))
+  if (!_bizRoadshowProjects.length) {
+    _bizRoadshowProjects = [{ project_id: '', cover_image: '', sort_order: 0 }]
+  }
+  if (!_bizRoadshowDimensions.length) {
+    _bizRoadshowDimensions = [{ name: '项目创新性', sort_order: 0 }, { name: '团队能力', sort_order: 1 }, { name: '市场前景', sort_order: 2 }]
+  }
+  await ensureBizProjectsCache()
+  const summaryHtml = item?.score_summary ? renderRoadshowSummaryPanel(item.score_summary) : ''
   showModal(`
-    <div class="p-6" style="max-width:760px">
-      <h3 class="text-lg font-bold text-navy-800 mb-6">${editId ? '编辑商机' : '新增商机'}</h3>
+    <div class="p-6" style="max-width:860px">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold text-navy-800">${editId ? '编辑商机' : '新增商机'}</h3>
+        ${editId && item?.category === 'roadshow' ? `<button onclick="showRoadshowRegistrations('${editId}')" class="px-3 py-1.5 text-xs bg-navy-100 text-navy-700 rounded-lg hover:bg-navy-200">查看报名名单</button>` : ''}
+      </div>
       <div class="space-y-4">
         <div><label class="block text-sm font-medium text-gray-700 mb-1">标题 *</label><input id="bizTitle" value="${escapeHtml(item?.title || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         <div class="grid grid-cols-2 gap-4">
           <div><label class="block text-sm font-medium text-gray-700 mb-1">分类 *</label>
-            <select id="bizCategory" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+            <select id="bizCategory" onchange="toggleBizRoadshowFields()" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
               <option value="roadshow" ${(!item || item?.category==='roadshow')?'selected':''}>项目路演</option>
               <option value="financing" ${item?.category==='financing'?'selected':''}>融资招募</option>
               <option value="resource" ${item?.category==='resource'?'selected':''}>资源对接</option>
@@ -1967,11 +2232,42 @@ async function showBusinessModal(editId) {
             </select>
           </div>
         </div>
+        <div id="bizRoadshowPanel" class="${(!item || item?.category==='roadshow') ? '' : 'hidden'} border border-brand-100 rounded-2xl p-4 space-y-4 bg-brand-50/30">
+          <p class="text-sm font-semibold text-navy-800">项目路演配置</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div><label class="block text-sm font-medium text-gray-700 mb-1">路演开始时间</label><input id="bizStartTime" type="datetime-local" value="${escapeHtml(toDatetimeLocalValue(item?.start_time))}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+            <div><label class="block text-sm font-medium text-gray-700 mb-1">路演结束时间</label><input id="bizEndTime" type="datetime-local" value="${escapeHtml(toDatetimeLocalValue(item?.end_time))}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+          </div>
+          <p class="text-xs text-gray-500">报名时间默认至结束时间前均可报名；评分仅在开始至结束时间内开放给已报名用户。</p>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-sm font-medium text-gray-700">报名表单字段（可选）</label>
+              <button onclick="addBizFormField()" class="px-3 py-1 text-xs bg-navy-100 text-navy-700 rounded-lg">+ 添加字段</button>
+            </div>
+            <div id="bizFormFieldsList" class="space-y-2"></div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-sm font-medium text-gray-700">参与路演项目 *</label>
+              <button onclick="addBizRoadshowProject()" class="px-3 py-1 text-xs bg-navy-100 text-navy-700 rounded-lg">+ 添加项目</button>
+            </div>
+            <input id="bizProjectSearch" oninput="filterBizProjectOptions(this.value)" class="w-full mb-3 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="搜索项目名称">
+            <div id="bizRoadshowProjectsList" class="space-y-3"></div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-sm font-medium text-gray-700">评分维度（每项 5 星）*</label>
+              <button onclick="addBizRoadshowDimension()" class="px-3 py-1 text-xs bg-navy-100 text-navy-700 rounded-lg">+ 添加维度</button>
+            </div>
+            <div id="bizRoadshowDimensionsList" class="space-y-2"></div>
+          </div>
+          ${editId ? `<div><p class="text-sm font-medium text-navy-800 mb-2">评分汇总</p>${summaryHtml}</div>` : ''}
+        </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">封面图（选填）</label>
           <div class="flex items-center gap-3">
             <input id="bizCover" value="${escapeHtml(item?.cover_image || '')}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传封面">
-            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'bizCover')"></label>
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'bizCover', 690, 388)"></label>
           </div>
         </div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">摘要</label><textarea id="bizSummary" rows="2" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${escapeHtml(item?.summary || '')}</textarea></div>
@@ -1987,20 +2283,31 @@ async function showBusinessModal(editId) {
     </div>
   `, { wide: true })
   initRichEditor('bizContentEditor', item?.content || '')
+  renderBizFormFields()
+  renderBizRoadshowProjects()
+  renderBizRoadshowDimensions()
+  toggleBizRoadshowFields()
 }
 
 async function saveBusiness(editId) {
   if (!assertNoUploading()) return
   const cover = document.getElementById('bizCover').value.trim()
+  const category = document.getElementById('bizCategory').value
   const body = {
     title: document.getElementById('bizTitle').value,
-    category: document.getElementById('bizCategory').value,
+    category,
     status: document.getElementById('bizStatus').value,
     cover_image: cover || null,
     summary: document.getElementById('bizSummary').value,
     content: getRichEditorHtml('bizContentEditor'),
   }
   if (!body.title.trim()) return toast('请输入标题', 'error')
+  if (category === 'roadshow') {
+    const roadshowPayload = collectBizRoadshowPayload()
+    if (!roadshowPayload?.roadshow?.projects?.length) return toast('请至少选择一个路演项目', 'error')
+    if (!roadshowPayload?.roadshow?.dimensions?.length) return toast('请至少配置一个评分维度', 'error')
+    Object.assign(body, roadshowPayload)
+  }
   const url = editId ? `/admin/business/${editId}` : '/admin/business'
   const method = editId ? 'PUT' : 'POST'
   const res = await api(url, { method, body })
