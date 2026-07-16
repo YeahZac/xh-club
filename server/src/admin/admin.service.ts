@@ -317,13 +317,97 @@ export class AdminService {
   }
 
   /** ====== 活动管理 ====== */
+  private parseJsonValue(value: unknown): unknown {
+    if (value == null) return null
+    if (typeof value === 'object') return value
+    if (typeof value !== 'string') return value
+    try {
+      return JSON.parse(value)
+    } catch {
+      return value
+    }
+  }
+
+  private formatDateTimeToMinute(value: unknown): string {
+    if (!value) return ''
+    const date = value instanceof Date ? value : new Date(String(value))
+    if (Number.isNaN(date.getTime())) return String(value)
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    const hh = String(date.getHours()).padStart(2, '0')
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    return `${y}-${m}-${d} ${hh}:${mm}`
+  }
+
+  private toDatetimeLocalValue(value: unknown): string {
+    if (!value) return ''
+    const date = value instanceof Date ? value : new Date(String(value))
+    if (Number.isNaN(date.getTime())) return ''
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    const hh = String(date.getHours()).padStart(2, '0')
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    return `${y}-${m}-${d}T${hh}:${mm}`
+  }
+
+  private normalizeFormFields(value: unknown): unknown[] | null {
+    if (value == null || value === '') return null
+    const parsed = this.parseJsonValue(value)
+    return Array.isArray(parsed) ? parsed : null
+  }
+
+  private normalizeFormAnswers(value: unknown): Record<string, unknown> {
+    const parsed = this.parseJsonValue(value)
+    if (!parsed) return {}
+    if (Array.isArray(parsed)) {
+      const mapped: Record<string, unknown> = {}
+      parsed.forEach((item) => {
+        if (!item || typeof item !== 'object') return
+        const row = item as Record<string, unknown>
+        const label = String(row.label || row.name || '').trim()
+        if (!label) return
+        mapped[label] = row.value ?? ''
+      })
+      return mapped
+    }
+    if (typeof parsed === 'object') return parsed as Record<string, unknown>
+    return {}
+  }
+
   async getAllEvents(query: any) {
     try {
-      const rows = await queryRows('SELECT * FROM events ORDER BY created_at DESC')
+      let sql = 'SELECT * FROM events'
+      const params: any[] = []
+      if (query?.status) {
+        sql += ' WHERE status = ?'
+        params.push(query.status)
+      }
+      sql += ' ORDER BY created_at DESC'
+      const rows = await queryRows(sql, params)
       return this.uploadService.signRowsFields(rows, ['cover_image', 'video_url'])
     } catch (error) {
       console.error('[AdminService] getAllEvents error:', error)
       throw new HttpException('获取活动列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async getEventById(id: string) {
+    try {
+      const row = await queryOne('SELECT * FROM events WHERE id = ?', [id])
+      if (!row) throw new HttpException('活动不存在', HttpStatus.NOT_FOUND)
+      const signed = await this.uploadService.signRowFields(row, ['cover_image', 'video_url'])
+      return {
+        ...signed,
+        form_fields: this.normalizeFormFields(row.form_fields),
+        start_time_local: this.toDatetimeLocalValue(row.start_time),
+        end_time_local: this.toDatetimeLocalValue(row.end_time),
+      }
+    } catch (error) {
+      console.error('[AdminService] getEventById error:', error)
+      if (error instanceof HttpException) throw error
+      throw new HttpException('获取活动详情失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 
@@ -345,11 +429,123 @@ export class AdminService {
          dto.location || null, dto.address || null, dto.max_participants || 100, dto.fee || 0,
          formFieldsJson]
       )
-      return await queryOne('SELECT * FROM events WHERE id = ?', [result.insertId])
+      const insertedId = result.insertId
+      if (insertedId) {
+        return await this.getEventById(String(insertedId))
+      }
+      const latest = await queryOne('SELECT * FROM events ORDER BY created_at DESC LIMIT 1')
+      return latest ? await this.getEventById(String(latest.id)) : latest
     } catch (error) {
       console.error('[AdminService] createEvent error:', error)
       if (error instanceof HttpException) throw error
       throw new HttpException('创建活动失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async updateEvent(id: string, dto: any) {
+    try {
+      const existing = await queryOne('SELECT id FROM events WHERE id = ?', [id])
+      if (!existing) throw new HttpException('活动不存在', HttpStatus.NOT_FOUND)
+
+      const updates: string[] = []
+      const params: any[] = []
+      const assign = (column: string, value: unknown) => {
+        updates.push(`${column} = ?`)
+        params.push(value)
+      }
+
+      if (dto.title !== undefined) assign('title', dto.title)
+      if (dto.description !== undefined) assign('description', dto.description || null)
+      if (dto.cover_image !== undefined) assign('cover_image', assertCloudStorageImageUrl(dto.cover_image))
+      if (dto.video_url !== undefined) assign('video_url', normalizeOptionalVideoUrl(dto.video_url))
+      if (dto.event_type !== undefined) assign('event_type', dto.event_type || 'salon')
+      if (dto.status !== undefined) assign('status', dto.status || 'draft')
+      if (dto.start_time !== undefined) assign('start_time', dto.start_time || null)
+      if (dto.end_time !== undefined) assign('end_time', dto.end_time || null)
+      if (dto.location !== undefined) assign('location', dto.location || null)
+      if (dto.address !== undefined) assign('address', dto.address || null)
+      if (dto.max_participants !== undefined) assign('max_participants', dto.max_participants || 100)
+      if (dto.fee !== undefined) assign('fee', dto.fee || 0)
+      if (dto.form_fields !== undefined) {
+        const formFieldsJson =
+          dto.form_fields == null
+            ? null
+            : typeof dto.form_fields === 'string'
+              ? dto.form_fields
+              : JSON.stringify(dto.form_fields)
+        assign('form_fields', formFieldsJson)
+      }
+
+      if (!updates.length) {
+        throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
+      }
+
+      params.push(id)
+      await queryExecute(`UPDATE events SET ${updates.join(', ')} WHERE id = ?`, params)
+      return await this.getEventById(id)
+    } catch (error) {
+      console.error('[AdminService] updateEvent error:', error)
+      if (error instanceof HttpException) throw error
+      throw new HttpException('更新活动失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async getEventRegistrations(eventId: string) {
+    try {
+      const event = await queryOne('SELECT id, title, form_fields FROM events WHERE id = ?', [eventId])
+      if (!event) throw new HttpException('活动不存在', HttpStatus.NOT_FOUND)
+
+      const rows = await queryRows(
+        `SELECT
+           er.id,
+           er.event_id,
+           er.member_id,
+           er.status,
+           er.form_answers,
+           er.created_at,
+           m.name AS member_name,
+           m.avatar AS member_avatar,
+           m.phone AS member_phone,
+           m.company_name AS member_company
+         FROM event_registrations er
+         LEFT JOIN members m ON m.id = er.member_id
+         WHERE er.event_id = ?
+         ORDER BY er.created_at DESC`,
+        [eventId],
+      )
+
+      const formFields = this.normalizeFormFields(event.form_fields) || []
+      const list = rows.map((row) => {
+        const answers = this.normalizeFormAnswers(row.form_answers)
+        return {
+          id: row.id,
+          event_id: row.event_id,
+          member_id: row.member_id,
+          member_nickname: row.member_name || '-',
+          member_name: row.member_name || '-',
+          member_avatar: row.member_avatar || null,
+          member_phone: row.member_phone || null,
+          member_company: row.member_company || null,
+          status: row.status,
+          form_answers: answers,
+          filled_at: this.formatDateTimeToMinute(row.created_at),
+          created_at: row.created_at,
+        }
+      })
+
+      return {
+        event: {
+          id: event.id,
+          title: event.title,
+          form_fields: formFields,
+        },
+        total: list.length,
+        list,
+      }
+    } catch (error) {
+      console.error('[AdminService] getEventRegistrations error:', error)
+      if (error instanceof HttpException) throw error
+      throw new HttpException('获取报名名单失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 

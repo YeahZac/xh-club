@@ -22,9 +22,10 @@ export class EventsController {
 
   @Post(':id/register')
   @UseGuards(MemberAuthGuard)
-  async register(@Param('id') id: string, @Req() request: any) {
+  async register(@Param('id') id: string, @Req() request: any, @Body() body: any) {
     console.log('[EventsController] POST /api/events/:id/register')
-    const result = await this.eventsService.registerEvent(id, request.user.sub)
+    const formAnswers = body?.form_answers || body?.answers || null
+    const result = await this.eventsService.registerEvent(id, request.user.sub, formAnswers)
     return { code: 200, msg: '报名成功', data: result }
   }
 

@@ -1,10 +1,15 @@
+import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '@/app.module';
 import * as express from 'express';
 import { HttpStatusInterceptor } from '@/interceptors/http-status.interceptor';
-import * as fs from 'fs';
-import * as path from 'path';
 import { initMySQL } from '@/storage/database/mysql-client';
+
+// 兼容从 server/ 或仓库根目录启动：优先加载项目根 .env
+dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 function parsePort(): number {
   // 优先使用环境变量 SERVER_PORT（开发环境）或 PORT（微信云托管等平台会注入）

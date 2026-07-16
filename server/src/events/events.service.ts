@@ -53,7 +53,7 @@ export class EventsService {
   }
 
   /** 报名活动 */
-  async registerEvent(eventId: string, memberId: string) {
+  async registerEvent(eventId: string, memberId: string, formAnswers?: Record<string, unknown> | null) {
     console.log('[EventsService] registerEvent - eventId:', eventId, 'memberId:', memberId)
 
     // 检查是否已报名
@@ -76,10 +76,20 @@ export class EventsService {
     if (!event || event.status !== 'open') throw new HttpException('活动不可报名', HttpStatus.BAD_REQUEST)
     if (event.current_participants >= event.max_participants) throw new HttpException('活动名额已满', HttpStatus.BAD_REQUEST)
 
+    const answers =
+      formAnswers && typeof formAnswers === 'object' && !Array.isArray(formAnswers)
+        ? formAnswers
+        : null
+
     // 插入报名记录
     const { data, error } = await this.client()
       .from('event_registrations')
-      .insert({ event_id: eventId, member_id: memberId, status: 'registered' })
+      .insert({
+        event_id: eventId,
+        member_id: memberId,
+        status: 'registered',
+        ...(answers ? { form_answers: JSON.stringify(answers) } : {}),
+      })
       .select()
       .single()
 

@@ -332,10 +332,11 @@
               <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">地点</th>
               <th class="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">报名人数</th>
               <th class="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">状态</th>
+              <th class="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">操作</th>
             </tr>
           </thead>
           <tbody id="eventTableBody" class="divide-y divide-gray-50">
-            <tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
+            <tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -700,8 +701,10 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;')
 }
 
-function showModal(html) {
-  document.getElementById('modalContent').innerHTML = html
+function showModal(html, options = {}) {
+  const el = document.getElementById('modalContent')
+  el.className = `bg-white rounded-2xl shadow-2xl w-full max-h-[85vh] overflow-y-auto fade-in ${options.wide ? 'max-w-4xl' : 'max-w-lg'}`
+  el.innerHTML = html
   document.getElementById('modalOverlay').classList.remove('hidden')
 }
 
@@ -1233,32 +1236,66 @@ async function loadEvents() {
   let events = Array.isArray(res.data) ? res.data : (res.data?.list || [])
   if (status) events = events.filter(e => e.status === status)
   if (!events.length) {
-    document.getElementById('eventTableBody').innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">暂无活动</td></tr>'
+    document.getElementById('eventTableBody').innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">暂无活动</td></tr>'
     return
   }
   document.getElementById('eventTableBody').innerHTML = events.map(e => `
-    <tr class="hover:bg-gray-50 transition">
-      <td class="px-6 py-4"><p class="font-medium text-navy-800">${e.title}</p></td>
-      <td class="px-6 py-4 text-sm">${EVENT_TYPE_MAP[e.event_type] || e.event_type || '-'}</td>
+    <tr class="hover:bg-gray-50 transition cursor-pointer" onclick="showEventDetail('${escapeHtml(e.id)}')">
+      <td class="px-6 py-4"><p class="font-medium text-navy-800">${escapeHtml(e.title)}</p></td>
+      <td class="px-6 py-4 text-sm">${escapeHtml(EVENT_TYPE_MAP[e.event_type] || e.event_type || '-')}</td>
       <td class="px-6 py-4 text-sm text-gray-500">${e.start_time ? new Date(e.start_time).toLocaleDateString('zh-CN') : '-'}</td>
-      <td class="px-6 py-4 text-sm text-gray-500">${e.location || '-'}</td>
+      <td class="px-6 py-4 text-sm text-gray-500">${escapeHtml(e.location || '-')}</td>
       <td class="px-6 py-4 text-center text-sm">${e.current_participants || 0}/${e.max_participants || '∞'}</td>
-      <td class="px-6 py-4 text-center"><span class="text-xs px-2.5 py-1 rounded-full ${e.status === 'open' ? 'bg-green-100 text-green-700' : e.status === 'full' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}">${e.status === 'open' ? '报名中' : e.status === 'full' ? '已满' : '已结束'}</span></td>
+      <td class="px-6 py-4 text-center"><span class="text-xs px-2.5 py-1 rounded-full ${e.status === 'open' ? 'bg-green-100 text-green-700' : e.status === 'full' ? 'bg-yellow-100 text-yellow-700' : e.status === 'draft' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}">${e.status === 'open' ? '报名中' : e.status === 'full' ? '已满' : e.status === 'draft' ? '草稿' : '已结束'}</span></td>
+      <td class="px-6 py-4 text-center" onclick="event.stopPropagation()">
+        <button onclick="showEventDetail('${escapeHtml(e.id)}')" class="text-xs text-brand-600 hover:underline mr-2">详情</button>
+        <button onclick="showEventRegistrations('${escapeHtml(e.id)}')" class="text-xs text-navy-700 hover:underline">报名名单</button>
+      </td>
     </tr>
   `).join('')
 }
 
-function showEventModal() {
-  showModal(`
-    <div class="p-6" style="max-width:600px">
-      <h3 class="text-lg font-bold text-navy-800 mb-6">创建活动</h3>
+function parseEventFormFields(value) {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+function collectEventFormFields() {
+  return _formFields.filter(f => f.label.trim()).map(f => ({
+    label: f.label.trim(),
+    type: f.type,
+    required: !!f.required,
+    ...(f.type === 'select' && f.options ? { options: String(f.options).split(',').map(o => o.trim()).filter(Boolean) } : {})
+  }))
+}
+
+function renderEventForm(mode, event = null) {
+  const isEdit = mode === 'edit'
+  const title = isEdit ? '编辑活动' : '创建活动'
+  const action = isEdit ? `submitUpdateEvent('${escapeHtml(event.id)}')` : 'submitCreateEvent()'
+  const actionLabel = isEdit ? '保存修改' : '创建'
+  return `
+    <div class="p-6" style="max-width:720px">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold text-navy-800">${title}</h3>
+        ${isEdit ? `<button onclick="showEventRegistrations('${escapeHtml(event.id)}')" class="px-3 py-1.5 text-xs bg-navy-100 text-navy-700 rounded-lg hover:bg-navy-200">查看报名名单</button>` : ''}
+      </div>
       <div class="space-y-4">
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">活动名称</label><input id="evTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动名称"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">活动名称</label><input id="evTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动名称" value="${escapeHtml(event?.title || '')}"></div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">封面图片 <span class="text-red-500">*</span></label>
           <p class="text-xs text-gray-400 mb-2">${mediaHint('event')}</p>
           <div class="flex items-center gap-3">
-            <input id="evCover" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传封面图片">
+            <input id="evCover" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传封面图片" value="${escapeHtml(event?.cover_image || '')}">
             <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'evCover', 690, 290)"></label>
           </div>
           ${mediaPreviewBox('event')}
@@ -1267,22 +1304,24 @@ function showEventModal() {
           <label class="block text-sm font-medium text-gray-700 mb-1">活动视频（选填）</label>
           <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，单文件 ≤200MB</p>
           <div class="flex items-center gap-3">
-            <input id="evVideo" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传活动宣传视频">
+            <input id="evVideo" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传活动宣传视频" value="${escapeHtml(event?.video_url || '')}">
             <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" onchange="uploadFile(this, 'evVideo')"></label>
           </div>
         </div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">活动类型</label><select id="evType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="salon">专题沙龙</option><option value="roadshow">路演日</option><option value="annual">年度大会</option><option value="training">培训</option><option value="meeting">定期例会</option></select></div>
         <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">开始时间</label><input id="evStart" type="datetime-local" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">结束时间</label><input id="evEnd" type="datetime-local" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">活动类型</label><select id="evType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="salon">专题沙龙</option><option value="roadshow">路演日</option><option value="annual">年度大会</option><option value="training">培训</option><option value="meeting">定期例会</option></select></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">状态</label><select id="evStatus" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="open">报名中</option><option value="draft">草稿</option><option value="full">已满员</option><option value="ended">已结束</option></select></div>
         </div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">地点</label><input id="evLocation" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动地点"></div>
         <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">人数上限</label><input id="evMax" type="number" value="100" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">费用(元)</label><input id="evFee" type="number" value="0" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">开始时间</label><input id="evStart" type="datetime-local" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" value="${escapeHtml(event?.start_time_local || '')}"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">结束时间</label><input id="evEnd" type="datetime-local" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" value="${escapeHtml(event?.end_time_local || '')}"></div>
         </div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">活动描述</label><textarea id="evDesc" rows="3" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动描述..."></textarea></div>
-        <!-- 报名表单构建器 -->
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">地点</label><input id="evLocation" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动地点" value="${escapeHtml(event?.location || '')}"></div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">人数上限</label><input id="evMax" type="number" value="${escapeHtml(event?.max_participants ?? 100)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">费用(元)</label><input id="evFee" type="number" value="${escapeHtml(event?.fee ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        </div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">活动描述</label><textarea id="evDesc" rows="3" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动描述...">${escapeHtml(event?.description || '')}</textarea></div>
         <div class="border-t border-gray-100 pt-4">
           <div class="flex items-center justify-between mb-3">
             <label class="text-sm font-medium text-gray-700">报名表单字段（可选）</label>
@@ -1293,11 +1332,105 @@ function showEventModal() {
         </div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
-          <button type="button" onclick="submitCreateEvent()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
+          <button type="button" onclick="${action}" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">${actionLabel}</button>
         </div>
       </div>
     </div>
-  `)
+  `
+}
+
+function showEventModal() {
+  _formFields = []
+  showModal(renderEventForm('create'), { wide: true })
+  renderFormFields()
+}
+
+async function showEventDetail(id) {
+  try {
+    const res = await api(`/admin/events/${id}`)
+    if (res.code !== 200 || !res.data) return toast(res.msg || '加载活动详情失败', 'error')
+    const event = res.data
+    _formFields = parseEventFormFields(event.form_fields).map(f => ({
+      label: f.label || f.name || '',
+      type: f.type || 'text',
+      required: !!f.required,
+      options: Array.isArray(f.options) ? f.options.join(',') : (f.options || '')
+    }))
+    showModal(renderEventForm('edit', event), { wide: true })
+    const typeEl = document.getElementById('evType')
+    const statusEl = document.getElementById('evStatus')
+    if (typeEl) typeEl.value = event.event_type || 'salon'
+    if (statusEl) statusEl.value = event.status || 'open'
+    renderFormFields()
+  } catch (error) {
+    toast(error.message || '加载活动详情失败', 'error')
+  }
+}
+
+async function showEventRegistrations(eventId) {
+  try {
+    const res = await api(`/admin/events/${eventId}/registrations`)
+    if (res.code !== 200 || !res.data) return toast(res.msg || '加载报名名单失败', 'error')
+    const { event, list = [], total = 0 } = res.data
+    const formFields = parseEventFormFields(event?.form_fields)
+    const dynamicHeaders = formFields.map(f => f.label || f.name).filter(Boolean)
+
+    const rowsHtml = list.length
+      ? list.map((item, index) => {
+          const answers = item.form_answers || {}
+          const dynamicCells = dynamicHeaders.map(label => {
+            const value = answers[label]
+            return `<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(value == null || value === '' ? '-' : value)}</td>`
+          }).join('')
+          // 若活动未配置动态字段，仍展示已提交的全部答案
+          const fallbackAnswers = !dynamicHeaders.length
+            ? Object.entries(answers).map(([k, v]) => `<div><span class="text-gray-400">${escapeHtml(k)}：</span>${escapeHtml(v ?? '-')}</div>`).join('') || '-'
+            : ''
+          return `
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-3 text-sm text-gray-500">${index + 1}</td>
+              <td class="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">${escapeHtml(item.filled_at || '-')}</td>
+              <td class="px-4 py-3 text-sm font-medium text-navy-800">${escapeHtml(item.member_nickname || item.member_name || '-')}</td>
+              <td class="px-4 py-3 text-xs text-gray-500 font-mono">${escapeHtml(item.member_id || '-')}</td>
+              ${dynamicHeaders.length ? dynamicCells : `<td class="px-4 py-3 text-sm text-gray-600">${fallbackAnswers}</td>`}
+            </tr>
+          `
+        }).join('')
+      : `<tr><td colspan="${4 + (dynamicHeaders.length || 1)}" class="px-6 py-12 text-center text-gray-400">暂无报名记录</td></tr>`
+
+    showModal(`
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4 gap-3">
+          <div>
+            <h3 class="text-lg font-bold text-navy-800">报名名单</h3>
+            <p class="text-sm text-gray-500 mt-1">${escapeHtml(event?.title || '')} · 共 ${total} 人</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="showEventDetail('${escapeHtml(eventId)}')" class="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">返回编辑</button>
+            <button onclick="closeModal()" class="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-50">关闭</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto border border-gray-100 rounded-xl">
+          <table class="w-full min-w-[720px]">
+            <thead class="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">#</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">填写时间</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">会员昵称</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">会员ID</th>
+                ${dynamicHeaders.length
+                  ? dynamicHeaders.map(label => `<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">${escapeHtml(label)}</th>`).join('')
+                  : '<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">填写信息</th>'}
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">${rowsHtml}</tbody>
+          </table>
+        </div>
+      </div>
+    `, { wide: true })
+  } catch (error) {
+    toast(error.message || '加载报名名单失败', 'error')
+  }
 }
 
 let _formFields = []
@@ -1314,7 +1447,7 @@ function renderFormFields() {
   if (!container) return
   container.innerHTML = _formFields.map((f, i) => `
     <div class="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
-      <input value="${f.label}" onchange="_formFields[${i}].label=this.value" placeholder="字段名称" class="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none">
+      <input value="${escapeHtml(f.label)}" onchange="_formFields[${i}].label=this.value" placeholder="字段名称" class="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none">
       <select onchange="_formFields[${i}].type=this.value;renderFormFields()" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none">
         <option value="text" ${f.type==='text'?'selected':''}>文本</option>
         <option value="textarea" ${f.type==='textarea'?'selected':''}>多行文本</option>
@@ -1322,37 +1455,36 @@ function renderFormFields() {
         <option value="number" ${f.type==='number'?'selected':''}>数字</option>
         <option value="date" ${f.type==='date'?'selected':''}>日期</option>
       </select>
-      ${f.type === 'select' ? `<input value="${f.options||''}" onchange="_formFields[${i}].options=this.value" placeholder="选项用逗号分隔" class="w-32 px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none">` : ''}
+      ${f.type === 'select' ? `<input value="${escapeHtml(f.options||'')}" onchange="_formFields[${i}].options=this.value" placeholder="选项用逗号分隔" class="w-32 px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none">` : ''}
       <label class="flex items-center gap-1 text-xs text-gray-500"><input type="checkbox" ${f.required?'checked':''} onchange="_formFields[${i}].required=this.checked">必填</label>
       <button onclick="removeFormField(${i})" class="text-red-400 hover:text-red-600 text-sm">✕</button>
     </div>
   `).join('')
 }
 
-// 勿命名为 createEvent：inline onclick 作用域会命中 document.createEvent（DOM API）
-async function submitCreateEvent() {
-  if (!assertNoUploading()) return
-  // 收集表单字段
-  const formFields = _formFields.filter(f => f.label.trim()).map(f => ({
-    label: f.label,
-    type: f.type,
-    required: f.required,
-    ...(f.type === 'select' && f.options ? { options: f.options.split(',').map(o => o.trim()).filter(Boolean) } : {})
-  }))
-
-  const body = {
+function buildEventPayload(statusFallback = 'open') {
+  const formFields = collectEventFormFields()
+  return {
     title: document.getElementById('evTitle').value,
     cover_image: document.getElementById('evCover').value,
     video_url: document.getElementById('evVideo').value || null,
     event_type: document.getElementById('evType').value,
+    status: document.getElementById('evStatus')?.value || statusFallback,
     start_time: document.getElementById('evStart').value,
     end_time: document.getElementById('evEnd').value,
     location: document.getElementById('evLocation').value,
     max_participants: parseInt(document.getElementById('evMax').value) || 100,
     fee: parseInt(document.getElementById('evFee').value) || 0,
     description: document.getElementById('evDesc').value,
-    status: 'open',
     form_fields: formFields.length > 0 ? formFields : null,
+  }
+}
+
+// 勿命名为 createEvent：inline onclick 作用域会命中 document.createEvent（DOM API）
+async function submitCreateEvent() {
+  if (!assertNoUploading()) return
+  const body = {
+    ...buildEventPayload('open'),
     current_participants: 0
   }
   if (!body.title.trim()) return toast('请输入活动名称', 'error')
@@ -1360,6 +1492,16 @@ async function submitCreateEvent() {
   const res = await api('/admin/events', { method: 'POST', body })
   if (res.code === 200) { toast('活动创建成功'); closeModal(); loadEvents(); }
   else toast(res.msg || '创建失败', 'error')
+}
+
+async function submitUpdateEvent(id) {
+  if (!assertNoUploading()) return
+  const body = buildEventPayload('open')
+  if (!body.title.trim()) return toast('请输入活动名称', 'error')
+  if (!body.cover_image.trim()) return toast('活动封面图片为必填项', 'error')
+  const res = await api(`/admin/events/${id}`, { method: 'PUT', body })
+  if (res.code === 200) { toast('活动已更新'); closeModal(); loadEvents(); }
+  else toast(res.msg || '更新失败', 'error')
 }
 
 // ===== 项目管理 =====

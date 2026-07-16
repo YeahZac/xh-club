@@ -77,6 +77,9 @@ importers:
       '@babel/core':
         specifier: ^7.24.4
         version: 7.28.5
+      '@babel/plugin-proposal-decorators':
+        specifier: ^7.28.0
+        version: 7.28.0(@babel/core@7.28.5)
       '@babel/plugin-transform-class-properties':
         specifier: 7.25.9
         version: 7.25.9(@babel/core@7.28.5)

@@ -5,6 +5,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['events', 'video_url', 'VARCHAR(500) NULL'],
   ['events', 'address', 'TEXT NULL'],
   ['events', 'form_fields', 'JSON NULL'],
+  ['event_registrations', 'form_answers', 'JSON NULL'],
   ['projects', 'video_url', 'VARCHAR(500) NULL'],
   ['projects', 'industry', 'VARCHAR(64) NULL'],
   ['projects', 'stage', `VARCHAR(32) DEFAULT 'seed'`],

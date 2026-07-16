@@ -1140,11 +1140,32 @@ export class AdminController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Get('events/:id')
+  async getEvent(@Param('id') id: string) {
+    console.log('[AdminController] GET /api/admin/events/:id')
+    const result = await this.adminService.getEventById(id)
+    return { code: 200, msg: 'success', data: result }
+  }
+
   @Post('events')
   async createEvent(@Body() dto: any) {
     console.log('[AdminController] POST /api/admin/events')
     const result = await this.adminService.createEvent(dto)
     return { code: 200, msg: '创建成功', data: result }
+  }
+
+  @Put('events/:id')
+  async updateEvent(@Param('id') id: string, @Body() dto: any) {
+    console.log('[AdminController] PUT /api/admin/events/:id')
+    const result = await this.adminService.updateEvent(id, dto)
+    return { code: 200, msg: '更新成功', data: result }
+  }
+
+  @Get('events/:id/registrations')
+  async getEventRegistrations(@Param('id') id: string) {
+    console.log('[AdminController] GET /api/admin/events/:id/registrations')
+    const result = await this.adminService.getEventRegistrations(id)
+    return { code: 200, msg: 'success', data: result }
   }
 
   @Delete('events/:id')

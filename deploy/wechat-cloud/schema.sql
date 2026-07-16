@@ -213,6 +213,7 @@ CREATE TABLE IF NOT EXISTS event_registrations (
   event_id VARCHAR(36) NOT NULL,
   member_id VARCHAR(36) NOT NULL,
   status VARCHAR(32) NOT NULL DEFAULT 'registered',
+  form_answers JSON NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX event_registrations_event_id_idx (event_id),
   INDEX event_registrations_member_id_idx (member_id),

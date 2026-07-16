@@ -61,6 +61,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.24.4",
+    "@babel/plugin-proposal-decorators": "^7.28.0",
     "@babel/plugin-transform-class-properties": "7.25.9",
     "@babel/preset-react": "^7.24.1",
     "@eslint/eslintrc": "^3.3.1",
@@ -70,8 +71,8 @@
     "@tarojs/plugin-mini-ci": "^4.1.9",
     "@tarojs/vite-runner": "4.1.9",
     "@types/minimatch": "^5",
-    "@types/react": "^18.0.0",
     "@types/node": "^24",
+    "@types/react": "^18.0.0",
     "@vitejs/plugin-react": "^4.3.0",
     "babel-preset-taro": "4.1.9",
     "concurrently": "^9.2.1",

@@ -10,8 +10,19 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { getResponseList } from "@/lib/api-response"
 import { Network } from "@/network"
+
+interface EventFormField {
+  label: string
+  type?: string
+  required?: boolean
+  options?: string[]
+}
 
 interface EventItem {
   id: string
@@ -27,6 +38,7 @@ interface EventItem {
   fee: number
   status: string
   is_featured: boolean
+  form_fields?: EventFormField[] | string | null
 }
 
 interface MemberItem {
@@ -65,6 +77,20 @@ const levelMap: Record<string, { label: string; color: string }> = {
 const isCloudStorageImageUrl = (url: string) =>
   /^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)/i.test(url)
 
+const parseFormFields = (value: EventItem['form_fields']): EventFormField[] => {
+  if (!value) return []
+  if (Array.isArray(value)) return value.filter((item) => item?.label)
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed.filter((item: EventFormField) => item?.label) : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
 const DiscoverPage = () => {
   const [activeTab, setActiveTab] = useState("events")
   const isMiniApp = ([Taro.ENV_TYPE.WEAPP, Taro.ENV_TYPE.TT] as string[]).includes(Taro.getEnv() as string)
@@ -74,6 +100,11 @@ const DiscoverPage = () => {
   const [members, setMembers] = useState<MemberItem[]>([])
   const [products, setProducts] = useState<ProductItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [registerOpen, setRegisterOpen] = useState(false)
+  const [registeringEvent, setRegisteringEvent] = useState<EventItem | null>(null)
+  const [registerFields, setRegisterFields] = useState<EventFormField[]>([])
+  const [formAnswers, setFormAnswers] = useState<Record<string, string>>({})
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => { loadData() }, [])
 
@@ -105,6 +136,26 @@ const DiscoverPage = () => {
     return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
   }
 
+  const submitRegistration = async (eventId: string, answers?: Record<string, string>) => {
+    const response = await Network.request({
+      url: `/api/events/${eventId}/register`,
+      method: 'POST',
+      data: {
+        form_answers: answers && Object.keys(answers).length ? answers : undefined,
+      },
+    })
+    Taro.showToast({
+      title: response.data?.code === 200 ? '报名成功' : (response.data?.msg || '报名失败'),
+      icon: response.data?.code === 200 ? 'success' : 'none',
+    })
+    if (response.data?.code === 200) {
+      setRegisterOpen(false)
+      setRegisteringEvent(null)
+      setFormAnswers({})
+      loadData()
+    }
+  }
+
   const handleEventRegistration = async (eventId: string) => {
     const memberId = Taro.getStorageSync('member_id')
     if (!memberId) {
@@ -113,18 +164,39 @@ const DiscoverPage = () => {
     }
 
     try {
-      const response = await Network.request({
-        url: `/api/events/${eventId}/register`,
-        method: 'POST',
-        data: { member_id: memberId },
-      })
-      Taro.showToast({
-        title: response.data?.code === 200 ? '报名成功' : (response.data?.msg || '报名失败'),
-        icon: response.data?.code === 200 ? 'success' : 'none',
-      })
+      const detailRes = await Network.request({ url: `/api/events/${eventId}` })
+      const eventDetail = (detailRes.data?.data || {}) as EventItem
+      const fields = parseFormFields(eventDetail.form_fields)
+      if (fields.length > 0) {
+        setRegisteringEvent({ ...eventDetail, id: eventId })
+        setRegisterFields(fields)
+        setFormAnswers({})
+        setRegisterOpen(true)
+        return
+      }
+      await submitRegistration(eventId)
     } catch (error) {
       console.error('[发现页] 活动报名失败:', error)
       Taro.showToast({ title: '报名失败，请稍后重试', icon: 'none' })
+    }
+  }
+
+  const handleSubmitRegisterForm = async () => {
+    if (!registeringEvent?.id) return
+    for (const field of registerFields) {
+      if (field.required && !String(formAnswers[field.label] || '').trim()) {
+        Taro.showToast({ title: `请填写${field.label}`, icon: 'none' })
+        return
+      }
+    }
+    try {
+      setSubmitting(true)
+      await submitRegistration(registeringEvent.id, formAnswers)
+    } catch (error) {
+      console.error('[发现页] 提交报名表单失败:', error)
+      Taro.showToast({ title: '报名失败，请稍后重试', icon: 'none' })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -292,6 +364,48 @@ const DiscoverPage = () => {
         </Tabs>
       </View>
       <View className="h-16" />
+
+      <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{registeringEvent?.title || '活动报名'}</DialogTitle>
+          </DialogHeader>
+          <View className="flex flex-col gap-3 py-2">
+            {registerFields.map((field) => (
+              <View key={field.label} className="flex flex-col gap-1.5">
+                <Label>
+                  <Text className="block text-sm text-gray-700">
+                    {field.label}{field.required ? ' *' : ''}
+                  </Text>
+                </Label>
+                {field.type === 'textarea' ? (
+                  <View className="rounded-md border border-input bg-background px-3 py-2">
+                    <Textarea
+                      className="w-full bg-transparent"
+                      placeholder={`请输入${field.label}`}
+                      value={formAnswers[field.label] || ''}
+                      onInput={(e) => setFormAnswers((prev) => ({ ...prev, [field.label]: e.detail.value }))}
+                    />
+                  </View>
+                ) : (
+                  <Input
+                    type={field.type === 'number' ? 'number' : field.type === 'date' ? 'text' : 'text'}
+                    placeholder={field.type === 'select' && field.options?.length ? field.options.join('/') : `请输入${field.label}`}
+                    value={formAnswers[field.label] || ''}
+                    onInput={(e) => setFormAnswers((prev) => ({ ...prev, [field.label]: e.detail.value }))}
+                  />
+                )}
+              </View>
+            ))}
+          </View>
+          <DialogFooter className="flex flex-row gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setRegisterOpen(false)}>取消</Button>
+            <Button className="flex-1 bg-[#1B2A4A] text-white" disabled={submitting} onClick={handleSubmitRegisterForm}>
+              {submitting ? '提交中...' : '提交报名'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </View>
   )
 }
