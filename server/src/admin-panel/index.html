@@ -782,12 +782,15 @@
 
     <!-- ====== 邀请奖励 ====== -->
     <div data-page="invitations" class="p-8 fade-in">
-      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <div class="flex justify-between items-center mb-6">
-          <h3 class="font-bold text-navy-800">邀请奖励规则</h3>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
+        <div class="flex justify-between items-center mb-2">
+          <div>
+            <h3 class="font-bold text-navy-800">邀请奖励规则</h3>
+            <p class="text-xs text-gray-400 mt-1">配置积分值、经验值与图文说明，小程序「会员推荐」页将读取此处内容</p>
+          </div>
           <button onclick="showAddInvitationRuleModal()" class="px-4 py-2 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg text-sm hover:shadow-lg transition">+ 新增规则</button>
         </div>
-        <div id="invitationRulesList" class="space-y-3">
+        <div id="invitationRulesList" class="space-y-3 mt-4">
           <p class="text-gray-400">加载中...</p>
         </div>
       </div>
@@ -4212,54 +4215,94 @@ async function loadInvitationRules() {
   const list = document.getElementById('invitationRulesList')
   if (res.code === 200 && res.data?.length) {
     list.innerHTML = res.data.map(r => `
-      <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
-        <div>
-          <p class="font-medium text-navy-800">${r.rule_name}</p>
-          <p class="text-xs text-gray-400">奖励类型: ${r.reward_type} · 奖励值: ${r.reward_value} · 状态: ${r.is_active ? '启用' : '禁用'}</p>
-        </div>
-        <div class="flex gap-2">
-          <button onclick="toggleInvitationRule(${r.id}, ${!r.is_active})" class="px-3 py-1.5 text-sm text-green-600 hover:bg-green-50 rounded-lg">${r.is_active ? '禁用' : '启用'}</button>
-          <button onclick="deleteInvitationRule(${r.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
+      <div class="p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <p class="font-medium text-navy-800">${escapeHtml(r.rule_name || '')}</p>
+            <p class="text-xs text-gray-400 mt-1">
+              积分值: <span class="text-brand-600 font-medium">${Number(r.points_value ?? r.reward_value ?? 0)}</span>
+              · 经验值: <span class="text-brand-600 font-medium">${Number(r.experience_value ?? 0)}</span>
+              · 状态: ${r.is_active ? '启用' : '禁用'}
+            </p>
+            ${r.content ? `<div class="mt-2 text-xs text-gray-500 line-clamp-2 prose prose-sm max-w-none">${r.content}</div>` : '<p class="text-xs text-gray-300 mt-2">暂无图文说明</p>'}
+          </div>
+          <div class="flex gap-2 shrink-0">
+            <button onclick="showEditInvitationRuleModal(${r.id})" class="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg">编辑</button>
+            <button onclick="toggleInvitationRule(${r.id}, ${!r.is_active})" class="px-3 py-1.5 text-sm text-green-600 hover:bg-green-50 rounded-lg">${r.is_active ? '禁用' : '启用'}</button>
+            <button onclick="deleteInvitationRule(${r.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
+          </div>
         </div>
       </div>
     `).join('')
   } else {
-    list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无规则</p>'
+    list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无规则，请新增一条邀请奖励配置</p>'
   }
 }
 
-function showAddInvitationRuleModal() {
+function showAddInvitationRuleModal(rule) {
+  const isEdit = !!(rule && rule.id)
   showModal(`
-    <div class="p-6">
-      <h3 class="text-lg font-bold text-navy-800 mb-4">新增邀请奖励规则</h3>
+    <div class="p-6 max-h-[85vh] overflow-y-auto">
+      <h3 class="text-lg font-bold text-navy-800 mb-4">${isEdit ? '编辑' : '新增'}邀请奖励规则</h3>
       <div class="space-y-4">
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">规则名称</label><input id="invRuleName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 邀请注册奖励"></div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">奖励类型</label>
-          <select id="invRuleType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
-            <option value="points">积分</option>
-            <option value="contribution">贡献值</option>
-          </select>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">规则名称</label>
+          <input id="invRuleName" value="${escapeHtml(rule?.rule_name || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 邀请注册奖励">
         </div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">奖励值</label><input id="invRuleValue" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 100"></div>
-        <div class="flex justify-end gap-3 pt-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">积分值</label>
+            <input id="invPointsValue" type="number" min="0" value="${Number(rule?.points_value ?? rule?.reward_value ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 100">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">经验值</label>
+            <input id="invExperienceValue" type="number" min="0" value="${Number(rule?.experience_value ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 50">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">规则说明（图文）</label>
+          <div id="invRuleContent" class="bg-white border border-gray-200 rounded-xl overflow-hidden" style="min-height:180px"></div>
+        </div>
+        <div class="flex justify-end gap-3 pt-2">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
-          <button onclick="saveInvitationRule()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+          <button onclick="saveInvitationRule(${isEdit ? rule.id : 'null'})" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
         </div>
       </div>
     </div>
   `)
+  setTimeout(() => {
+    initRichEditor('invRuleContent', rule?.content || '')
+  }, 50)
 }
 
-async function saveInvitationRule() {
+async function showEditInvitationRuleModal(id) {
+  const res = await api('/admin/invitation-rules')
+  const rule = (res.data || []).find(item => String(item.id) === String(id))
+  if (!rule) return toast('规则不存在', 'error')
+  showAddInvitationRuleModal(rule)
+}
+
+async function saveInvitationRule(id) {
   const body = {
-    rule_name: document.getElementById('invRuleName').value,
-    reward_type: document.getElementById('invRuleType').value,
-    reward_value: parseInt(document.getElementById('invRuleValue').value)
+    rule_name: document.getElementById('invRuleName').value.trim(),
+    rule_type: 'direct',
+    points_value: parseInt(document.getElementById('invPointsValue').value, 10) || 0,
+    experience_value: parseInt(document.getElementById('invExperienceValue').value, 10) || 0,
+    content: getRichEditorHtml('invRuleContent'),
   }
   if (!body.rule_name) return toast('请填写规则名称', 'error')
-  const res = await api('/admin/invitation-rules', { method: 'POST', body })
-  if (res.code === 200) { toast('创建成功'); closeModal(); loadInvitationRules(); }
-  else toast(res.msg || '创建失败', 'error')
+  if (body.points_value <= 0 && body.experience_value <= 0) return toast('请至少配置积分值或经验值', 'error')
+
+  const res = id
+    ? await api(`/admin/invitation-rules/${id}`, { method: 'PUT', body })
+    : await api('/admin/invitation-rules', { method: 'POST', body })
+  if (res.code === 200) {
+    toast(id ? '更新成功' : '创建成功')
+    closeModal()
+    loadInvitationRules()
+  } else {
+    toast(res.msg || '保存失败', 'error')
+  }
 }
 
 async function toggleInvitationRule(id, active) {

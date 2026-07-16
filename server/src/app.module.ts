@@ -16,6 +16,7 @@ import { EventRegistrationModule } from './event-registration/event-registration
 import { HomepageModule } from './homepage/homepage.module'
 import { BusinessModule } from './business/business.module'
 import { TalentModule } from './talent/talent.module'
+import { InvitationModule } from './invitation/invitation.module'
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { TalentModule } from './talent/talent.module'
     HomepageModule,
     BusinessModule,
     TalentModule,
+    InvitationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -221,6 +221,59 @@ export class MembersService {
     return { referrer, referred: referred || [] }
   }
 
+  /** 生成并确保会员推荐码存在 */
+  async ensureInviteCode(memberId: string): Promise<string> {
+    const { data: profile } = await this.client()
+      .from('members')
+      .select('id, invite_code')
+      .eq('id', memberId)
+      .single()
+
+    if (!profile) throw new HttpException('用户不存在', HttpStatus.NOT_FOUND)
+    if (profile.invite_code) return String(profile.invite_code)
+
+    const code = `XH${String(profile.id).padStart(6, '0')}`
+    const { error } = await this.client()
+      .from('members')
+      .update({ invite_code: code })
+      .eq('id', memberId)
+
+    if (error) {
+      // 列可能尚未迁移时回退为基于 ID 的展示码
+      console.warn('[MembersService] ensureInviteCode update failed:', error.message)
+      return code
+    }
+    return code
+  }
+
+  /** 会员推荐页数据：推荐码 + 推荐人数 + 推荐人员列表 */
+  async getInviteDashboard(memberId: string) {
+    const inviteCode = await this.ensureInviteCode(memberId)
+    const { data: referred } = await this.client()
+      .from('members')
+      .select('id, name, phone, avatar, company_name, membership_level, status, created_at')
+      .eq('referrer_id', memberId)
+      .order('created_at', { ascending: false })
+
+    const invitees = (referred || []).map((item: any) => ({
+      id: item.id,
+      name: item.name || '未命名',
+      phone: item.phone
+        ? `${String(item.phone).slice(0, 3)}****${String(item.phone).slice(-4)}`
+        : '-',
+      company_name: item.company_name || '-',
+      membership_level: item.membership_level || '-',
+      status: item.status || '-',
+      created_at: item.created_at,
+    }))
+
+    return {
+      invite_code: inviteCode,
+      invite_count: invitees.length,
+      invitees,
+    }
+  }
+
   /** 获取成长数据 */
   async getGrowthData(id: string) {
     const { data } = await this.client()

@@ -1438,6 +1438,13 @@ export class AdminController {
     return { code: 200, msg: '更新成功', data: result }
   }
 
+  @Delete('invitation-rules/:id')
+  async deleteInvitationRewardRule(@Param('id') id: string) {
+    console.log('[AdminController] DELETE /api/admin/invitation-rules/:id')
+    const result = await this.adminService.deleteInvitationRewardRule(id)
+    return { code: 200, msg: '删除成功', data: result }
+  }
+
   /** ====== 积分规则管理 ====== */
   @Get('points-rules')
   async getPointsRules() {

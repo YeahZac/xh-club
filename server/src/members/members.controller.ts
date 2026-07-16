@@ -54,6 +54,15 @@ export class MembersController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Get(':id/invite')
+  @UseGuards(MemberAuthGuard)
+  async getInviteDashboard(@Param('id') id: string, @Req() request: any) {
+    this.assertOwnMember(id, request.user.sub)
+    console.log('[MembersController] GET /api/members/:id/invite')
+    const result = await this.membersService.getInviteDashboard(id)
+    return { code: 200, msg: 'success', data: result }
+  }
+
   @Get(':id/growth')
   @UseGuards(MemberAuthGuard)
   async getGrowth(@Param('id') id: string, @Req() request: any) {

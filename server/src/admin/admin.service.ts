@@ -1163,13 +1163,28 @@ export class AdminService {
 
   async createInvitationRewardRule(dto: any) {
     try {
+      const points = Number(dto.points_value ?? dto.reward_value ?? 0) || 0
+      const experience = Number(dto.experience_value ?? 0) || 0
+      const rewardType = dto.reward_type
+        || (points > 0 && experience > 0 ? 'both' : points > 0 ? 'points' : experience > 0 ? 'contribution' : 'points')
       const result = await queryExecute(
-        `INSERT INTO invitation_reward_rules (rule_name, rule_type, reward_type, reward_value, conditions, max_rewards, is_active, start_date, end_date)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [dto.rule_name, dto.rule_type, dto.reward_type, dto.reward_value,
-         dto.conditions ? JSON.stringify(dto.conditions) : null,
-         dto.max_rewards || -1, dto.is_active !== false,
-         dto.start_date || null, dto.end_date || null]
+        `INSERT INTO invitation_reward_rules
+         (rule_name, rule_type, reward_type, reward_value, points_value, experience_value, content, conditions, max_rewards, is_active, start_date, end_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          dto.rule_name,
+          dto.rule_type || 'direct',
+          rewardType,
+          points || experience,
+          points,
+          experience,
+          dto.content || null,
+          dto.conditions ? JSON.stringify(dto.conditions) : null,
+          dto.max_rewards ?? -1,
+          dto.is_active !== false,
+          dto.start_date || null,
+          dto.end_date || null,
+        ],
       )
       return await queryOne('SELECT * FROM invitation_reward_rules WHERE id = ?', [result.insertId])
     } catch (error) {
@@ -1180,11 +1195,53 @@ export class AdminService {
 
   async updateInvitationRewardRule(id: string, dto: any) {
     try {
-      await queryExecute('UPDATE invitation_reward_rules SET ? WHERE id = ?', [dto, id])
+      const payload: Record<string, any> = { ...dto }
+      if (payload.points_value !== undefined) payload.points_value = Number(payload.points_value) || 0
+      if (payload.experience_value !== undefined) payload.experience_value = Number(payload.experience_value) || 0
+      if (payload.points_value !== undefined || payload.experience_value !== undefined) {
+        const points = payload.points_value ?? 0
+        const experience = payload.experience_value ?? 0
+        payload.reward_value = points || experience
+        if (!payload.reward_type) {
+          payload.reward_type = points > 0 && experience > 0
+            ? 'both'
+            : points > 0 ? 'points' : 'contribution'
+        }
+      }
+      if (payload.conditions && typeof payload.conditions === 'object') {
+        payload.conditions = JSON.stringify(payload.conditions)
+      }
+      await queryExecute('UPDATE invitation_reward_rules SET ? WHERE id = ?', [payload, id])
       return await queryOne('SELECT * FROM invitation_reward_rules WHERE id = ?', [id])
     } catch (error) {
       console.error('[AdminService] updateInvitationRewardRule error:', error)
       throw new HttpException('更新邀请奖励规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async deleteInvitationRewardRule(id: string) {
+    try {
+      await queryExecute('DELETE FROM invitation_reward_rules WHERE id = ?', [id])
+      return { success: true }
+    } catch (error) {
+      console.error('[AdminService] deleteInvitationRewardRule error:', error)
+      throw new HttpException('删除邀请奖励规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  /** 小程序端读取启用中的邀请规则（含图文说明） */
+  async getActiveInvitationRulesForClient() {
+    try {
+      const rows = await queryRows(
+        `SELECT id, rule_name, rule_type, reward_type, reward_value, points_value, experience_value, content, is_active
+         FROM invitation_reward_rules
+         WHERE is_active = 1
+         ORDER BY id ASC`,
+      )
+      return rows || []
+    } catch (error) {
+      console.error('[AdminService] getActiveInvitationRulesForClient error:', error)
+      return []
     }
   }
 

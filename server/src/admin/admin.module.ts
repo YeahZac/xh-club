@@ -8,5 +8,6 @@ import { UploadModule } from '@/upload/upload.module'
   imports: [UploadModule],
   controllers: [AdminController],
   providers: [AdminService, AdminAuthGuard],
+  exports: [AdminService],
 })
 export class AdminModule {}
