@@ -143,8 +143,13 @@ const QUICK_ENTRIES = [
   { label: "我的收益", icon: Wallet, tint: "#FEF2F2", color: "#EF4444", path: "/pages/profile/index" },
 ]
 
-const isCloudStorageImageUrl = (url: string) =>
-  /^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)/i.test(url)
+const isCloudStorageImageUrl = (url: string) => {
+  if (!url || typeof url !== 'string') return false
+  const value = url.trim()
+  if (!/^https:\/\//i.test(value)) return false
+  // 兼容 COS / 云托管临时域名 / 带签名 query 的 URL
+  return /(?:\.myqcloud\.com|\.tcb\.qcloud\.la)(?:\/|\?|$)/i.test(value)
+}
 
 const IndexPage = () => {
   const isMiniApp = ([Taro.ENV_TYPE.WEAPP, Taro.ENV_TYPE.TT] as string[]).includes(Taro.getEnv() as string)
@@ -201,7 +206,9 @@ const IndexPage = () => {
       const homepageConfig = (homepageRes?.data?.data || null) as HomepageConfig | null
 
       if (bannersRes) {
-        const list = getResponseList<BannerItem>(bannersRes.data?.data)
+        // 兼容 Taro 响应体直接是数组 / {data:[]} / {code,data:[]} 多种形态
+        const list = getResponseList<BannerItem>(bannersRes.data?.data ?? bannersRes.data)
+        console.log('[首页] banners parsed count:', list.length)
         const parsed = list.map((banner: BannerItem) => {
           let linkConfig = banner.link_config || {}
           if (typeof banner.link_config === 'string') {
@@ -215,6 +222,10 @@ const IndexPage = () => {
           return { ...banner, link_config: linkConfig }
         })
         setBanners(parsed.slice(0, 5))
+        setFailedBannerImages(new Set())
+        setLoadedBannerImages(new Set())
+      } else {
+        setBanners([])
       }
       if (projectsRes) {
         const list = getResponseList<RoadshowItem>(projectsRes.data?.data)
@@ -373,43 +384,52 @@ const IndexPage = () => {
       {banners.length > 0 && (
         <View className="px-4 -mt-2">
           <Carousel
+            key={banners.map((item) => item.id).join('-')}
             opts={{ autoplay: true, interval: 4000, duration: 500, loop: true }}
-            className="rounded-2xl overflow-hidden w-full aspect-[69/28]"
+            className="w-full"
           >
-            <CarouselContent>
-              {banners.map((banner) => (
-                <CarouselItem key={banner.id}>
-                  <View
-                    className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] rounded-2xl p-5 relative overflow-hidden h-full"
-                    onClick={() => handleBannerClick(banner)}
-                  >
-                    {isCloudStorageImageUrl(banner.image_url) && !failedBannerImages.has(banner.id) && (
-                      <Image
-                        src={banner.image_url}
-                        mode="aspectFill"
-                        className={`absolute inset-0 w-full h-full ${loadedBannerImages.has(banner.id) ? 'opacity-100' : 'opacity-0'}`}
-                        onLoad={() => handleBannerImageLoad(banner.id)}
-                        onError={() => handleBannerImageError(banner.id)}
-                      />
-                    )}
-                    {loadedBannerImages.has(banner.id) ? (
-                      <View className="absolute left-0 bottom-0 right-0 p-4" style={{ background: 'linear-gradient(transparent, rgba(27,42,74,0.85))' }}>
-                        <Text className="block text-white text-base font-bold">{banner.title}</Text>
+            {/* 小程序端 Swiper 依赖明确高度；aspect + 绝对填充比 h-full 更稳 */}
+            <View
+              className="relative w-full overflow-hidden rounded-2xl"
+              style={{ paddingBottom: `${(28 / 69) * 100}%` }}
+            >
+              <View className="absolute inset-0">
+                <CarouselContent className="h-full">
+                  {banners.map((banner) => (
+                    <CarouselItem key={banner.id} className="h-full">
+                      <View
+                        className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] relative overflow-hidden h-full w-full"
+                        onClick={() => handleBannerClick(banner)}
+                      >
+                        {isCloudStorageImageUrl(banner.image_url) && !failedBannerImages.has(banner.id) && (
+                          <Image
+                            src={banner.image_url}
+                            mode="aspectFill"
+                            className={`absolute inset-0 w-full h-full ${loadedBannerImages.has(banner.id) ? 'opacity-100' : 'opacity-0'}`}
+                            onLoad={() => handleBannerImageLoad(banner.id)}
+                            onError={() => handleBannerImageError(banner.id)}
+                          />
+                        )}
+                        {loadedBannerImages.has(banner.id) ? (
+                          <View className="absolute left-0 bottom-0 right-0 p-4" style={{ background: 'linear-gradient(transparent, rgba(27,42,74,0.85))' }}>
+                            <Text className="block text-white text-base font-bold">{banner.title}</Text>
+                          </View>
+                        ) : (
+                          <View className="h-full flex flex-col justify-end p-5">
+                            <View className="absolute -right-6 -top-6 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
+                            <View className="absolute left-0 bottom-0 right-0 h-1 bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8]" />
+                            <Text className="block text-white text-lg font-bold mb-1 relative z-10">{banner.title}</Text>
+                            <View className="rounded-lg px-3 py-1 self-start relative z-10" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                              <Text className="block text-white text-xs font-medium">立即参与 →</Text>
+                            </View>
+                          </View>
+                        )}
                       </View>
-                    ) : (
-                      <View>
-                        <View className="absolute -right-6 -top-6 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                        <View className="absolute left-0 bottom-0 right-0 h-1 bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8] rounded-full" />
-                        <Text className="block text-white text-lg font-bold mb-1">{banner.title}</Text>
-                        <View className="rounded-lg px-3 py-1 self-start" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-                          <Text className="block text-white text-xs font-medium">立即参与 →</Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                </CarouselItem>
-              ))}
-            </CarouselContent>
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+              </View>
+            </View>
             <CarouselDots total={banners.length} />
           </Carousel>
         </View>

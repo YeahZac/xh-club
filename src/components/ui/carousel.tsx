@@ -132,6 +132,7 @@ const CarouselContent = React.forwardRef<
       <Swiper
         ref={ref}
         className="h-full w-full"
+        style={{ height: '100%', width: '100%' }}
         vertical={orientation === "vertical"}
         current={current}
         onChange={(e) => setCurrent(e.detail.current)}
