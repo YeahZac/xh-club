@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
+import { ensureSchemaColumns } from '@/storage/database/ensure-schema-columns'
 import { UploadService } from '@/upload/upload.service'
 import { assertCloudStorageImageUrl } from '@/utils/media-validators'
 
@@ -45,7 +46,6 @@ export class RoadshowService {
   constructor(private readonly uploadService: UploadService) {}
 
   async ensureSchema() {
-    const { ensureSchemaColumns } = await import('@/storage/database/ensure-schema-columns')
     await ensureSchemaColumns()
   }
 
