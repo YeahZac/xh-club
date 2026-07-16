@@ -163,7 +163,7 @@ const DiscoverPage = () => {
                   <Card key={item.id} className="shadow-sm border-0 overflow-hidden">
                     {isCloudStorageImageUrl(item.cover_image) ? (
                       <View className="relative">
-                        <Image src={item.cover_image} mode="aspectFill" className="w-full h-36" />
+                        <Image src={item.cover_image} mode="aspectFill" className="w-full aspect-[69/29]" />
                         <View className="absolute left-0 top-0 right-0 p-3" style={{ background: 'linear-gradient(rgba(0,0,0,0.5), transparent)' }}>
                           <Badge className="bg-[#C9A96E] text-white text-[10px] px-2 py-0">{eventTypeMap[item.event_type] || item.event_type}</Badge>
                         </View>

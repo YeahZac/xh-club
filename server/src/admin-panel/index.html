@@ -706,6 +706,14 @@ function showModal(html) {
 }
 
 function closeModal() {
+  Object.keys(uploadTasks || {}).forEach((targetId) => {
+    const task = uploadTasks[targetId]
+    if (task?.xhr && task.status === 'uploading') {
+      task._manualAbort = true
+      task.xhr.abort()
+    }
+  })
+  Object.keys(uploadTasks || {}).forEach((targetId) => clearUploadTaskUi(targetId))
   document.getElementById('modalOverlay').classList.add('hidden')
 }
 
@@ -713,6 +721,7 @@ document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal()
 })
 
+const uploadTasks = {}
 const LEVEL_MAP = { normal: '普通', silver: '银卡', gold: '金卡', diamond: '钻石' }
 const STATUS_MAP = { active: '已激活', pending: '待审批', frozen: '已冻结', exited: '已退出' }
 const STATUS_COLORS = { active: 'bg-green-100 text-green-700', pending: 'bg-yellow-100 text-yellow-700', frozen: 'bg-red-100 text-red-700', exited: 'bg-gray-100 text-gray-500' }
@@ -1246,15 +1255,16 @@ function showEventModal() {
         <div><label class="block text-sm font-medium text-gray-700 mb-1">活动名称</label><input id="evTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="输入活动名称"></div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">封面图片 <span class="text-red-500">*</span></label>
-          <p class="text-xs text-gray-400 mb-2">推荐尺寸 1200×500，前端活动卡片按相同比例展示</p>
+          <p class="text-xs text-gray-400 mb-2">${mediaHint('event')}</p>
           <div class="flex items-center gap-3">
             <input id="evCover" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传封面图片">
-            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'evCover', 1200, 500)"></label>
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'evCover', 690, 290)"></label>
           </div>
+          ${mediaPreviewBox('event')}
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">活动视频（选填）</label>
-          <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，最大 100MB</p>
+          <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，单文件 ≤200MB</p>
           <div class="flex items-center gap-3">
             <input id="evVideo" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传活动宣传视频">
             <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" onchange="uploadFile(this, 'evVideo')"></label>
@@ -1319,6 +1329,7 @@ function renderFormFields() {
 }
 
 async function createEvent() {
+  if (!assertNoUploading()) return
   // 收集表单字段
   const formFields = _formFields.filter(f => f.label.trim()).map(f => ({
     label: f.label,
@@ -1385,15 +1396,16 @@ function showProjectModal() {
         <div><label class="block text-sm font-medium text-gray-700 mb-1">项目名称</label><input id="pjTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">封面图片 <span class="text-red-500">*</span></label>
-          <p class="text-xs text-gray-400 mb-2">推荐尺寸 1200×675（16:9），与前端项目卡片一致</p>
+          <p class="text-xs text-gray-400 mb-2">${mediaHint('project')}</p>
           <div class="flex items-center gap-3">
             <input id="pjCover" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传项目封面">
-            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'pjCover', 1200, 675)"></label>
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'pjCover', 690, 388)"></label>
           </div>
+          ${mediaPreviewBox('project')}
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">项目视频（选填）</label>
-          <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，最大 100MB</p>
+          <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，单文件 ≤200MB</p>
           <div class="flex items-center gap-3">
             <input id="pjVideo" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传项目路演视频">
             <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" onchange="uploadFile(this, 'pjVideo')"></label>
@@ -1418,6 +1430,7 @@ function showProjectModal() {
 }
 
 async function createProject() {
+  if (!assertNoUploading()) return
   const body = {
     title: document.getElementById('pjTitle').value,
     cover_image: document.getElementById('pjCover').value,
@@ -1481,13 +1494,14 @@ function showBannerModal() {
         <div><label class="block text-sm font-medium text-gray-700 mb-1">标题</label><input id="bnTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">封面图片 <span class="text-red-500">*</span></label>
-          <p class="text-xs text-gray-400 mb-2">推荐尺寸 1200×490，与前端首页 Banner 的 343×140 展示比例一致</p>
+          <p class="text-xs text-gray-400 mb-2">${mediaHint('banner')}</p>
           <div class="flex items-center gap-3">
             <input id="bnImage" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传 Banner 图片">
             <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">
-              上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'bnImage', 1200, 490)">
+              上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'bnImage', 690, 280)">
             </label>
           </div>
+          ${mediaPreviewBox('banner')}
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -1553,6 +1567,7 @@ async function loadBannerEventOptions() {
 }
 
 async function createBanner() {
+  if (!assertNoUploading()) return
   const linkType = document.getElementById('bnLinkType').value
   let linkConfig = {}
   if (linkType === 'article') linkConfig = { article_id: document.getElementById('bnArticleId').value }
@@ -1622,15 +1637,16 @@ function showMallModal() {
         <div><label class="block text-sm font-medium text-gray-700 mb-1">商品名称</label><input id="mlName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">商品图片 <span class="text-red-500">*</span></label>
-          <p class="text-xs text-gray-400 mb-2">推荐尺寸 800×800（1:1），与前端商品卡片和详情主图一致</p>
+          <p class="text-xs text-gray-400 mb-2">${mediaHint('product')}</p>
           <div class="flex items-center gap-3">
             <input id="mlCover" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传商品图片">
-            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'mlCover', 800, 800)"></label>
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'mlCover', 690, 690)"></label>
           </div>
+          ${mediaPreviewBox('product')}
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">商品视频（选填）</label>
-          <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，最大 100MB</p>
+          <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，单文件 ≤200MB</p>
           <div class="flex items-center gap-3">
             <input id="mlVideo" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传商品演示视频">
             <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" onchange="uploadFile(this, 'mlVideo')"></label>
@@ -1651,6 +1667,7 @@ function showMallModal() {
 }
 
 async function createMallProduct() {
+  if (!assertNoUploading()) return
   const body = {
     name: document.getElementById('mlName').value,
     image_url: document.getElementById('mlCover').value,
@@ -1785,12 +1802,154 @@ setInterval(() => {
   document.getElementById('currentTime').textContent = now.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric', weekday:'long' }) + ' ' + now.toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' })
 }, 1000)
 
-// ===== 文件上传 =====
+// ===== 媒体规范（按手机 375 逻辑宽 × 2x 视网膜出图）=====
+const MEDIA_IMAGE_MAX_BYTES = 2 * 1024 * 1024
+const MEDIA_VIDEO_MAX_BYTES = 200 * 1024 * 1024
+const MEDIA_SPECS = {
+  banner:  { w: 690, h: 280, label: 'Banner', tip: '手机首页轮播约 343×140，上传 690×280（约 2.46:1）' },
+  event:   { w: 690, h: 290, label: '活动封面', tip: '手机活动卡片约 343×144，上传 690×290（约 2.38:1）' },
+  project: { w: 690, h: 388, label: '项目封面', tip: '手机项目封面约 343×193，上传 690×388（16:9）' },
+  article: { w: 690, h: 388, label: '文章封面', tip: '手机文章封面约 343×193，上传 690×388（16:9）' },
+  product: { w: 690, h: 690, label: '商品图', tip: '手机商品主图正方形，上传 690×690（1:1）' },
+}
+
+function mediaHint(specKey) {
+  const spec = MEDIA_SPECS[specKey]
+  if (!spec) return ''
+  return `${spec.tip}；单张 ≤2MB，JPG/PNG/WebP`
+}
+
+function mediaPreviewBox(specKey) {
+  const spec = MEDIA_SPECS[specKey]
+  if (!spec) return ''
+  const maxW = 280
+  const scale = Math.min(maxW / spec.w, 96 / spec.h)
+  const w = Math.round(spec.w * scale)
+  const h = Math.round(spec.h * scale)
+  return `<div class="mt-2 inline-flex flex-col items-start gap-1">
+    <div class="border border-dashed border-brand-300 bg-brand-50/40 rounded-lg overflow-hidden flex items-center justify-center text-[10px] text-brand-600" style="width:${w}px;height:${h}px">预览框 ${spec.w}×${spec.h}</div>
+    <span class="text-[10px] text-gray-400">上传后请保证主体落在此比例内</span>
+  </div>`
+}
+
+// ===== 文件上传（进度条 + 可取消/删除）=====
+function formatFileSize(bytes) {
+  if (!bytes && bytes !== 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function getOrCreateUploadTaskHost(targetId) {
+  const input = document.getElementById(targetId)
+  if (!input) return null
+  let host = document.getElementById(`uploadTask-${targetId}`)
+  if (!host) {
+    host = document.createElement('div')
+    host.id = `uploadTask-${targetId}`
+    host.className = 'mt-2'
+    const row = input.closest('.flex.items-center') || input.parentElement
+    row.insertAdjacentElement('afterend', host)
+  }
+  return host
+}
+
+function renderUploadTask(targetId, task) {
+  const host = getOrCreateUploadTaskHost(targetId)
+  if (!host) return
+  const percent = Math.max(0, Math.min(100, Math.round(task.percent || 0)))
+  const isUploading = task.status === 'uploading'
+  const isDone = task.status === 'done'
+  const isError = task.status === 'error'
+  const isCancelled = task.status === 'cancelled'
+  const statusText = isUploading
+    ? `上传中 ${percent}%`
+    : isDone
+      ? '上传完成'
+      : isError
+        ? (task.message || '上传失败')
+        : isCancelled
+          ? '已取消'
+          : ''
+  const barColor = isError || isCancelled ? 'bg-red-400' : isDone ? 'bg-green-500' : 'bg-brand-500'
+  const actionLabel = isUploading ? '取消' : '删除'
+  host.innerHTML = `
+    <div class="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+      <div class="flex items-center justify-between gap-3 mb-2">
+        <div class="min-w-0 flex-1">
+          <p class="text-sm text-navy-800 truncate">${task.fileName || '未命名文件'}</p>
+          <p class="text-xs text-gray-400">${formatFileSize(task.fileSize)} · ${statusText}</p>
+        </div>
+        <button type="button" onclick="removeUploadTask('${targetId}')" class="shrink-0 px-2.5 py-1 text-xs rounded-lg ${isUploading ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-red-100 text-red-700 hover:bg-red-200'} transition">
+          ${actionLabel}
+        </button>
+      </div>
+      <div class="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+        <div class="h-full ${barColor} transition-all duration-200" style="width:${isError || isCancelled ? 100 : percent}%"></div>
+      </div>
+    </div>
+  `
+}
+
+function clearUploadTaskUi(targetId) {
+  const host = document.getElementById(`uploadTask-${targetId}`)
+  if (host) host.innerHTML = ''
+  delete uploadTasks[targetId]
+}
+
+function assertNoUploading() {
+  const busy = Object.values(uploadTasks).some((task) => task.status === 'uploading')
+  if (busy) {
+    toast('请等待文件上传完成，或取消当前上传任务', 'error')
+    return false
+  }
+  return true
+}
+
+function removeUploadTask(targetId) {
+  const task = uploadTasks[targetId]
+  if (task?.xhr && task.status === 'uploading') {
+    task._manualAbort = true
+    task.xhr.abort()
+  }
+  const input = document.getElementById(targetId)
+  if (input) input.value = ''
+  clearUploadTaskUi(targetId)
+  toast(task?.status === 'uploading' ? '已取消上传' : '已删除文件')
+}
+
+function syncExistingMediaTask(targetId, label = '已上传文件') {
+  const input = document.getElementById(targetId)
+  const url = (input?.value || '').trim()
+  if (!url) {
+    clearUploadTaskUi(targetId)
+    return
+  }
+  uploadTasks[targetId] = {
+    status: 'done',
+    percent: 100,
+    fileName: label,
+    fileSize: 0,
+    url,
+  }
+  renderUploadTask(targetId, uploadTasks[targetId])
+}
+
 async function uploadFile(input, targetId, expectedWidth, expectedHeight) {
   const file = input.files[0]
   if (!file) return
   const isImage = file.type.startsWith('image/')
   const isVideo = file.type.startsWith('video/')
+  if (isImage && file.size > MEDIA_IMAGE_MAX_BYTES) {
+    toast('图片大小不能超过 2MB', 'error')
+    input.value = ''
+    return
+  }
+  if (isVideo && file.size > MEDIA_VIDEO_MAX_BYTES) {
+    toast('视频大小不能超过 200MB', 'error')
+    input.value = ''
+    return
+  }
   if (isImage && expectedWidth && expectedHeight) {
     const objectUrl = URL.createObjectURL(file)
     try {
@@ -1811,25 +1970,77 @@ async function uploadFile(input, targetId, expectedWidth, expectedHeight) {
       URL.revokeObjectURL(objectUrl)
     }
   }
+
+  // 若已有进行中的任务，先取消
+  if (uploadTasks[targetId]?.xhr && uploadTasks[targetId].status === 'uploading') {
+    uploadTasks[targetId]._manualAbort = true
+    uploadTasks[targetId].xhr.abort()
+  }
+
+  const endpoint = isImage ? '/upload/image' : isVideo ? '/upload/video' : '/upload'
   const formData = new FormData()
   formData.append('file', file)
-  try {
-    const endpoint = isImage ? '/upload/image' : isVideo ? '/upload/video' : '/upload'
-    const res = await fetch(`/api${endpoint}`, {
-      method: 'POST',
-      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: formData
-    })
-    const data = await res.json()
-    if (data.code === 200 && data.data?.url) {
-      document.getElementById(targetId).value = data.data.url
-      toast('上传成功')
-    } else {
-      toast(data.msg || '上传失败', 'error')
-    }
-  } catch (e) {
-    toast('上传异常: ' + e.message, 'error')
+  const xhr = new XMLHttpRequest()
+  const task = {
+    status: 'uploading',
+    percent: 0,
+    fileName: file.name,
+    fileSize: file.size,
+    xhr,
+    _manualAbort: false,
   }
+  uploadTasks[targetId] = task
+  renderUploadTask(targetId, task)
+
+  xhr.upload.onprogress = (event) => {
+    if (!event.lengthComputable) return
+    task.percent = (event.loaded / event.total) * 100
+    renderUploadTask(targetId, task)
+  }
+
+  xhr.onerror = () => {
+    if (task._manualAbort) return
+    task.status = 'error'
+    task.message = '网络异常'
+    renderUploadTask(targetId, task)
+    toast('上传异常', 'error')
+  }
+
+  xhr.onabort = () => {
+    if (task._manualAbort) return
+    task.status = 'cancelled'
+    renderUploadTask(targetId, task)
+  }
+
+  xhr.onload = () => {
+    if (task._manualAbort) return
+    try {
+      const data = JSON.parse(xhr.responseText || '{}')
+      if (xhr.status >= 200 && xhr.status < 300 && data.code === 200 && data.data?.url) {
+        const targetInput = document.getElementById(targetId)
+        if (targetInput) targetInput.value = data.data.url
+        task.status = 'done'
+        task.percent = 100
+        task.url = data.data.url
+        renderUploadTask(targetId, task)
+        toast('上传成功')
+      } else {
+        task.status = 'error'
+        task.message = data.msg || `上传失败(${xhr.status})`
+        renderUploadTask(targetId, task)
+        toast(task.message, 'error')
+      }
+    } catch (e) {
+      task.status = 'error'
+      task.message = '响应解析失败'
+      renderUploadTask(targetId, task)
+      toast('上传异常: ' + e.message, 'error')
+    }
+  }
+
+  xhr.open('POST', `/api${endpoint}`)
+  if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+  xhr.send(formData)
   input.value = ''
 }
 
@@ -1909,15 +2120,16 @@ async function showArticleModal(editId) {
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">封面图 <span class="text-red-500">*</span></label>
-          <p class="text-xs text-gray-400 mb-2">推荐尺寸 1200×675（16:9），用于文章列表和详情封面</p>
+          <p class="text-xs text-gray-400 mb-2">${mediaHint('article')}</p>
           <div class="flex items-center gap-3">
             <input id="artCover" required value="${article?.cover_image || ''}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传文章封面">
-            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'artCover', 1200, 675)"></label>
+            <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'artCover', 690, 388)"></label>
           </div>
+          ${mediaPreviewBox('article')}
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">文章视频（选填）</label>
-          <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，最大 100MB</p>
+          <p class="text-xs text-gray-400 mb-2">支持 MP4、WebM、MOV，单文件 ≤200MB</p>
           <div class="flex items-center gap-3">
             <input id="artVideo" value="${article?.video_url || ''}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可上传文章配套视频">
             <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer">上传<input type="file" accept="video/mp4,video/webm,video/quicktime" class="hidden" onchange="uploadFile(this, 'artVideo')"></label>
@@ -1933,9 +2145,12 @@ async function showArticleModal(editId) {
       </div>
     </div>
   `)
+  syncExistingMediaTask('artCover', '已上传封面')
+  syncExistingMediaTask('artVideo', '已上传视频')
 }
 
 async function saveArticle(editId) {
+  if (!assertNoUploading()) return
   const tagsStr = document.getElementById('artTags').value
   const body = {
     title: document.getElementById('artTitle').value,

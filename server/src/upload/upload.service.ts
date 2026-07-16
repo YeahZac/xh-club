@@ -245,9 +245,9 @@ export class UploadService {
       throw new Error('只支持 JPG、PNG、GIF、WebP 格式的图片');
     }
 
-    const maxSize = 10 * 1024 * 1024;
+    const maxSize = 2 * 1024 * 1024;
     if (file.size > maxSize) {
-      throw new Error('图片大小不能超过 10MB');
+      throw new Error('图片大小不能超过 2MB');
     }
 
     return this.uploadFile(file, folder);
@@ -259,9 +259,9 @@ export class UploadService {
     if (!allowedTypes.includes(file.mimetype)) {
       throw new Error('只支持 MP4、WebM、MOV 格式的视频');
     }
-    const maxSize = 100 * 1024 * 1024;
+    const maxSize = 200 * 1024 * 1024;
     if (file.size > maxSize) {
-      throw new Error('视频大小不能超过 100MB');
+      throw new Error('视频大小不能超过 200MB');
     }
     return this.uploadFile(file, folder);
   }

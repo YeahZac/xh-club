@@ -143,7 +143,7 @@ const BusinessPage = () => {
                 {projects.map((item) => (
                   <Card key={item.id} className="shadow-sm border-0 overflow-hidden">
                     {isCloudStorageImageUrl(item.cover_image) && (
-                      <Image src={item.cover_image} mode="aspectFill" className="w-full h-48" />
+                      <Image src={item.cover_image} mode="aspectFill" className="w-full aspect-video" />
                     )}
                     <View className="bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] p-5 relative overflow-hidden">
                       <View className="absolute -right-8 -top-8 w-28 h-28 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
@@ -195,7 +195,7 @@ const BusinessPage = () => {
                 {financing.map((item) => (
                   <Card key={item.id} className="shadow-sm border-0 overflow-hidden">
                     {isCloudStorageImageUrl(item.cover_image) && (
-                      <Image src={item.cover_image} mode="aspectFill" className="w-full h-48" />
+                      <Image src={item.cover_image} mode="aspectFill" className="w-full aspect-video" />
                     )}
                     <View className="bg-gradient-to-br from-[#2D4A7A] to-[#4A6FA5] p-5 relative overflow-hidden">
                       <View className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />

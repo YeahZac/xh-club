@@ -365,8 +365,7 @@ const IndexPage = () => {
         <View className="px-4 -mt-2">
           <Carousel
             opts={{ autoplay: true, interval: 4000, duration: 500, loop: true }}
-            className="rounded-2xl overflow-hidden"
-            style={{ height: '140px' }}
+            className="rounded-2xl overflow-hidden w-full aspect-[69/28]"
           >
             <CarouselContent>
               {banners.map((banner) => (
@@ -446,7 +445,7 @@ const IndexPage = () => {
               {roadshows.map((item) => (
                 <Card key={item.id} className="min-w-[260px] shadow-sm border-0 overflow-hidden flex-shrink-0">
                   {isCloudStorageImageUrl(item.cover_image) && (
-                    <Image src={item.cover_image} mode="aspectFill" className="w-full h-36" />
+                    <Image src={item.cover_image} mode="aspectFill" className="w-full aspect-video" />
                   )}
                   <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] p-4 relative overflow-hidden">
                     <View className="absolute -right-4 -bottom-4 w-20 h-20 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }} />
