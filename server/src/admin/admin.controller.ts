@@ -338,6 +338,7 @@ CREATE TABLE events (
   max_participants INT DEFAULT 0,
   current_participants INT DEFAULT 0,
   fee DECIMAL(10,2) DEFAULT 0,
+  form_fields JSON,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_status (status),
@@ -863,6 +864,8 @@ export class AdminController {
       // 8. 补齐内容媒体字段（封面由接口对新建/编辑内容强制校验）
       const mediaColumns: Array<[string, string, string]> = [
         ['events', 'video_url', 'VARCHAR(500) NULL'],
+        ['events', 'address', 'TEXT NULL'],
+        ['events', 'form_fields', 'JSON NULL'],
         ['projects', 'video_url', 'VARCHAR(500) NULL'],
         ['projects', 'industry', 'VARCHAR(64) NULL'],
         ['projects', 'stage', `VARCHAR(32) DEFAULT 'seed'`],

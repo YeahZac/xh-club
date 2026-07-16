@@ -76,6 +76,9 @@ export async function initMySQL(): Promise<void> {
     try {
       await Promise.race([testPromise, timeoutPromise]);
       console.log('[MySQL] 连接测试成功');
+      // 启动时自动补齐旧库缺失列（如 events.video_url）
+      const { ensureSchemaColumns } = await import('./ensure-schema-columns');
+      await ensureSchemaColumns();
     } catch (err: any) {
       console.error('[MySQL] 连接测试失败或超时:', err.message);
       // 不抛出错误，允许服务继续启动
