@@ -16,6 +16,9 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['articles', 'tags', 'JSON NULL'],
   ['mall_products', 'image_url', 'VARCHAR(500) NULL'],
   ['mall_products', 'video_url', 'VARCHAR(500) NULL'],
+  ['mall_products', 'view_count', 'INT NOT NULL DEFAULT 0'],
+  ['events', 'view_count', 'INT NOT NULL DEFAULT 0'],
+  ['homepage_sections', 'sort_mode', `VARCHAR(32) NOT NULL DEFAULT 'custom'`],
   // 商机管理（兼容旧 business_opportunities 表结构）
   ['business_opportunities', 'summary', 'TEXT NULL'],
   ['business_opportunities', 'content', 'MEDIUMTEXT NULL'],

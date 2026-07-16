@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common'
 import { AdminAuthGuard } from '@/auth/auth.guard'
@@ -19,6 +20,12 @@ export class HomepageController {
   @Get()
   async getConfig() {
     const data = await this.homepageService.getConfig()
+    return { code: 200, msg: 'success', data }
+  }
+
+  @Get('feed')
+  async getFeed() {
+    const data = await this.homepageService.getFeed()
     return { code: 200, msg: 'success', data }
   }
 }
@@ -35,15 +42,24 @@ export class HomepageAdminController {
   }
 
   @Get('candidates/:section')
-  async getCandidates(@Param('section') section: string) {
-    const data = await this.homepageService.getCandidates(section)
+  async getCandidates(
+    @Param('section') section: string,
+    @Query('keyword') keyword?: string,
+  ) {
+    const data = await this.homepageService.getCandidates(section, keyword)
     return { code: 200, msg: 'success', data }
+  }
+
+  @Put('settings')
+  async updateSettings(@Body() body: { sort_mode: string }) {
+    const data = await this.homepageService.updateSettings(body)
+    return { code: 200, msg: '排序设置已保存', data }
   }
 
   @Put('sections/:section')
   async updateSection(
     @Param('section') section: string,
-    @Body() body: { is_enabled?: boolean; item_limit?: number },
+    @Body() body: { is_enabled?: boolean; item_limit?: number; sort_mode?: string },
   ) {
     const data = await this.homepageService.updateSection(section, body)
     return { code: 200, msg: '保存成功', data }

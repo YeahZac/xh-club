@@ -285,8 +285,20 @@
     <!-- ====== 首页管理 ====== -->
     <div data-page="homepage" class="p-8 fade-in">
       <div class="mb-6">
-        <h2 class="text-lg font-bold text-navy-800">首页列表内容</h2>
-        <p class="text-sm text-gray-500 mt-1">管理小程序首页的精选项目、资源大厅和商会动态，可设置展示状态、数量与顺序。</p>
+        <h2 class="text-lg font-bold text-navy-800">首页内容管理</h2>
+        <p class="text-sm text-gray-500 mt-1">配置小程序首页瀑布流展示模块：活动、商城商品、项目、融资招募、项目路演、资源对接。</p>
+      </div>
+      <div id="homepageSortBar" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6 flex flex-wrap items-center gap-4">
+        <div>
+          <p class="text-sm font-medium text-navy-800 mb-1">展示排序机制</p>
+          <p class="text-xs text-gray-400">自定义排序时，可编辑每条内容的排序值（越小越靠前）</p>
+        </div>
+        <select id="homeSortMode" class="px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
+          <option value="time_desc">时间倒序</option>
+          <option value="view_count">浏览次数</option>
+          <option value="custom">自定义排序</option>
+        </select>
+        <button onclick="saveHomepageSortMode()" class="px-4 py-2.5 bg-navy-700 text-white text-sm rounded-xl hover:bg-navy-800">保存排序设置</button>
       </div>
       <div id="homepageSections" class="space-y-6">
         <div class="bg-white rounded-2xl p-8 text-center text-gray-400">加载中...</div>
@@ -1243,6 +1255,8 @@ async function loadDashboard() {
 
 // ===== 首页管理 =====
 let homepageCandidates = {}
+let homepageSortMode = 'custom'
+const HOMEPAGE_SORT_LABEL = { time_desc: '时间倒序', view_count: '浏览次数', custom: '自定义排序' }
 
 async function loadHomepage() {
   const container = document.getElementById('homepageSections')
@@ -1250,11 +1264,15 @@ async function loadHomepage() {
   try {
     const configRes = await api('/admin/homepage')
     if (configRes.code !== 200 || !configRes.data?.configured) {
-      container.innerHTML = '<div class="bg-yellow-50 border border-yellow-200 rounded-2xl p-6 text-yellow-800">请先在数据看板执行数据库迁移，再配置首页内容。</div>'
+      container.innerHTML = '<div class="bg-yellow-50 border border-yellow-200 rounded-2xl p-6 text-yellow-800">首页配置初始化中，请刷新重试。若仍失败请确认数据库连接正常。</div>'
       return
     }
 
     const sections = configRes.data.sections || []
+    homepageSortMode = configRes.data.sort_mode || 'custom'
+    const sortEl = document.getElementById('homeSortMode')
+    if (sortEl) sortEl.value = homepageSortMode
+
     const candidateResults = await Promise.all(
       sections.map(section => api(`/admin/homepage/candidates/${section.section}`))
     )
@@ -1276,16 +1294,17 @@ function renderHomepageSection(section) {
   const options = candidates.map(item =>
     `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title || `内容 #${item.id}`)}</option>`
   ).join('')
+  const showCustomSort = homepageSortMode === 'custom'
   const rows = (section.items || []).map(item => {
     const content = candidateMap.get(String(item.item_id))
     return `
       <tr class="border-t border-gray-100">
         <td class="px-4 py-3">
           <p class="text-sm font-medium text-navy-800">${escapeHtml(content?.title || `已失效内容 #${item.item_id}`)}</p>
-          <p class="text-xs text-gray-400">ID: ${escapeHtml(item.item_id)}</p>
+          <p class="text-xs text-gray-400">ID: ${escapeHtml(item.item_id)}${content?.view_count != null ? ` · 浏览 ${content.view_count}` : ''}</p>
         </td>
-        <td class="px-4 py-3 w-32">
-          <input id="home-order-${item.id}" type="number" value="${Number(item.sort_order) || 0}" class="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm">
+        <td class="px-4 py-3 w-32 ${showCustomSort ? '' : 'opacity-40'}">
+          <input id="home-order-${item.id}" type="number" value="${Number(item.sort_order) || 0}" class="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm" ${showCustomSort ? '' : 'disabled'}>
         </td>
         <td class="px-4 py-3 w-28 text-center">
           <input id="home-active-${item.id}" type="checkbox" ${item.is_active ? 'checked' : ''} class="w-4 h-4 accent-brand-500">
@@ -1300,25 +1319,27 @@ function renderHomepageSection(section) {
 
   return `
     <section class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+      <div class="p-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h3 class="font-bold text-navy-800">${escapeHtml(section.display_name)}</h3>
-          <p class="text-xs text-gray-400 mt-1">按排序值从小到大展示</p>
+          <p class="text-xs text-gray-400 mt-1">当前全局排序：${HOMEPAGE_SORT_LABEL[homepageSortMode] || homepageSortMode}</p>
         </div>
-        <div class="flex items-center gap-4">
+        <div class="flex flex-wrap items-center gap-4">
           <label class="flex items-center gap-2 text-sm text-gray-600">
             <input id="home-enabled-${section.section}" type="checkbox" ${section.is_enabled ? 'checked' : ''} class="w-4 h-4 accent-brand-500">
-            启用栏目
+            启用模块
           </label>
           <label class="flex items-center gap-2 text-sm text-gray-600">
             展示数量
-            <input id="home-limit-${section.section}" type="number" min="1" max="20" value="${Number(section.item_limit) || 5}" class="w-20 px-3 py-2 border border-gray-200 rounded-lg">
+            <input id="home-limit-${section.section}" type="number" min="1" max="50" value="${Number(section.item_limit) || 8}" class="w-20 px-3 py-2 border border-gray-200 rounded-lg">
           </label>
-          <button onclick="saveHomepageSection('${section.section}')" class="px-4 py-2 bg-navy-700 text-white text-sm rounded-lg hover:bg-navy-800">保存栏目</button>
+          <button onclick="saveHomepageSection('${section.section}')" class="px-4 py-2 bg-navy-700 text-white text-sm rounded-lg hover:bg-navy-800">保存模块</button>
         </div>
       </div>
-      <div class="p-4 bg-gray-50 flex items-center gap-3">
-        <select id="home-candidate-${section.section}" class="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+      <div class="p-4 bg-gray-50 flex flex-wrap items-center gap-3">
+        <input id="home-search-${section.section}" onkeydown="if(event.key==='Enter')searchHomepageCandidates('${section.section}')" placeholder="搜索标题..." class="px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white w-48 outline-none">
+        <button onclick="searchHomepageCandidates('${section.section}')" class="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white hover:bg-gray-50">搜索</button>
+        <select id="home-candidate-${section.section}" class="flex-1 min-w-[200px] px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white">
           <option value="">选择要加入的内容</option>
           ${options}
         </select>
@@ -1328,10 +1349,39 @@ function renderHomepageSection(section) {
         <thead class="bg-gray-50 text-xs text-gray-500">
           <tr><th class="px-4 py-3 text-left">内容</th><th class="px-4 py-3 text-left">排序</th><th class="px-4 py-3 text-center">显示</th><th class="px-4 py-3 text-right">操作</th></tr>
         </thead>
-        <tbody>${rows || '<tr><td colspan="4" class="px-4 py-10 text-center text-gray-400">尚未配置内容</td></tr>'}</tbody>
+        <tbody>${rows || '<tr><td colspan="4" class="px-4 py-10 text-center text-gray-400">尚未配置内容，可搜索后添加</td></tr>'}</tbody>
       </table>
     </section>
   `
+}
+
+async function saveHomepageSortMode() {
+  const sortMode = document.getElementById('homeSortMode')?.value || 'custom'
+  try {
+    await api('/admin/homepage/settings', { method: 'PUT', body: { sort_mode: sortMode } })
+    toast('排序设置已保存')
+    loadHomepage()
+  } catch (error) {
+    toast(error.message, 'error')
+  }
+}
+
+async function searchHomepageCandidates(section) {
+  const keyword = document.getElementById(`home-search-${section}`)?.value?.trim() || ''
+  try {
+    const res = await api(`/admin/homepage/candidates/${section}?keyword=${encodeURIComponent(keyword)}`)
+    if (res.code !== 200) return toast(res.msg || '搜索失败', 'error')
+    homepageCandidates[section] = res.data || []
+    const select = document.getElementById(`home-candidate-${section}`)
+    if (!select) return
+    select.innerHTML = '<option value="">选择要加入的内容</option>' +
+      homepageCandidates[section].map(item =>
+        `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title || `内容 #${item.id}`)}</option>`
+      ).join('')
+    toast(`找到 ${homepageCandidates[section].length} 条`)
+  } catch (error) {
+    toast(error.message, 'error')
+  }
 }
 
 async function saveHomepageSection(section) {
@@ -1342,7 +1392,7 @@ async function saveHomepageSection(section) {
       method: 'PUT',
       body: { item_limit: itemLimit, is_enabled: isEnabled }
     })
-    toast('栏目设置已保存')
+    toast('模块设置已保存')
     loadHomepage()
   } catch (error) {
     toast(error.message, 'error')

@@ -217,8 +217,9 @@ CREATE TABLE IF NOT EXISTS homepage_sections (
   section VARCHAR(32) PRIMARY KEY,
   display_name VARCHAR(64) NOT NULL,
   is_enabled TINYINT(1) DEFAULT 1,
-  item_limit INT DEFAULT 5,
+  item_limit INT DEFAULT 8,
   sort_order INT DEFAULT 0,
+  sort_mode VARCHAR(32) NOT NULL DEFAULT 'custom',
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -245,7 +246,10 @@ INSERT INTO member_levels (name, min_points, max_points, benefits) VALUES
 ('金卡会员', 5000, 19999, '{"discount": 0.9, "points_rate": 1.5}'),
 ('钻石会员', 20000, NULL, '{"discount": 0.85, "points_rate": 2.0}');
 
-INSERT IGNORE INTO homepage_sections (section, display_name, item_limit, sort_order) VALUES
-('projects', '精选项目', 6, 1),
-('resources', '资源大厅', 5, 2),
-('posts', '商会动态', 5, 3);
+INSERT IGNORE INTO homepage_sections (section, display_name, item_limit, sort_order, sort_mode) VALUES
+('events', '活动', 8, 1, 'custom'),
+('products', '商城商品', 8, 2, 'custom'),
+('projects', '项目', 8, 3, 'custom'),
+('financing', '融资招募', 8, 4, 'custom'),
+('roadshow', '项目路演', 8, 5, 'custom'),
+('resource', '资源对接', 8, 6, 'custom');
