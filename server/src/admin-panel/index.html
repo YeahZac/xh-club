@@ -2160,6 +2160,18 @@ function addBizRoadshowDimension() {
 function collectBizRoadshowPayload() {
   const category = document.getElementById('bizCategory')?.value
   if (category !== 'roadshow') return null
+  const toMysqlDateTime = (value) => {
+    if (!value) return null
+    // datetime-local → YYYY-MM-DD HH:mm:ss（MySQL DATETIME）
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
+      const normalized = value.replace('T', ' ')
+      return normalized.length === 16 ? `${normalized}:00` : normalized.slice(0, 19)
+    }
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return null
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  }
   const projects = _bizRoadshowProjects
     .filter(item => String(item.project_id || '').trim())
     .map((item, index) => ({
@@ -2183,8 +2195,8 @@ function collectBizRoadshowPayload() {
       ...(f.type === 'select' && f.options ? { options: f.options } : {}),
     }))
   return {
-    start_time: document.getElementById('bizStartTime')?.value ? new Date(document.getElementById('bizStartTime').value).toISOString() : null,
-    end_time: document.getElementById('bizEndTime')?.value ? new Date(document.getElementById('bizEndTime').value).toISOString() : null,
+    start_time: toMysqlDateTime(document.getElementById('bizStartTime')?.value),
+    end_time: toMysqlDateTime(document.getElementById('bizEndTime')?.value),
     form_fields: formFields.length ? formFields : null,
     roadshow: { projects, dimensions },
   }

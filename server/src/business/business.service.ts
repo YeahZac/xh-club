@@ -11,6 +11,31 @@ function isBusinessCategory(value: unknown): value is BusinessCategory {
   return typeof value === 'string' && (BUSINESS_CATEGORIES as readonly string[]).includes(value)
 }
 
+/** MySQL DATETIME 不接受 ISO（含 T/Z），统一转为 `YYYY-MM-DD HH:mm:ss` */
+function toMysqlDateTime(value: unknown): string | null {
+  if (value == null || value === '') return null
+  if (typeof value !== 'string' && !(value instanceof Date)) return null
+
+  const raw = value instanceof Date ? value.toISOString() : value.trim()
+  if (!raw) return null
+
+  // 已是 MySQL 格式
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+    return raw.length === 16 ? `${raw}:00` : raw
+  }
+
+  // datetime-local: 2026-07-16T18:53 或 2026-07-16T18:53:00
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+    const normalized = raw.replace('T', ' ')
+    return normalized.length === 16 ? `${normalized}:00` : normalized
+  }
+
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return null
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`
+}
+
 @Injectable()
 export class BusinessService {
   constructor(
@@ -113,16 +138,16 @@ export class BusinessService {
         dto.contact_info || null,
         dto.status || 'published',
         dto.sort_order || 0,
-        dto.start_time || null,
-        dto.end_time || null,
+        dto.start_time ? toMysqlDateTime(dto.start_time) : null,
+        dto.end_time ? toMysqlDateTime(dto.end_time) : null,
         dto.form_fields == null ? null : JSON.stringify(dto.form_fields),
       ],
     )
     const businessId = String(result.insertId)
     if (dto.category === 'roadshow' && dto.roadshow) {
       await this.roadshowService.saveConfig(businessId, {
-        start_time: dto.start_time || dto.roadshow.start_time,
-        end_time: dto.end_time || dto.roadshow.end_time,
+        start_time: toMysqlDateTime(dto.start_time || dto.roadshow.start_time),
+        end_time: toMysqlDateTime(dto.end_time || dto.roadshow.end_time),
         form_fields: dto.form_fields ?? dto.roadshow.form_fields,
         projects: dto.roadshow.projects,
         dimensions: dto.roadshow.dimensions,
@@ -165,8 +190,8 @@ export class BusinessService {
     if (dto.contact_info !== undefined) assign('contact_info', dto.contact_info || null)
     if (dto.status !== undefined) assign('status', dto.status || 'published')
     if (dto.sort_order !== undefined) assign('sort_order', dto.sort_order || 0)
-    if (dto.start_time !== undefined) assign('start_time', dto.start_time || null)
-    if (dto.end_time !== undefined) assign('end_time', dto.end_time || null)
+    if (dto.start_time !== undefined) assign('start_time', toMysqlDateTime(dto.start_time))
+    if (dto.end_time !== undefined) assign('end_time', toMysqlDateTime(dto.end_time))
     if (dto.form_fields !== undefined) {
       assign('form_fields', dto.form_fields == null ? null : JSON.stringify(dto.form_fields))
     }
@@ -180,8 +205,8 @@ export class BusinessService {
     }
     if (dto.roadshow) {
       await this.roadshowService.saveConfig(id, {
-        start_time: dto.start_time,
-        end_time: dto.end_time,
+        start_time: toMysqlDateTime(dto.start_time),
+        end_time: toMysqlDateTime(dto.end_time),
         form_fields: dto.form_fields,
         projects: dto.roadshow.projects,
         dimensions: dto.roadshow.dimensions,

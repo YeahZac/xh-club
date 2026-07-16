@@ -22,6 +22,24 @@ export interface RoadshowDimensionInput {
   sort_order?: number
 }
 
+function toMysqlDateTime(value: unknown): string | null {
+  if (value == null || value === '') return null
+  if (typeof value !== 'string' && !(value instanceof Date)) return null
+  const raw = value instanceof Date ? value.toISOString() : value.trim()
+  if (!raw) return null
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+    return raw.length === 16 ? `${raw}:00` : raw
+  }
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+    const normalized = raw.replace('T', ' ')
+    return normalized.length === 16 ? `${normalized}:00` : normalized
+  }
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return null
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`
+}
+
 @Injectable()
 export class RoadshowService {
   constructor(private readonly uploadService: UploadService) {}
@@ -219,7 +237,7 @@ export class RoadshowService {
       `UPDATE business_opportunities
        SET start_time = ?, end_time = ?, form_fields = ?, updated_at = NOW()
        WHERE id = ?`,
-      [dto.start_time || null, dto.end_time || null, formFieldsJson, businessId],
+      [toMysqlDateTime(dto.start_time), toMysqlDateTime(dto.end_time), formFieldsJson, businessId],
     )
 
     await queryExecute('DELETE FROM roadshow_projects WHERE business_id = ?', [businessId])
