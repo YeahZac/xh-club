@@ -1823,9 +1823,9 @@ async function submitUpdateEvent(id) {
 // ===== 项目管理 =====
 async function loadProjects() {
   const status = document.getElementById('projectFilter').value
-  const res = await api('/projects?limit=100')
+  const res = await api('/admin/projects')
   if (res.code !== 200) return
-  let projects = res.data || []
+  let projects = Array.isArray(res.data) ? res.data : (res.data?.list || [])
   if (status) projects = projects.filter(p => p.status === status)
   if (!projects.length) {
     document.getElementById('projectCards').innerHTML = '<p class="text-gray-400 col-span-3 text-center py-12">暂无项目</p>'
