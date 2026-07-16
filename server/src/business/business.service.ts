@@ -59,7 +59,7 @@ export class BusinessService {
       source_label: source === 'user' ? '用户上传' : '管理员上传',
       audit_status_label:
         audit === 'pending' ? '待审核' : audit === 'rejected' ? '未通过' : '已通过',
-      demand_talent_name: row.demand_talent_name || null,
+      demand_talent_name: row.demand_talent_name || row.demand_member_name || null,
     }
   }
 
@@ -105,9 +105,11 @@ export class BusinessService {
       values,
     )
     const rows = await queryRows(
-      `SELECT b.*, t.real_name AS demand_talent_name
+      `SELECT b.*,
+              COALESCE(NULLIF(t.real_name, ''), NULLIF(m.name, '')) AS demand_talent_name
        FROM business_opportunities b
        LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
+       LEFT JOIN members m ON m.id = b.user_id
        ${whereSql}
        ORDER BY b.sort_order ASC, b.created_at DESC
        LIMIT ? OFFSET ?`,
@@ -124,9 +126,11 @@ export class BusinessService {
 
   async getById(id: string, memberId?: string | number) {
     const row = await queryOne(
-      `SELECT b.*, t.real_name AS demand_talent_name
+      `SELECT b.*,
+              COALESCE(NULLIF(t.real_name, ''), NULLIF(m.name, '')) AS demand_talent_name
        FROM business_opportunities b
        LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
+       LEFT JOIN members m ON m.id = b.user_id
        WHERE b.id = ?`,
       [id],
     )
@@ -178,9 +182,11 @@ export class BusinessService {
     }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
     const rows = await queryRows(
-      `SELECT b.*, t.real_name AS demand_talent_name
+      `SELECT b.*,
+              COALESCE(NULLIF(t.real_name, ''), NULLIF(m.name, '')) AS demand_talent_name
        FROM business_opportunities b
        LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
+       LEFT JOIN members m ON m.id = b.user_id
        ${whereSql}
        ORDER BY
          CASE WHEN b.audit_status = 'pending' THEN 0 ELSE 1 END,
@@ -398,9 +404,11 @@ export class BusinessService {
 
   async listMine(memberId: string | number) {
     const rows = await queryRows(
-      `SELECT b.*, t.real_name AS demand_talent_name
+      `SELECT b.*,
+              COALESCE(NULLIF(t.real_name, ''), NULLIF(m.name, '')) AS demand_talent_name
        FROM business_opportunities b
        LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
+       LEFT JOIN members m ON m.id = b.user_id
        WHERE b.user_id = ?
        ORDER BY b.created_at DESC`,
       [memberId],
@@ -409,8 +417,28 @@ export class BusinessService {
     return (signed || []).map((r) => this.formatBusinessRow(r))
   }
 
+  /** 用户发布时，需求方固定为当前登录会员（优先绑定其人才档案） */
+  private async resolveMemberDemandParty(memberId: string | number) {
+    const talent = await queryOne<{ id: number; real_name?: string }>(
+      'SELECT id, real_name FROM talent_applications WHERE member_id = ? ORDER BY id DESC LIMIT 1',
+      [memberId],
+    )
+    const member = await queryOne<{ name?: string; phone?: string }>(
+      'SELECT name, phone FROM members WHERE id = ?',
+      [memberId],
+    )
+    return {
+      demandTalentId: talent?.id || null,
+      demandName: talent?.real_name || member?.name || member?.phone || `会员#${memberId}`,
+    }
+  }
+
   async submitByMember(memberId: string | number, dto: any) {
-    return this.create(dto, { source: 'user', memberId })
+    const { demandTalentId } = await this.resolveMemberDemandParty(memberId)
+    return this.create(
+      { ...dto, demand_talent_id: demandTalentId },
+      { source: 'user', memberId },
+    )
   }
 
   async updateMine(id: string, memberId: string | number, dto: any) {
@@ -423,9 +451,11 @@ export class BusinessService {
       throw new HttpException('仅可发布融资招募或资源对接', HttpStatus.BAD_REQUEST)
     }
 
+    const { demandTalentId } = await this.resolveMemberDemandParty(memberId)
     const payload = {
       ...dto,
       category: dto.category || existing.category,
+      demand_talent_id: demandTalentId,
       status: 'draft',
     }
     // 用户编辑后重新进入待审核
@@ -464,9 +494,11 @@ export class BusinessService {
 
   private async getAdminById(id: string) {
     const row = await queryOne(
-      `SELECT b.*, t.real_name AS demand_talent_name
+      `SELECT b.*,
+              COALESCE(NULLIF(t.real_name, ''), NULLIF(m.name, '')) AS demand_talent_name
        FROM business_opportunities b
        LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
+       LEFT JOIN members m ON m.id = b.user_id
        WHERE b.id = ?`,
       [id],
     )
