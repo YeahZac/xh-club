@@ -1966,6 +1966,31 @@ async function deleteBusiness(id) {
 }
 
 // ===== Banner管理 =====
+const BANNER_LINK_TYPE_MAP = {
+  event: '活动',
+  article: '文章',
+  project: '项目',
+  financing: '融资招募',
+  roadshow: '项目路演',
+  resource: '资源对接',
+  product: '商城商品',
+  link: 'URL',
+  miniapp: '外部小程序'
+}
+
+function formatBannerLinkDesc(linkType, lc = {}) {
+  if (linkType === 'article') return lc.article_id ? `文章#${lc.article_id}` : ''
+  if (linkType === 'event') return lc.event_id ? `活动#${lc.event_id}` : ''
+  if (linkType === 'project') return lc.project_id ? `项目#${lc.project_id}` : ''
+  if (linkType === 'financing' || linkType === 'roadshow' || linkType === 'resource') {
+    return lc.business_id ? `商机#${lc.business_id}` : ''
+  }
+  if (linkType === 'product') return lc.product_id ? `商品#${lc.product_id}` : ''
+  if (linkType === 'link') return lc.url || ''
+  if (linkType === 'miniapp') return lc.appid ? `APPID: ${lc.appid}` : ''
+  return ''
+}
+
 async function loadBanners() {
   const res = await api('/admin/banners')
   if (res.code !== 200) return
@@ -1974,27 +1999,23 @@ async function loadBanners() {
     document.getElementById('bannerCards').innerHTML = '<p class="text-gray-400 col-span-2 text-center py-12">暂无Banner</p>'
     return
   }
-  const LINK_TYPE_MAP = { article: '文章', event: '活动', link: '链接', miniapp: '小程序' }
   document.getElementById('bannerCards').innerHTML = banners.map(b => {
     const lc = b.link_config || {}
-    let linkDesc = ''
-    if (b.link_type === 'article') linkDesc = `文章ID: ${(lc.article_id || '').slice(0,8)}...`
-    else if (b.link_type === 'event') linkDesc = `活动ID: ${(lc.event_id || '').slice(0,8)}...`
-    else if (b.link_type === 'link') linkDesc = lc.url || ''
-    else if (b.link_type === 'miniapp') linkDesc = `APPID: ${lc.appid || ''}`
+    const linkDesc = formatBannerLinkDesc(b.link_type, lc)
     return `
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">
       <div class="h-40 bg-gradient-to-br from-navy-600 to-brand-400 flex items-center justify-center relative">
-        ${b.image_url ? `<img src="${b.image_url}" class="w-full h-full object-cover" onerror="this.style.display='none'">` : ''}
-        <p class="absolute text-white text-lg font-bold">${b.title}</p>
+        ${b.image_url ? `<img src="${escapeHtml(b.image_url)}" class="w-full h-full object-cover" onerror="this.style.display='none'">` : ''}
+        <p class="absolute text-white text-lg font-bold">${escapeHtml(b.title)}</p>
         <span class="absolute top-3 right-3 text-xs px-2 py-1 rounded-full ${b.is_active ? 'bg-green-500 text-white' : 'bg-gray-500 text-white'}">${b.is_active ? '已启用' : '已禁用'}</span>
       </div>
-      <div class="p-4 flex items-center justify-between">
-        <div>
-          <p class="font-medium text-navy-800">${b.title}</p>
-          <p class="text-xs text-gray-400">排序: ${b.sort_order} · <span class="px-1.5 py-0.5 rounded bg-brand-50 text-brand-600">${LINK_TYPE_MAP[b.link_type] || b.link_type}</span> ${linkDesc ? '· ' + linkDesc.slice(0,30) : ''}</p>
+      <div class="p-4 flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <p class="font-medium text-navy-800 truncate">${escapeHtml(b.title)}</p>
+          <p class="text-xs text-gray-400 mt-1">排序: ${b.sort_order} · <span class="px-1.5 py-0.5 rounded bg-brand-50 text-brand-600">${BANNER_LINK_TYPE_MAP[b.link_type] || b.link_type || '-'}</span>${linkDesc ? ' · ' + escapeHtml(String(linkDesc).slice(0, 36)) : ''}</p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-shrink-0">
+          <button onclick="showBannerModal('${b.id}')" class="px-3 py-1.5 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200">编辑</button>
           <button onclick="toggleBanner('${b.id}', ${!b.is_active})" class="px-3 py-1.5 text-xs rounded-lg ${b.is_active ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}">${b.is_active ? '禁用' : '启用'}</button>
           <button onclick="deleteBanner('${b.id}')" class="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200">删除</button>
         </div>
@@ -2003,17 +2024,25 @@ async function loadBanners() {
   }).join('')
 }
 
-function showBannerModal() {
+async function showBannerModal(editId) {
+  let banner = null
+  if (editId) {
+    const res = await api('/admin/banners')
+    banner = (res.data || []).find((item) => String(item.id) === String(editId)) || null
+    if (!banner) return toast('Banner 不存在', 'error')
+  }
+  const lc = banner?.link_config || {}
+  const linkType = banner?.link_type || 'event'
   showModal(`
-    <div class="p-6">
-      <h3 class="text-lg font-bold text-navy-800 mb-6">添加Banner</h3>
+    <div class="p-6" style="max-width:720px">
+      <h3 class="text-lg font-bold text-navy-800 mb-6">${editId ? '编辑Banner' : '添加Banner'}</h3>
       <div class="space-y-4">
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">标题</label><input id="bnTitle" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">标题</label><input id="bnTitle" value="${escapeHtml(banner?.title || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400"></div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">封面图片 <span class="text-red-500">*</span></label>
           <p class="text-xs text-gray-400 mb-2">${mediaHint('banner')}</p>
           <div class="flex items-center gap-3">
-            <input id="bnImage" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传 Banner 图片">
+            <input id="bnImage" required value="${escapeHtml(banner?.image_url || '')}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传 Banner 图片">
             <label class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">
               上传<input type="file" accept="image/*" class="hidden" onchange="uploadFile(this, 'bnImage', 690, 280)">
             </label>
@@ -2024,87 +2053,198 @@ function showBannerModal() {
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">跳转类型</label>
             <select id="bnLinkType" onchange="toggleBannerLinkFields()" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
-              <option value="article">文章</option>
-              <option value="event">活动</option>
-              <option value="link">链接地址</option>
-              <option value="miniapp">外部小程序</option>
+              <option value="event" ${linkType==='event'?'selected':''}>活动</option>
+              <option value="article" ${linkType==='article'?'selected':''}>文章</option>
+              <option value="project" ${linkType==='project'?'selected':''}>项目</option>
+              <option value="financing" ${linkType==='financing'?'selected':''}>融资招募</option>
+              <option value="roadshow" ${linkType==='roadshow'?'selected':''}>项目路演</option>
+              <option value="resource" ${linkType==='resource'?'selected':''}>资源对接</option>
+              <option value="product" ${linkType==='product'?'selected':''}>商城商品</option>
+              <option value="link" ${linkType==='link'?'selected':''}>URL</option>
+              <option value="miniapp" ${linkType==='miniapp'?'selected':''}>外部小程序链接</option>
             </select>
           </div>
-          <div><label class="block text-sm font-medium text-gray-700 mb-1">排序</label><input id="bnSort" type="number" value="1" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">排序</label><input id="bnSort" type="number" value="${escapeHtml(banner?.sort_order ?? 1)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         </div>
-        <!-- 文章选择 -->
-        <div id="bnArticleField"><label class="block text-sm font-medium text-gray-700 mb-1">选择文章</label><select id="bnArticleId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
-        <!-- 活动选择 -->
         <div id="bnEventField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1">选择活动</label><select id="bnEventId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
-        <!-- 链接地址 -->
-        <div id="bnLinkField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1">URL链接</label><input id="bnUrl" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="https://..."></div>
-        <!-- 外部小程序 -->
+        <div id="bnArticleField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1">选择文章</label><select id="bnArticleId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
+        <div id="bnProjectField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1">选择项目</label><select id="bnProjectId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
+        <div id="bnBusinessField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1" id="bnBusinessLabel">选择商机</label><select id="bnBusinessId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
+        <div id="bnProductField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1">选择商品</label><select id="bnProductId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
+        <div id="bnLinkField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1">URL链接</label><input id="bnUrl" value="${escapeHtml(lc.url || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="https://..."></div>
         <div id="bnMiniappField" class="hidden">
           <div class="grid grid-cols-2 gap-4">
-            <div><label class="block text-sm font-medium text-gray-700 mb-1">小程序APPID</label><input id="bnAppId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="wx..."></div>
-            <div><label class="block text-sm font-medium text-gray-700 mb-1">路径</label><input id="bnMiniPath" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="pages/index/index"></div>
+            <div><label class="block text-sm font-medium text-gray-700 mb-1">小程序APPID</label><input id="bnAppId" value="${escapeHtml(lc.appid || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="wx..."></div>
+            <div><label class="block text-sm font-medium text-gray-700 mb-1">路径</label><input id="bnMiniPath" value="${escapeHtml(lc.path || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="pages/index/index"></div>
           </div>
         </div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
-          <button onclick="createBanner()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
+          <button onclick="saveBanner('${editId || ''}')" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">${editId ? '保存' : '创建'}</button>
         </div>
       </div>
     </div>
-  `)
-  // 加载文章和活动列表供选择
-  loadBannerArticleOptions()
-  loadBannerEventOptions()
+  `, { wide: true })
+  syncExistingMediaTask('bnImage', '已上传封面')
+  toggleBannerLinkFields()
+  await Promise.all([
+    loadBannerEventOptions(lc.event_id || ''),
+    loadBannerArticleOptions(lc.article_id || ''),
+    loadBannerProjectOptions(lc.project_id || ''),
+    loadBannerBusinessOptions(linkType, lc.business_id || ''),
+    loadBannerProductOptions(lc.product_id || ''),
+  ])
 }
 
 function toggleBannerLinkFields() {
-  const type = document.getElementById('bnLinkType').value
-  document.getElementById('bnArticleField').classList.toggle('hidden', type !== 'article')
-  document.getElementById('bnEventField').classList.toggle('hidden', type !== 'event')
-  document.getElementById('bnLinkField').classList.toggle('hidden', type !== 'link')
-  document.getElementById('bnMiniappField').classList.toggle('hidden', type !== 'miniapp')
+  const type = document.getElementById('bnLinkType')?.value || 'event'
+  const map = {
+    bnEventField: type === 'event',
+    bnArticleField: type === 'article',
+    bnProjectField: type === 'project',
+    bnBusinessField: type === 'financing' || type === 'roadshow' || type === 'resource',
+    bnProductField: type === 'product',
+    bnLinkField: type === 'link',
+    bnMiniappField: type === 'miniapp',
+  }
+  Object.keys(map).forEach((id) => {
+    const el = document.getElementById(id)
+    if (el) el.classList.toggle('hidden', !map[id])
+  })
+  const label = document.getElementById('bnBusinessLabel')
+  if (label) {
+    label.textContent = type === 'financing' ? '选择融资招募' : type === 'roadshow' ? '选择项目路演' : type === 'resource' ? '选择资源对接' : '选择商机'
+  }
+  if (type === 'financing' || type === 'roadshow' || type === 'resource') {
+    loadBannerBusinessOptions(type)
+  }
 }
 
-async function loadBannerArticleOptions() {
+async function loadBannerArticleOptions(selectedId = '') {
   const res = await api('/admin/articles?limit=200')
-  if (res.code === 200) {
-    const articles = res.data?.list || res.data || []
-    const sel = document.getElementById('bnArticleId')
-    if (sel) sel.innerHTML = '<option value="">请选择文章</option>' + articles.map(a => `<option value="${a.id}">${a.title}</option>`).join('')
-  }
+  if (res.code !== 200) return
+  const articles = res.data?.list || res.data || []
+  const sel = document.getElementById('bnArticleId')
+  if (!sel) return
+  sel.innerHTML = '<option value="">请选择文章</option>' + articles.map(a =>
+    `<option value="${a.id}" ${String(a.id) === String(selectedId) ? 'selected' : ''}>${escapeHtml(a.title)}</option>`
+  ).join('')
 }
 
-async function loadBannerEventOptions() {
+async function loadBannerEventOptions(selectedId = '') {
   const res = await api('/admin/events')
-  if (res.code === 200) {
-    const events = Array.isArray(res.data) ? res.data : (res.data?.list || [])
-    const sel = document.getElementById('bnEventId')
-    if (sel) sel.innerHTML = '<option value="">请选择活动</option>' + events.map(e => `<option value="${e.id}">${e.title}</option>`).join('')
-  }
+  if (res.code !== 200) return
+  const events = Array.isArray(res.data) ? res.data : (res.data?.list || [])
+  const sel = document.getElementById('bnEventId')
+  if (!sel) return
+  sel.innerHTML = '<option value="">请选择活动</option>' + events.map(e =>
+    `<option value="${e.id}" ${String(e.id) === String(selectedId) ? 'selected' : ''}>${escapeHtml(e.title)}</option>`
+  ).join('')
 }
 
-async function createBanner() {
-  if (!assertNoUploading()) return
+async function loadBannerProjectOptions(selectedId = '') {
+  const res = await api('/admin/projects')
+  if (res.code !== 200) return
+  const projects = Array.isArray(res.data) ? res.data : (res.data?.list || [])
+  const sel = document.getElementById('bnProjectId')
+  if (!sel) return
+  sel.innerHTML = '<option value="">请选择项目</option>' + projects.map(p =>
+    `<option value="${p.id}" ${String(p.id) === String(selectedId) ? 'selected' : ''}>${escapeHtml(p.title)}</option>`
+  ).join('')
+}
+
+async function loadBannerBusinessOptions(category, selectedId = '') {
+  const type = category || document.getElementById('bnLinkType')?.value
+  if (!['financing', 'roadshow', 'resource'].includes(type)) return
+  const res = await api(`/admin/business?category=${type}`)
+  if (res.code !== 200) return
+  const list = Array.isArray(res.data) ? res.data : []
+  const sel = document.getElementById('bnBusinessId')
+  if (!sel) return
+  const current = selectedId || sel.value || ''
+  sel.innerHTML = '<option value="">请选择内容</option>' + list.map(item =>
+    `<option value="${item.id}" ${String(item.id) === String(current) ? 'selected' : ''}>${escapeHtml(item.title)}</option>`
+  ).join('')
+}
+
+async function loadBannerProductOptions(selectedId = '') {
+  const res = await api('/admin/mall-products')
+  if (res.code !== 200) return
+  const products = Array.isArray(res.data) ? res.data : (res.data?.list || [])
+  const sel = document.getElementById('bnProductId')
+  if (!sel) return
+  sel.innerHTML = '<option value="">请选择商品</option>' + products.map(p =>
+    `<option value="${p.id}" ${String(p.id) === String(selectedId) ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
+  ).join('')
+}
+
+function buildBannerLinkPayload() {
   const linkType = document.getElementById('bnLinkType').value
   let linkConfig = {}
-  if (linkType === 'article') linkConfig = { article_id: document.getElementById('bnArticleId').value }
-  else if (linkType === 'event') linkConfig = { event_id: document.getElementById('bnEventId').value }
-  else if (linkType === 'link') linkConfig = { url: document.getElementById('bnUrl').value }
-  else if (linkType === 'miniapp') linkConfig = { appid: document.getElementById('bnAppId').value, path: document.getElementById('bnMiniPath').value }
+  let linkId = null
+  if (linkType === 'article') {
+    linkId = document.getElementById('bnArticleId').value || null
+    linkConfig = { article_id: linkId }
+  } else if (linkType === 'event') {
+    linkId = document.getElementById('bnEventId').value || null
+    linkConfig = { event_id: linkId }
+  } else if (linkType === 'project') {
+    linkId = document.getElementById('bnProjectId').value || null
+    linkConfig = { project_id: linkId }
+  } else if (linkType === 'financing' || linkType === 'roadshow' || linkType === 'resource') {
+    linkId = document.getElementById('bnBusinessId').value || null
+    linkConfig = { business_id: linkId, category: linkType }
+  } else if (linkType === 'product') {
+    linkId = document.getElementById('bnProductId').value || null
+    linkConfig = { product_id: linkId }
+  } else if (linkType === 'link') {
+    linkConfig = { url: document.getElementById('bnUrl').value.trim() }
+  } else if (linkType === 'miniapp') {
+    linkConfig = {
+      appid: document.getElementById('bnAppId').value.trim(),
+      path: document.getElementById('bnMiniPath').value.trim(),
+    }
+  }
+  return { linkType, linkConfig, linkId }
+}
+
+function validateBannerLink(linkType, linkConfig) {
+  if (linkType === 'article' && !linkConfig.article_id) return '请选择文章'
+  if (linkType === 'event' && !linkConfig.event_id) return '请选择活动'
+  if (linkType === 'project' && !linkConfig.project_id) return '请选择项目'
+  if ((linkType === 'financing' || linkType === 'roadshow' || linkType === 'resource') && !linkConfig.business_id) return '请选择对应商机内容'
+  if (linkType === 'product' && !linkConfig.product_id) return '请选择商城商品'
+  if (linkType === 'link' && !linkConfig.url) return '请填写 URL'
+  if (linkType === 'miniapp' && (!linkConfig.appid || !linkConfig.path)) return '请填写小程序 APPID 与路径'
+  return ''
+}
+
+async function saveBanner(editId) {
+  if (!assertNoUploading()) return
+  const { linkType, linkConfig, linkId } = buildBannerLinkPayload()
+  const err = validateBannerLink(linkType, linkConfig)
+  if (err) return toast(err, 'error')
 
   const body = {
     title: document.getElementById('bnTitle').value,
     image_url: document.getElementById('bnImage').value,
     link_type: linkType,
+    link_id: linkId,
     link_config: linkConfig,
     sort_order: parseInt(document.getElementById('bnSort').value) || 1,
-    is_active: true
   }
+  if (!editId) body.is_active = true
   if (!body.title.trim()) return toast('请输入 Banner 标题', 'error')
   if (!body.image_url.trim()) return toast('Banner 图片为必填项', 'error')
-  const res = await api('/admin/banners', { method: 'POST', body })
-  if (res.code === 200) { toast('Banner创建成功'); closeModal(); loadBanners(); }
-  else toast(res.msg || '创建失败', 'error')
+
+  const url = editId ? `/admin/banners/${editId}` : '/admin/banners'
+  const method = editId ? 'PUT' : 'POST'
+  const res = await api(url, { method, body })
+  if (res.code === 200) {
+    toast(editId ? 'Banner 已更新' : 'Banner 创建成功')
+    closeModal()
+    loadBanners()
+  } else toast(res.msg || '操作失败', 'error')
 }
 
 async function toggleBanner(id, active) {

@@ -24,6 +24,10 @@ import { Network } from "@/network"
 interface BannerLinkConfig {
   article_id?: string
   event_id?: string
+  project_id?: string
+  business_id?: string
+  product_id?: string
+  category?: string
   url?: string
   appid?: string
   path?: string
@@ -285,6 +289,27 @@ const IndexPage = () => {
           Taro.navigateTo({ url: `/pages/content-detail/index?type=event&id=${config.event_id}` })
         }
         break
+      case 'project':
+        if (config.project_id) {
+          Taro.navigateTo({ url: `/pages/content-detail/index?type=project&id=${config.project_id}` })
+        }
+        break
+      case 'financing':
+      case 'roadshow':
+      case 'resource':
+        if (config.business_id) {
+          Taro.navigateTo({ url: `/pages/content-detail/index?type=business&id=${config.business_id}` })
+        } else {
+          Taro.switchTab({ url: '/pages/business/index' })
+        }
+        break
+      case 'product':
+        if (config.product_id) {
+          Taro.navigateTo({ url: `/pages/mall/product-detail/index?id=${config.product_id}` })
+        } else {
+          Taro.switchTab({ url: '/pages/mall/index' })
+        }
+        break
       case 'link':
         if (config.url) {
           Taro.setClipboardData({
@@ -303,7 +328,7 @@ const IndexPage = () => {
         break
       default:
         if (banner.link_id) {
-          Taro.showToast({ title: '内容详情开发中', icon: 'none' })
+          Taro.showToast({ title: '暂不支持该跳转类型', icon: 'none' })
         }
         break
     }
