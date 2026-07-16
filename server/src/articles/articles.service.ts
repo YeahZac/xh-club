@@ -27,7 +27,7 @@ export class ArticlesService {
       .single();
 
     if (error) throw error;
-    return this.uploadService.signRowFields(data, ['cover_image', 'video_url']);
+    return this.uploadService.signDetailMediaFields(data, ['cover_image', 'video_url'], ['content']);
   }
 
   async create(data: any) {

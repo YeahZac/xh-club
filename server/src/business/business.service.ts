@@ -85,7 +85,11 @@ export class BusinessService {
     const row = await queryOne('SELECT * FROM business_opportunities WHERE id = ?', [id])
     if (!row) throw new HttpException('商机不存在', HttpStatus.NOT_FOUND)
     await queryExecute('UPDATE business_opportunities SET view_count = IFNULL(view_count, 0) + 1 WHERE id = ?', [id])
-    const signed = await this.uploadService.signRowFields(row, ['cover_image'])
+    const signed = await this.uploadService.signDetailMediaFields(
+      row,
+      ['cover_image'],
+      ['content', 'description', 'summary'],
+    )
     if (signed.category === 'roadshow') {
       return this.roadshowService.enrichBusinessRow(signed, memberId)
     }

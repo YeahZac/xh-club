@@ -215,6 +215,65 @@ export class UploadService {
   }
 
   /**
+   * 为富文本 HTML 内的 COS / cloud:// 媒体地址生成预签名 URL
+   * （私有桶下未签名的 img/src 在小程序端会加载失败）
+   */
+  async signHtmlMedia(html: unknown, maxAge?: number): Promise<string> {
+    if (typeof html !== 'string' || !html.trim()) {
+      return typeof html === 'string' ? html : '';
+    }
+
+    const candidates = new Set<string>();
+    const collect = (raw: string) => {
+      const value = raw.trim();
+      if (!value) return;
+      if (
+        value.startsWith('cloud://')
+        || /(?:\.myqcloud\.com|\.tcb\.qcloud\.la)/i.test(value)
+        || /^images\//i.test(value)
+        || /^uploads\//i.test(value)
+      ) {
+        candidates.add(value);
+      }
+    };
+
+    html.replace(/(?:src|href)=["']([^"']+)["']/gi, (_m, url: string) => {
+      collect(url);
+      return _m;
+    });
+
+    if (!candidates.size) return html;
+
+    let next = html;
+    for (const url of candidates) {
+      const signed = await this.signMediaUrl(url, maxAge);
+      if (signed && signed !== url) {
+        next = next.split(url).join(signed);
+      }
+    }
+    return next;
+  }
+
+  async signDetailMediaFields<T extends Record<string, any>>(
+    row: T,
+    imageFields: string[] = ['cover_image', 'video_url', 'image_url', 'photo_url', 'card_image_url', 'avatar_url'],
+    htmlFields: string[] = ['content', 'description'],
+    maxAge?: number,
+  ): Promise<T> {
+    if (!row) return row;
+    let next = await this.signRowFields(row, imageFields, maxAge);
+    const patched: Record<string, any> = { ...next };
+    await Promise.all(
+      htmlFields.map(async (field) => {
+        if (patched[field]) {
+          patched[field] = await this.signHtmlMedia(patched[field], maxAge);
+        }
+      }),
+    );
+    return patched as T;
+  }
+
+  /**
    * 上传文件到微信云托管对象存储
    */
   async uploadFile(file: Express.Multer.File, folder: string = 'uploads'): Promise<{

@@ -48,7 +48,11 @@ export class EventsService {
       .select('member_id, status, created_at, members(id, name, avatar, company_name)')
       .eq('event_id', id)
 
-    const signed = await this.uploadService.signRowFields(data, ['cover_image', 'video_url'])
+    const signed = await this.uploadService.signDetailMediaFields(
+      data,
+      ['cover_image', 'video_url'],
+      ['description', 'content'],
+    )
     return { ...signed, registrations: registrations || [] }
   }
 
@@ -178,7 +182,11 @@ export class EventsService {
       .select('*')
       .eq('project_id', id)
 
-    const signed = await this.uploadService.signRowFields(data, ['cover_image', 'video_url'])
+    const signed = await this.uploadService.signDetailMediaFields(
+      data,
+      ['cover_image', 'video_url'],
+      ['description', 'content'],
+    )
     return { ...signed, financing: financingData || [], roadshows: roadshowData || [] }
   }
 
