@@ -2,10 +2,14 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
 import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url'
 import { UploadService } from '@/upload/upload.service'
+import { PointsEngineService } from '@/points/points-engine.service'
 
 @Injectable()
 export class EventsService {
-  constructor(private readonly uploadService: UploadService) {}
+  constructor(
+    private readonly uploadService: UploadService,
+    private readonly pointsEngine: PointsEngineService,
+  ) {}
 
   private client() { return getSupabaseClient() }
 
@@ -113,6 +117,14 @@ export class EventsService {
       .from('events')
       .update({ current_participants: event.current_participants + 1 })
       .eq('id', eventId)
+
+    void this.pointsEngine
+      .evaluate(memberId, 'attend_event', {
+        referenceType: 'event',
+        referenceId: eventId,
+        description: '参加活动奖励积分',
+      })
+      .catch((err) => console.warn('[EventsService] points evaluate failed', err))
 
     return data
   }

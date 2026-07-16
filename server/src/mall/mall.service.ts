@@ -165,18 +165,48 @@ export class MallService {
 
   // ==================== 订单管理 ====================
 
+  /** 订单状态：paid 待发货 → shipped 已发货 → completed 已收货 */
+  private formatOrder(row: any) {
+    if (!row) return row
+    const status = String(row.status || '')
+    const statusMap: Record<string, string> = {
+      pending: '待支付',
+      paid: '待发货',
+      shipped: '已发货',
+      completed: '已收货',
+      cancelled: '已取消',
+    }
+    return {
+      ...row,
+      status_label: statusMap[status] || status,
+      logistics: {
+        company: row.logistics_company || '',
+        no: row.logistics_no || '',
+        shipped_at: row.shipped_at || null,
+        received_at: row.received_at || null,
+      },
+    }
+  }
+
   async createOrder(data: {
     member_id: string;
     product_id: string;
     quantity: number;
-    points_used: number;
+    points_used?: number;
     referrer_id?: string;
+    contact_name?: string;
+    contact_phone?: string;
+    shipping_address?: string;
+    remark?: string;
   }) {
     if (!Number.isInteger(data.quantity) || data.quantity <= 0) {
       return { code: 400, msg: '商品数量必须为正整数', data: null };
     }
-    if (!Number.isInteger(data.points_used) || data.points_used < 0) {
-      return { code: 400, msg: '使用积分不能为负数', data: null };
+    const contactName = String(data.contact_name || '').trim()
+    const contactPhone = String(data.contact_phone || '').trim()
+    const shippingAddress = String(data.shipping_address || '').trim()
+    if (!contactName || !contactPhone || !shippingAddress) {
+      return { code: 400, msg: '请填写收货人、手机号与收货地址', data: null }
     }
 
     try {
@@ -190,13 +220,18 @@ export class MallService {
         if (product.status !== 'active') return { code: 400, msg: '商品已下架', data: null };
         if (product.stock < data.quantity) return { code: 400, msg: '库存不足', data: null };
 
+        const pointsNeeded = Number(product.points_price) * data.quantity
+        if (!Number.isFinite(pointsNeeded) || pointsNeeded <= 0) {
+          return { code: 400, msg: '商品积分价格无效', data: null }
+        }
+
         const [memberRows] = await connection.query<MemberRow[]>(
           'SELECT * FROM members WHERE id = ? FOR UPDATE',
           [data.member_id],
         );
         const member = memberRows[0];
         if (!member) return { code: 404, msg: '会员不存在', data: null };
-        if (member.available_points < data.points_used) {
+        if (Number(member.available_points) < pointsNeeded) {
           return { code: 400, msg: '积分不足', data: null };
         }
 
@@ -204,8 +239,9 @@ export class MallService {
         const totalAmount = parseFloat(product.cash_price || '0') * data.quantity;
         const [orderResult] = await connection.query<ResultSetHeader>(
           `INSERT INTO mall_orders
-             (order_no, member_id, product_id, product_name, quantity, total_amount, points_used, cash_amount, referrer_id, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+             (order_no, member_id, product_id, product_name, quantity, total_amount, points_used, cash_amount,
+              referrer_id, status, payment_method, contact_name, contact_phone, shipping_address, remark)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', 'points', ?, ?, ?, ?)`,
           [
             orderNo,
             data.member_id,
@@ -213,20 +249,41 @@ export class MallService {
             product.name,
             data.quantity,
             totalAmount.toString(),
-            data.points_used,
-            totalAmount.toString(),
+            pointsNeeded,
+            '0',
             data.referrer_id || null,
+            contactName,
+            contactPhone,
+            shippingAddress,
+            String(data.remark || '').trim() || null,
           ],
         );
 
+        const balanceAfter = Number(member.available_points) - pointsNeeded
         await connection.query(
-          'UPDATE members SET available_points = available_points - ?, updated_at = NOW() WHERE id = ?',
-          [data.points_used, data.member_id],
+          'UPDATE members SET available_points = ?, updated_at = NOW() WHERE id = ?',
+          [balanceAfter, data.member_id],
         );
         await connection.query(
           'UPDATE mall_products SET stock = stock - ?, sales_count = sales_count + ?, updated_at = NOW() WHERE id = ?',
           [data.quantity, data.quantity, data.product_id],
         );
+
+        try {
+          await connection.query(
+            `INSERT INTO points_records (member_id, type, amount, balance, source, source_id, description)
+             VALUES (?, 'spend', ?, ?, 'mall', ?, ?)`,
+            [
+              data.member_id,
+              pointsNeeded,
+              balanceAfter,
+              String(orderResult.insertId),
+              `积分兑换「${product.name}」x${data.quantity}`,
+            ],
+          )
+        } catch {
+          // points_records 表结构差异时忽略，不影响下单
+        }
 
         if (data.referrer_id && product.enable_distribution) {
           await this.processDistribution(
@@ -242,11 +299,169 @@ export class MallService {
           'SELECT * FROM mall_orders WHERE id = ?',
           [orderResult.insertId],
         );
-        return { code: 200, msg: '下单成功', data: orderRows[0] || null };
+        return { code: 200, msg: '支付成功，等待发货', data: this.formatOrder(orderRows[0] || null) };
       });
     } catch (error) {
       this.logger.error('创建订单失败', error);
       return { code: 500, msg: '创建订单失败', data: null };
+    }
+  }
+
+  /** 购物车一次性结算（仅积分），逐商品生成订单 */
+  async checkout(data: {
+    member_id: string
+    items: Array<{ product_id: string; quantity: number }>
+    contact_name: string
+    contact_phone: string
+    shipping_address: string
+    remark?: string
+    referrer_id?: string
+  }) {
+    const items = (data.items || []).filter((i) => i?.product_id && Number(i.quantity) > 0)
+    if (!items.length) return { code: 400, msg: '请选择商品', data: null }
+
+    const orders: any[] = []
+    for (const item of items) {
+      const result = await this.createOrder({
+        member_id: data.member_id,
+        product_id: String(item.product_id),
+        quantity: Math.floor(Number(item.quantity)),
+        contact_name: data.contact_name,
+        contact_phone: data.contact_phone,
+        shipping_address: data.shipping_address,
+        remark: data.remark,
+        referrer_id: data.referrer_id,
+      })
+      if (result.code !== 200) {
+        return {
+          code: result.code,
+          msg: orders.length
+            ? `${result.msg}（已成功 ${orders.length} 笔订单）`
+            : result.msg,
+          data: { orders, failed: item },
+        }
+      }
+      orders.push(result.data)
+    }
+    return { code: 200, msg: '支付成功，等待发货', data: { orders } }
+  }
+
+  async getMemberOrders(memberId: string, status?: string) {
+    try {
+      let sql = `SELECT o.*, p.image_url AS product_image
+                 FROM mall_orders o
+                 LEFT JOIN mall_products p ON p.id = o.product_id
+                 WHERE o.member_id = ?`
+      const params: any[] = [memberId]
+      if (status && status !== 'all') {
+        sql += ' AND o.status = ?'
+        params.push(status)
+      }
+      sql += ' ORDER BY o.created_at DESC'
+      const rows = await queryRows(sql, params)
+      const signed = await this.uploadService.signRowsFields(rows || [], ['product_image'])
+      return { code: 200, msg: 'success', data: (signed || []).map((r) => this.formatOrder(r)) }
+    } catch (error) {
+      this.logger.error('获取订单列表失败', error)
+      return { code: 500, msg: '获取订单列表失败', data: null }
+    }
+  }
+
+  async getOrderById(id: string, memberId?: string) {
+    try {
+      const row = await queryOne('SELECT * FROM mall_orders WHERE id = ?', [id])
+      if (!row) return { code: 404, msg: '订单不存在', data: null }
+      if (memberId && String((row as any).member_id) !== String(memberId)) {
+        return { code: 403, msg: '无权查看该订单', data: null }
+      }
+      let productImage: string | null = null
+      try {
+        const product = await queryOne<ProductRow>('SELECT image_url FROM mall_products WHERE id = ?', [
+          (row as any).product_id,
+        ])
+        if (product?.image_url) {
+          const signed = await this.uploadService.signRowFields(product, ['image_url'])
+          productImage = (signed?.image_url as string) || product.image_url
+        }
+      } catch {
+        /* ignore */
+      }
+      return {
+        code: 200,
+        msg: 'success',
+        data: { ...this.formatOrder(row), product_image: productImage },
+      }
+    } catch (error) {
+      this.logger.error('获取订单详情失败', error)
+      return { code: 500, msg: '获取订单详情失败', data: null }
+    }
+  }
+
+  async confirmReceipt(orderId: string, memberId: string) {
+    try {
+      const row = await queryOne<RowDataPacket>('SELECT * FROM mall_orders WHERE id = ?', [orderId])
+      if (!row) return { code: 404, msg: '订单不存在', data: null }
+      if (String(row.member_id) !== String(memberId)) {
+        return { code: 403, msg: '无权操作该订单', data: null }
+      }
+      if (row.status !== 'shipped') {
+        return { code: 400, msg: '仅已发货订单可确认收货', data: null }
+      }
+      await queryExecute(
+        `UPDATE mall_orders SET status = 'completed', received_at = NOW(), updated_at = NOW() WHERE id = ?`,
+        [orderId],
+      )
+      return this.getOrderById(orderId, memberId)
+    } catch (error) {
+      this.logger.error('确认收货失败', error)
+      return { code: 500, msg: '确认收货失败', data: null }
+    }
+  }
+
+  async shipOrder(
+    orderId: string,
+    data: { logistics_company: string; logistics_no: string },
+  ) {
+    const company = String(data.logistics_company || '').trim()
+    const logisticsNo = String(data.logistics_no || '').trim()
+    if (!company || !logisticsNo) {
+      return { code: 400, msg: '请填写物流公司与运单号', data: null }
+    }
+    try {
+      const row = await queryOne<RowDataPacket>('SELECT * FROM mall_orders WHERE id = ?', [orderId])
+      if (!row) return { code: 404, msg: '订单不存在', data: null }
+      if (row.status !== 'paid' && row.status !== 'pending') {
+        return { code: 400, msg: '当前状态不可发货', data: null }
+      }
+      await queryExecute(
+        `UPDATE mall_orders
+         SET status = 'shipped', logistics_company = ?, logistics_no = ?, shipped_at = NOW(), updated_at = NOW()
+         WHERE id = ?`,
+        [company, logisticsNo, orderId],
+      )
+      return this.getOrderById(orderId)
+    } catch (error) {
+      this.logger.error('发货失败', error)
+      return { code: 500, msg: '发货失败', data: null }
+    }
+  }
+
+  async getAllOrders(status?: string) {
+    try {
+      let sql = `SELECT o.*, m.name AS member_name, m.phone AS member_phone
+                 FROM mall_orders o
+                 LEFT JOIN members m ON m.id = o.member_id`
+      const params: any[] = []
+      if (status && status !== 'all') {
+        sql += ' WHERE o.status = ?'
+        params.push(status)
+      }
+      sql += ' ORDER BY o.created_at DESC LIMIT 200'
+      const rows = await queryRows(sql, params)
+      return { code: 200, msg: 'success', data: (rows || []).map((r) => this.formatOrder(r)) }
+    } catch (error) {
+      this.logger.error('获取全部订单失败', error)
+      return { code: 500, msg: '获取订单失败', data: null }
     }
   }
 

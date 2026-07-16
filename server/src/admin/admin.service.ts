@@ -1308,7 +1308,9 @@ export class AdminService {
   /** ====== 积分规则管理 ====== */
   async getPointsRules() {
     try {
-      return await queryRows('SELECT * FROM points_rules ORDER BY priority DESC, created_at DESC')
+      const { formatPointsRuleRow } = await import('@/points/points-rule.util')
+      const rows = await queryRows('SELECT * FROM points_rules ORDER BY priority DESC, created_at DESC')
+      return (rows || []).map((r) => formatPointsRuleRow(r))
     } catch (error) {
       console.error('[AdminService] getPointsRules error:', error)
       throw new HttpException('获取积分规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
@@ -1317,29 +1319,93 @@ export class AdminService {
 
   async createPointsRule(dto: any) {
     try {
+      const { normalizePointsRuleDto, formatPointsRuleRow } = await import('@/points/points-rule.util')
+      const data = normalizePointsRuleDto(dto)
+      if (data.action_type === 'invite' || data.action_type === 'invite_friend' || data.action_type === 'invite_register') {
+        throw new HttpException('邀请积分请在「邀请奖励」模块配置', HttpStatus.BAD_REQUEST)
+      }
       const result = await queryExecute(
-        `INSERT INTO points_rules (rule_name, action_type, points_value, conditions, daily_limit, total_limit, is_active, priority, start_date, end_date)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [dto.rule_name, dto.action_type, dto.points_value,
-         dto.conditions ? JSON.stringify(dto.conditions) : null,
-         dto.daily_limit || -1, dto.total_limit || -1,
-         dto.is_active !== false, dto.priority || 0,
-         dto.start_date || null, dto.end_date || null]
+        `INSERT INTO points_rules
+           (rule_name, action_type, points_value, threshold_value, conditions, daily_limit, total_limit,
+            is_active, priority, repeatable, description, start_date, end_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          data.rule_name,
+          data.action_type,
+          data.points_value,
+          data.threshold_value,
+          data.conditions,
+          data.daily_limit,
+          data.total_limit,
+          data.is_active ? 1 : 0,
+          data.priority,
+          data.repeatable ? 1 : 0,
+          data.description,
+          data.start_date,
+          data.end_date,
+        ],
       )
-      return await queryOne('SELECT * FROM points_rules WHERE id = ?', [result.insertId])
+      const row = await queryOne('SELECT * FROM points_rules WHERE id = ?', [result.insertId])
+      return formatPointsRuleRow(row)
     } catch (error) {
+      if (error instanceof HttpException) throw error
       console.error('[AdminService] createPointsRule error:', error)
-      throw new HttpException('创建积分规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
+      throw new HttpException(
+        (error as Error)?.message || '创建积分规则失败',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      )
     }
   }
 
   async updatePointsRule(id: string, dto: any) {
     try {
-      await queryExecute('UPDATE points_rules SET ? WHERE id = ?', [dto, id])
-      return await queryOne('SELECT * FROM points_rules WHERE id = ?', [id])
+      const { normalizePointsRuleDto, formatPointsRuleRow } = await import('@/points/points-rule.util')
+      const data = normalizePointsRuleDto({ ...dto, action_type: dto.action_type || dto.action })
+      if (data.action_type === 'invite' || data.action_type === 'invite_friend' || data.action_type === 'invite_register') {
+        throw new HttpException('邀请积分请在「邀请奖励」模块配置', HttpStatus.BAD_REQUEST)
+      }
+      await queryExecute(
+        `UPDATE points_rules SET
+           rule_name = ?, action_type = ?, points_value = ?, threshold_value = ?, conditions = ?,
+           daily_limit = ?, total_limit = ?, is_active = ?, priority = ?, repeatable = ?,
+           description = ?, start_date = ?, end_date = ?, updated_at = NOW()
+         WHERE id = ?`,
+        [
+          data.rule_name,
+          data.action_type,
+          data.points_value,
+          data.threshold_value,
+          data.conditions,
+          data.daily_limit,
+          data.total_limit,
+          data.is_active ? 1 : 0,
+          data.priority,
+          data.repeatable ? 1 : 0,
+          data.description,
+          data.start_date,
+          data.end_date,
+          id,
+        ],
+      )
+      const row = await queryOne('SELECT * FROM points_rules WHERE id = ?', [id])
+      return formatPointsRuleRow(row)
     } catch (error) {
+      if (error instanceof HttpException) throw error
       console.error('[AdminService] updatePointsRule error:', error)
-      throw new HttpException('更新积分规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
+      throw new HttpException(
+        (error as Error)?.message || '更新积分规则失败',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      )
+    }
+  }
+
+  async deletePointsRule(id: string) {
+    try {
+      await queryExecute('DELETE FROM points_rules WHERE id = ?', [id])
+      return { success: true }
+    } catch (error) {
+      console.error('[AdminService] deletePointsRule error:', error)
+      throw new HttpException('删除积分规则失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 

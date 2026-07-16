@@ -12,6 +12,10 @@ export default defineAppConfig({
     'pages/discover/index',
     'pages/mall/index',
     'pages/mall/product-detail/index',
+    'pages/mall/cart/index',
+    'pages/mall/checkout/index',
+    'pages/mall/orders/index',
+    'pages/mall/order-detail/index',
     'pages/profile/index'
   ],
   window: {

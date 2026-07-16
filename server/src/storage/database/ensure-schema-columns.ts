@@ -44,6 +44,23 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['invitation_reward_rules', 'earnings_value', 'DECIMAL(14,2) NOT NULL DEFAULT 0'],
   ['invitation_reward_rules', 'contribution_value', 'INT NOT NULL DEFAULT 0'],
   ['invitation_reward_rules', 'content', 'MEDIUMTEXT NULL'],
+  // 积分商城订单：收货与物流
+  ['mall_orders', 'product_name', 'VARCHAR(255) NULL'],
+  ['mall_orders', 'points_used', 'INT NOT NULL DEFAULT 0'],
+  ['mall_orders', 'cash_amount', 'DECIMAL(10,2) NOT NULL DEFAULT 0'],
+  ['mall_orders', 'payment_method', `VARCHAR(32) NOT NULL DEFAULT 'points'`],
+  ['mall_orders', 'contact_name', 'VARCHAR(64) NULL'],
+  ['mall_orders', 'contact_phone', 'VARCHAR(32) NULL'],
+  ['mall_orders', 'shipping_address', 'VARCHAR(500) NULL'],
+  ['mall_orders', 'remark', 'VARCHAR(500) NULL'],
+  ['mall_orders', 'logistics_company', 'VARCHAR(64) NULL'],
+  ['mall_orders', 'logistics_no', 'VARCHAR(64) NULL'],
+  ['mall_orders', 'shipped_at', 'TIMESTAMP NULL'],
+  ['mall_orders', 'received_at', 'TIMESTAMP NULL'],
+  // 积分规则：阈值与说明
+  ['points_rules', 'threshold_value', 'INT NOT NULL DEFAULT 1'],
+  ['points_rules', 'description', 'VARCHAR(500) NULL'],
+  ['points_rules', 'repeatable', 'TINYINT(1) NOT NULL DEFAULT 0'],
 ]
 
 const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [

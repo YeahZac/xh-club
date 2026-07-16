@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { View, Text, ScrollView, Image } from "@tarojs/components"
-import Taro from "@tarojs/taro"
-import { Gift, ShoppingCart, Star } from "lucide-react-taro"
+import Taro, { useDidShow } from "@tarojs/taro"
+import { Gift, ShoppingCart, Package } from "lucide-react-taro"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Network } from "@/network"
+import { getCartCount } from "@/lib/mall-cart"
 
 interface Product {
   id: string
@@ -14,46 +16,32 @@ interface Product {
   points_price: number
   cash_price: string
   stock: number
-  category: string
   status: string
-  enable_distribution: boolean
-  distribution_rate: string
   sales_count: number
 }
 
-const categoryMap: Record<string, string> = {
-  all: "全部",
-  rights: "会员权益",
-  service: "专属服务",
-  gift: "精美礼品",
-  activity: "活动门票",
-  learning: "学习课程",
-}
-
 const MallPage = () => {
-  const [activeCategory, setActiveCategory] = useState("all")
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [userPoints, setUserPoints] = useState(0)
+  const [cartCount, setCartCount] = useState(0)
 
-  useEffect(() => {
+  useDidShow(() => {
     loadProducts()
     loadUserPoints()
-  }, [activeCategory])
+    setCartCount(getCartCount())
+  })
 
   const loadProducts = async () => {
     setLoading(true)
     try {
-      const url = activeCategory === "all"
-        ? "/api/mall/products"
-        : `/api/mall/products?category=${activeCategory}`
-      const res = await Network.request({ url })
+      const res = await Network.request({ url: "/api/mall/products" })
       console.log("[商城] products:", res?.data)
-      if (res?.data?.data) {
-        setProducts(res.data.data)
-      }
+      const list = res?.data?.data
+      setProducts(Array.isArray(list) ? list : [])
     } catch (err) {
       console.error("[商城] 加载失败:", err)
+      setProducts([])
     } finally {
       setLoading(false)
     }
@@ -64,7 +52,6 @@ const MallPage = () => {
       const memberId = Taro.getStorageSync("member_id")
       if (!memberId) return
       const res = await Network.request({ url: `/api/members/profile/${memberId}` })
-      console.log("[商城] user profile:", res?.data)
       if (res?.data?.data) {
         setUserPoints(res.data.data.available_points || 0)
       }
@@ -80,62 +67,55 @@ const MallPage = () => {
   const canAfford = (pointsPrice: number) => userPoints >= pointsPrice
 
   return (
-    <ScrollView scrollY className="h-screen bg-gray-50">
-      {/* 积分余额卡片 */}
-      <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pt-6 pb-8">
+    <ScrollView scrollY className="h-screen bg-[#F5F6FA]">
+      <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-3.5 pt-4 pb-5">
         <View className="flex items-center justify-between">
           <View>
-            <Text className="block text-white text-opacity-80 text-sm">我的积分</Text>
-            <Text className="block text-white text-3xl font-bold mt-1">
+            <Text className="block text-white text-opacity-80 text-xs">我的积分</Text>
+            <Text className="block text-white text-2xl font-bold mt-0.5">
               {userPoints.toLocaleString()}
             </Text>
           </View>
-          <View className="bg-white bg-opacity-20 rounded-full p-3">
-            <Gift size={28} color="#fff" />
+          <View className="flex items-center gap-2">
+            <View
+              className="bg-white bg-opacity-20 rounded-xl px-3 py-2"
+              onClick={() => Taro.navigateTo({ url: "/pages/mall/orders/index" })}
+            >
+              <Package size={18} color="#fff" />
+            </View>
+            <View
+              className="relative bg-white bg-opacity-20 rounded-xl px-3 py-2"
+              onClick={() => Taro.navigateTo({ url: "/pages/mall/cart/index" })}
+            >
+              <ShoppingCart size={18} color="#fff" />
+              {cartCount > 0 && (
+                <View className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 flex items-center justify-center">
+                  <Text className="text-white text-xs">{cartCount > 99 ? "99+" : cartCount}</Text>
+                </View>
+              )}
+            </View>
+            <View className="bg-white bg-opacity-20 rounded-xl p-2.5">
+              <Gift size={22} color="#fff" />
+            </View>
           </View>
         </View>
-        <View className="flex items-center gap-2 mt-4 bg-white bg-opacity-10 rounded-xl px-3 py-2">
-          <Star size={14} color="#C9A96E" />
-          <Text className="text-white text-opacity-90 text-xs">
-            积分可兑换商品或抵扣现金，邀请好友还可获得分销收益
-          </Text>
-        </View>
+        <Text className="block text-white text-opacity-80 text-xs mt-3">
+          仅支持积分兑换 · 支付成功后等待发货
+        </Text>
       </View>
 
-      {/* 分类标签 */}
-      <View className="bg-white px-4 py-3 sticky top-0 z-10">
-        <ScrollView scrollX className="whitespace-nowrap">
-          <View className="flex gap-2">
-            {Object.entries(categoryMap).map(([key, label]) => (
-              <View
-                key={key}
-                className={`px-4 py-2 rounded-full text-sm ${
-                  activeCategory === key
-                    ? "bg-[#1B2A4A] text-white"
-                    : "bg-gray-100 text-gray-600"
-                }`}
-                onClick={() => setActiveCategory(key)}
-              >
-                {label}
-              </View>
-            ))}
-          </View>
-        </ScrollView>
-      </View>
-
-      {/* 商品列表 */}
-      <View className="px-4 py-4">
+      <View className="px-3.5 py-3">
         {loading ? (
-          <View className="flex justify-center items-center py-20">
-            <Text className="text-gray-400 text-sm">加载中...</Text>
+          <View className="flex justify-center items-center py-12">
+            <Text className="text-gray-400 text-xs">加载中...</Text>
           </View>
         ) : products.length === 0 ? (
-          <View className="flex flex-col items-center justify-center py-20">
-            <ShoppingCart size={48} color="#d1d5db" />
-            <Text className="text-gray-400 text-sm mt-4">暂无商品</Text>
+          <View className="flex flex-col items-center justify-center py-12">
+            <ShoppingCart size={36} color="#d1d5db" />
+            <Text className="text-gray-400 text-xs mt-3">暂无商品</Text>
           </View>
         ) : (
-          <View className="grid grid-cols-2 gap-3">
+          <View className="grid grid-cols-2 gap-2">
             {products.map((product) => (
               <Card
                 key={product.id}
@@ -148,55 +128,49 @@ const MallPage = () => {
                     className="w-full aspect-square object-cover"
                     mode="aspectFill"
                   />
-                  {product.enable_distribution && (
-                    <View className="absolute top-2 left-2 bg-gradient-to-r from-[#C9A96E] to-[#E8D5A8] px-2 py-1 rounded-md">
-                      <Text className="text-white text-xs font-medium">
-                        赚{product.distribution_rate}%
-                      </Text>
-                    </View>
-                  )}
                   {product.stock <= 0 && (
                     <View className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
                       <Text className="text-white text-sm font-medium">已售罄</Text>
                     </View>
                   )}
                 </View>
-                <CardContent className="p-3">
-                  <Text className="block text-sm font-medium text-gray-900 line-clamp-2">
+                <CardContent className="p-2">
+                  <Text className="block text-xs font-medium text-gray-900 line-clamp-2">
                     {product.name}
                   </Text>
-                  <View className="flex items-center justify-between mt-2">
+                  <View className="flex items-center justify-between mt-1.5">
                     <View>
-                      <Text className="text-[#C9A96E] text-lg font-bold">
+                      <Text className="text-[#C9A96E] text-base font-bold">
                         {product.points_price}
                       </Text>
-                      <Text className="text-[#C9A96E] text-xs ml-1">积分</Text>
+                      <Text className="text-[#C9A96E] text-xs ml-0.5">积分</Text>
                     </View>
-                    {product.cash_price && parseFloat(product.cash_price) > 0 && (
-                      <Text className="text-gray-400 text-xs line-through">
-                        ¥{product.cash_price}
-                      </Text>
-                    )}
-                  </View>
-                  <View className="flex items-center justify-between mt-2">
                     <Badge
                       className={
                         canAfford(product.points_price)
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-gray-100 text-gray-500"
+                          ? "bg-emerald-100 text-emerald-700 text-xs px-1.5 py-0"
+                          : "bg-gray-100 text-gray-500 text-xs px-1.5 py-0"
                       }
                     >
                       {canAfford(product.points_price) ? "可兑换" : "积分不足"}
                     </Badge>
-                    <Text className="text-gray-400 text-xs">
-                      已售{product.sales_count}
-                    </Text>
                   </View>
+                  <Text className="block text-gray-400 text-xs mt-1">已售{product.sales_count || 0}</Text>
                 </CardContent>
               </Card>
             ))}
           </View>
         )}
+      </View>
+
+      <View className="px-3.5 pb-8">
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => Taro.navigateTo({ url: "/pages/mall/orders/index" })}
+        >
+          我的订单
+        </Button>
       </View>
     </ScrollView>
   )

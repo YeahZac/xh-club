@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
 import { queryOne, queryExecute } from '@/storage/database/mysql-client'
 import { signAuthToken } from './jwt'
+import { PointsEngineService } from '@/points/points-engine.service'
 
 interface WeChatSessionResponse {
   openid?: string
@@ -12,6 +13,8 @@ interface WeChatSessionResponse {
 
 @Injectable()
 export class AuthService {
+  constructor(private readonly pointsEngine: PointsEngineService) {}
+
   async wxLogin(code: string, avatar: string, nickname: string) {
     try {
       const openid = await this.exchangeCodeForOpenid(code)
@@ -44,7 +47,12 @@ export class AuthService {
     }
   }
 
-  private buildLoginResult(memberId: string, openid: string) {
+  private async buildLoginResult(memberId: string, openid: string) {
+    if (memberId) {
+      void this.pointsEngine
+        .onMemberActive(memberId)
+        .catch((err) => console.warn('[AuthService] points onMemberActive failed', err))
+    }
     return {
       member_id: memberId,
       openid,

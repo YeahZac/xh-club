@@ -3,6 +3,7 @@ import { AdminService } from './admin.service'
 import * as bcrypt from 'bcryptjs'
 import { AdminAuthGuard } from '@/auth/auth.guard'
 import { Public } from '@/auth/public.decorator'
+import { MallService } from '@/mall/mall.service'
 
 // 数据库初始化 SQL（直接嵌入代码，避免文件路径问题）
 const INIT_SQL = `
@@ -671,7 +672,10 @@ INSERT IGNORE INTO homepage_sections (section, display_name, item_limit, sort_or
 @Controller('admin')
 @UseGuards(AdminAuthGuard)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly mallService: MallService,
+  ) {}
 
   /** 数据库连接状态检查 */
   @Get('db-status')
@@ -1240,6 +1244,19 @@ export class AdminController {
     return { code: 200, msg: '删除成功', data: result }
   }
 
+  @Get('mall-orders')
+  async getMallOrders(@Query('status') status?: string) {
+    return this.mallService.getAllOrders(status)
+  }
+
+  @Post('mall-orders/:id/ship')
+  async shipMallOrder(
+    @Param('id') id: string,
+    @Body() body: { logistics_company: string; logistics_no: string },
+  ) {
+    return this.mallService.shipOrder(id, body)
+  }
+
   /** ====== 成交管理 ====== */
   @Get('transactions')
   async getTransactions(@Query() query: any) {
@@ -1465,6 +1482,13 @@ export class AdminController {
     console.log('[AdminController] PUT /api/admin/points-rules/:id')
     const result = await this.adminService.updatePointsRule(id, dto)
     return { code: 200, msg: '更新成功', data: result }
+  }
+
+  @Delete('points-rules/:id')
+  async deletePointsRule(@Param('id') id: string) {
+    console.log('[AdminController] DELETE /api/admin/points-rules/:id')
+    const result = await this.adminService.deletePointsRule(id)
+    return { code: 200, msg: '删除成功', data: result }
   }
 
   /** ====== 贡献值规则管理 ====== */

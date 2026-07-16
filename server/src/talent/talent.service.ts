@@ -2,6 +2,7 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { queryRows, queryOne, queryExecute } from '@/storage/database/mysql-client'
 import { UploadService } from '@/upload/upload.service'
 import { assertCloudStorageImageUrl } from '@/utils/media-validators'
+import { PointsEngineService } from '@/points/points-engine.service'
 
 export const TALENT_STATUSES = ['pending', 'approved', 'rejected'] as const
 export type TalentStatus = (typeof TALENT_STATUSES)[number]
@@ -48,7 +49,10 @@ function normalizeOptionalImage(value: unknown): string | null {
 
 @Injectable()
 export class TalentService {
-  constructor(private readonly uploadService: UploadService) {}
+  constructor(
+    private readonly uploadService: UploadService,
+    private readonly pointsEngine: PointsEngineService,
+  ) {}
 
   async ensureDefaultIndustries() {
     const countRow = await queryOne('SELECT COUNT(*) AS total FROM industries')
@@ -357,7 +361,20 @@ export class TalentService {
     if (!updates.length) throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
     params.push(id)
     await queryExecute(`UPDATE talent_applications SET ${updates.join(', ')} WHERE id = ?`, params)
-    return this.adminGetById(id)
+    const result = await this.adminGetById(id)
+    if (dto.status === 'approved') {
+      const memberId = (result as any)?.member_id
+      if (memberId) {
+        void this.pointsEngine
+          .evaluate(memberId, 'talent_settle', {
+            referenceType: 'talent',
+            referenceId: id,
+            description: '完成人才入驻奖励积分',
+          })
+          .catch((err) => console.warn('[TalentService] points evaluate failed', err))
+      }
+    }
+    return result
   }
 
   async adminReview(id: string, dto: { status: TalentStatus; reject_reason?: string; reviewed_by?: string }) {

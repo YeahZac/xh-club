@@ -1,8 +1,11 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
+import { PointsEngineService } from '@/points/points-engine.service'
 
 @Injectable()
 export class TransactionsService {
+  constructor(private readonly pointsEngine: PointsEngineService) {}
+
   private client() { return getSupabaseClient() }
 
   /** 创建成交记录 */
@@ -66,6 +69,16 @@ export class TransactionsService {
     // 如果成交完成，发放积分
     if (bothConfirmed) {
       await this.awardTransactionPoints(txn)
+      const parties = [txn.party_a_id, txn.party_b_id, txn.matcher_id].filter(Boolean)
+      for (const mid of parties) {
+        void this.pointsEngine
+          .evaluate(mid, 'deal_complete', {
+            referenceType: 'transaction',
+            referenceId: id,
+            description: '促成成交项目奖励积分',
+          })
+          .catch((err) => console.warn('[TransactionsService] points evaluate failed', err))
+      }
     }
 
     return data

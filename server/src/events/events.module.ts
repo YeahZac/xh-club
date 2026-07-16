@@ -3,9 +3,10 @@ import { EventsController, ProjectsController, ResourcesController } from './eve
 import { EventsService } from './events.service'
 import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard'
 import { UploadModule } from '@/upload/upload.module'
+import { PointsModule } from '@/points/points.module'
 
 @Module({
-  imports: [UploadModule],
+  imports: [UploadModule, PointsModule],
   controllers: [EventsController, ProjectsController, ResourcesController],
   providers: [EventsService, AdminAuthGuard, MemberAuthGuard],
 })

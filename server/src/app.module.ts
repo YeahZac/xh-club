@@ -17,6 +17,7 @@ import { HomepageModule } from './homepage/homepage.module'
 import { BusinessModule } from './business/business.module'
 import { TalentModule } from './talent/talent.module'
 import { InvitationModule } from './invitation/invitation.module'
+import { PointsModule } from './points/points.module'
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { InvitationModule } from './invitation/invitation.module'
     BusinessModule,
     TalentModule,
     InvitationModule,
+    PointsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
