@@ -938,9 +938,10 @@ async function loadDashboard() {
     document.getElementById('pendingBadge').classList.remove('hidden')
   }
   // 最近活动
-  const eventsRes = await api('/events?limit=5')
-  if (eventsRes.code === 200 && eventsRes.data?.length) {
-    document.getElementById('recentEvents').innerHTML = eventsRes.data.map(e => `
+  const eventsRes = await api('/admin/events')
+  const recentEvents = Array.isArray(eventsRes.data) ? eventsRes.data : (eventsRes.data?.list || [])
+  if (eventsRes.code === 200 && recentEvents.length) {
+    document.getElementById('recentEvents').innerHTML = recentEvents.slice(0, 5).map(e => `
       <div class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition">
         <div class="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center shrink-0">
           <svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -1226,10 +1227,10 @@ async function viewMember(id) {
 // ===== 活动管理 =====
 async function loadEvents() {
   const status = document.getElementById('eventFilter').value
-  let url = '/events?limit=100'
-  const res = await api(url)
+  // 管理端列表走 /admin/events（返回数组）；公开 /events 返回 { list, total }，不能当数组用
+  const res = await api('/admin/events')
   if (res.code !== 200) return
-  let events = res.data || []
+  let events = Array.isArray(res.data) ? res.data : (res.data?.list || [])
   if (status) events = events.filter(e => e.status === status)
   if (!events.length) {
     document.getElementById('eventTableBody').innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">暂无活动</td></tr>'
@@ -1559,9 +1560,9 @@ async function loadBannerArticleOptions() {
 }
 
 async function loadBannerEventOptions() {
-  const res = await api('/events?limit=200')
+  const res = await api('/admin/events')
   if (res.code === 200) {
-    const events = res.data?.list || res.data || []
+    const events = Array.isArray(res.data) ? res.data : (res.data?.list || [])
     const sel = document.getElementById('bnEventId')
     if (sel) sel.innerHTML = '<option value="">请选择活动</option>' + events.map(e => `<option value="${e.id}">${e.title}</option>`).join('')
   }

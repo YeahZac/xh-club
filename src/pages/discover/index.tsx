@@ -81,7 +81,7 @@ const DiscoverPage = () => {
     try {
       setLoading(true)
       const [eventsRes, membersRes, productsRes] = await Promise.all([
-        Network.request({ url: '/api/events' }),
+        Network.request({ url: '/api/events?pageSize=100' }),
         Network.request({ url: '/api/members' }),
         Network.request({ url: '/api/mall/products' }),
       ])

@@ -10,9 +10,9 @@ export class EventsService {
   private client() { return getSupabaseClient() }
 
   /** 获取活动列表 */
-  async getEvents(params: { event_type?: string; status?: string; page?: number; pageSize?: number }) {
-    const page = params.page || 1
-    const pageSize = params.pageSize || 10
+  async getEvents(params: { event_type?: string; status?: string; page?: number; pageSize?: number; limit?: number }) {
+    const page = Math.max(1, Number(params.page) || 1)
+    const pageSize = Math.max(1, Math.min(200, Number(params.pageSize || params.limit) || 10))
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
 
