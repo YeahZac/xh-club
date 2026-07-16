@@ -331,12 +331,19 @@ export class AdminService {
     try {
       const coverImage = assertCloudStorageImageUrl(dto.cover_image)
       const videoUrl = normalizeOptionalVideoUrl(dto.video_url)
+      const formFieldsJson =
+        dto.form_fields == null
+          ? null
+          : typeof dto.form_fields === 'string'
+            ? dto.form_fields
+            : JSON.stringify(dto.form_fields)
       const result = await queryExecute(
-        `INSERT INTO events (title, description, cover_image, video_url, event_type, status, start_time, end_time, location, address, max_participants, fee)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO events (title, description, cover_image, video_url, event_type, status, start_time, end_time, location, address, max_participants, fee, form_fields)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [dto.title, dto.description || null, coverImage, videoUrl, dto.event_type || 'salon',
          dto.status || 'draft', dto.start_time || null, dto.end_time || null,
-         dto.location || null, dto.address || null, dto.max_participants || 100, dto.fee || 0]
+         dto.location || null, dto.address || null, dto.max_participants || 100, dto.fee || 0,
+         formFieldsJson]
       )
       return await queryOne('SELECT * FROM events WHERE id = ?', [result.insertId])
     } catch (error) {

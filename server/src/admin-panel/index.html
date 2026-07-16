@@ -1292,7 +1292,7 @@ function showEventModal() {
         </div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
-          <button onclick="createEvent()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
+          <button type="button" onclick="submitCreateEvent()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">创建</button>
         </div>
       </div>
     </div>
@@ -1328,7 +1328,8 @@ function renderFormFields() {
   `).join('')
 }
 
-async function createEvent() {
+// 勿命名为 createEvent：inline onclick 作用域会命中 document.createEvent（DOM API）
+async function submitCreateEvent() {
   if (!assertNoUploading()) return
   // 收集表单字段
   const formFields = _formFields.filter(f => f.label.trim()).map(f => ({

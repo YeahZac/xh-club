@@ -10,8 +10,9 @@ export class CommunityService {
 
   /** 获取动态列表 */
   async getPosts(params: { type?: string; member_id?: string; page?: number; pageSize?: number }) {
-    const page = params.page || 1
-    const pageSize = params.pageSize || 20
+    const page = Math.max(1, Number(params.page) || 1)
+    // MySQL prepared statements may quote LIMIT/OFFSET placeholders as strings — interpolate safe ints.
+    const pageSize = Math.max(1, Math.min(100, Number(params.pageSize) || 20))
     const offset = (page - 1) * pageSize
     const pool = await this.getDb()
 
@@ -37,8 +38,8 @@ export class CommunityService {
        LEFT JOIN members m ON p.member_id = m.id
        ${where}
        ORDER BY p.is_featured DESC, p.created_at DESC
-       LIMIT ? OFFSET ?`,
-      [...values, pageSize, offset]
+       LIMIT ${pageSize} OFFSET ${offset}`,
+      values
     )
 
     const list = rows.map((row: any) => ({
@@ -134,13 +135,12 @@ export class CommunityService {
   /** 获取资源列表 */
   async getResources(query: any) {
     const pool = await this.getDb()
-    const limit = parseInt(query.limit || '10')
-    const page = parseInt(query.page || '1')
+    const limit = Math.max(1, Math.min(100, parseInt(String(query.limit || '10'), 10) || 10))
+    const page = Math.max(1, parseInt(String(query.page || '1'), 10) || 1)
     const offset = (page - 1) * limit
 
     const [rows]: any = await pool.query(
-      `SELECT * FROM resources WHERE status = 'active' ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-      [limit, offset]
+      `SELECT * FROM resources WHERE status = 'active' ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`
     )
     return rows
   }
