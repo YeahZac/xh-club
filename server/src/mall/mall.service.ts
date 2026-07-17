@@ -246,8 +246,8 @@ export class MallService {
         const [orderResult] = await connection.query<ResultSetHeader>(
           `INSERT INTO mall_orders
              (order_no, member_id, product_id, product_name, quantity, total_amount, points_used, cash_amount,
-              referrer_id, status, payment_method, contact_name, contact_phone, shipping_address, remark)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', 'points', ?, ?, ?, ?)`,
+              actual_amount, referrer_id, status, payment_method, contact_name, contact_phone, shipping_address, remark)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', 'points', ?, ?, ?, ?)`,
           [
             orderNo,
             data.member_id,
@@ -256,6 +256,7 @@ export class MallService {
             data.quantity,
             totalAmount.toString(),
             pointsNeeded,
+            '0',
             '0',
             data.referrer_id || null,
             contactName,
@@ -267,7 +268,7 @@ export class MallService {
 
         const balanceAfter = Number(member.available_points) - pointsNeeded
         await connection.query(
-          'UPDATE members SET available_points = ?, updated_at = NOW() WHERE id = ?',
+          'UPDATE members SET available_points = GREATEST(0, ?), updated_at = NOW() WHERE id = ?',
           [balanceAfter, data.member_id],
         );
         await connection.query(
@@ -275,21 +276,13 @@ export class MallService {
           [data.quantity, data.quantity, data.product_id],
         );
 
-        try {
-          await connection.query(
-            `INSERT INTO points_records (member_id, type, amount, balance, source, source_id, description)
-             VALUES (?, 'spend', ?, ?, 'mall', ?, ?)`,
-            [
-              data.member_id,
-              pointsNeeded,
-              balanceAfter,
-              String(orderResult.insertId),
-              `积分兑换「${product.name}」x${data.quantity}`,
-            ],
-          )
-        } catch {
-          // points_records 表结构差异时忽略，不影响下单
-        }
+        await this.writePointsSpendRecord(connection, {
+          memberId: data.member_id,
+          points: pointsNeeded,
+          balanceAfter,
+          orderId: orderResult.insertId,
+          description: `积分兑换「${product.name}」x${data.quantity}`,
+        })
 
         if (data.referrer_id && product.enable_distribution) {
           await this.processDistribution(
@@ -313,7 +306,61 @@ export class MallService {
     }
   }
 
-  /** 购物车一次性结算（仅积分），逐商品生成订单 */
+  /** 写入积分消耗流水，兼容多套表结构 */
+  private async writePointsSpendRecord(
+    connection: PoolConnection,
+    payload: {
+      memberId: string | number
+      points: number
+      balanceAfter: number
+      orderId: string | number
+      description: string
+    },
+  ) {
+    const attempts: Array<{ sql: string; params: any[] }> = [
+      {
+        sql: `INSERT INTO points_records (member_id, type, amount, balance, source, source_id, description)
+              VALUES (?, 'spend', ?, ?, 'mall', ?, ?)`,
+        params: [
+          payload.memberId,
+          payload.points,
+          payload.balanceAfter,
+          String(payload.orderId),
+          payload.description,
+        ],
+      },
+      {
+        sql: `INSERT INTO points_records (member_id, type, points, description)
+              VALUES (?, 'spend', ?, ?)`,
+        params: [payload.memberId, payload.points, payload.description],
+      },
+      {
+        sql: `INSERT INTO points_records (user_id, type, amount, description, related_id)
+              VALUES (?, 'spend', ?, ?, ?)`,
+        params: [
+          payload.memberId,
+          -Math.abs(payload.points),
+          payload.description,
+          String(payload.orderId),
+        ],
+      },
+    ]
+
+    let lastError: unknown = null
+    for (const attempt of attempts) {
+      try {
+        await connection.query(attempt.sql, attempt.params)
+        return
+      } catch (error) {
+        lastError = error
+      }
+    }
+    this.logger.warn(
+      `points_records insert failed after fallbacks: ${(lastError as Error)?.message || lastError}`,
+    )
+  }
+
+  /** 购物车一次性结算（仅积分），同一事务校验并扣减积分、生成订单 */
   async checkout(data: {
     member_id: string
     items: Array<{ product_id: string; quantity: number }>
@@ -323,33 +370,150 @@ export class MallService {
     remark?: string
     referrer_id?: string
   }) {
-    const items = (data.items || []).filter((i) => i?.product_id && Number(i.quantity) > 0)
+    const contactName = String(data.contact_name || '').trim()
+    const contactPhone = String(data.contact_phone || '').trim()
+    const shippingAddress = String(data.shipping_address || '').trim()
+    if (!contactName || !contactPhone || !shippingAddress) {
+      return { code: 400, msg: '请填写收货人、手机号与收货地址', data: null }
+    }
+
+    const items = (data.items || [])
+      .map((item) => ({
+        product_id: String(item?.product_id || ''),
+        quantity: Math.floor(Number(item?.quantity) || 0),
+      }))
+      .filter((item) => item.product_id && item.quantity > 0)
     if (!items.length) return { code: 400, msg: '请选择商品', data: null }
 
-    const orders: any[] = []
-    for (const item of items) {
-      const result = await this.createOrder({
-        member_id: data.member_id,
-        product_id: String(item.product_id),
-        quantity: Math.floor(Number(item.quantity)),
-        contact_name: data.contact_name,
-        contact_phone: data.contact_phone,
-        shipping_address: data.shipping_address,
-        remark: data.remark,
-        referrer_id: data.referrer_id,
-      })
-      if (result.code !== 200) {
-        return {
-          code: result.code,
-          msg: orders.length
-            ? `${result.msg}（已成功 ${orders.length} 笔订单）`
-            : result.msg,
-          data: { orders, failed: item },
+    try {
+      return await withTransaction(async (connection) => {
+        const [memberRows] = await connection.query<MemberRow[]>(
+          'SELECT * FROM members WHERE id = ? FOR UPDATE',
+          [data.member_id],
+        )
+        const member = memberRows[0]
+        if (!member) return { code: 404, msg: '会员不存在', data: null }
+
+        const prepared: Array<{
+          product: ProductRow
+          quantity: number
+          pointsNeeded: number
+          cashAmount: number
+        }> = []
+        let totalPointsNeeded = 0
+
+        for (const item of items) {
+          const [productRows] = await connection.query<ProductRow[]>(
+            'SELECT * FROM mall_products WHERE id = ? FOR UPDATE',
+            [item.product_id],
+          )
+          const product = productRows[0]
+          if (!product) return { code: 404, msg: `商品不存在（#${item.product_id}）`, data: null }
+          if (product.status !== 'active') {
+            return { code: 400, msg: `「${product.name}」已下架`, data: null }
+          }
+          if (product.stock < item.quantity) {
+            return { code: 400, msg: `「${product.name}」库存不足`, data: null }
+          }
+          const pointsNeeded = Number(product.points_price) * item.quantity
+          if (!Number.isFinite(pointsNeeded) || pointsNeeded <= 0) {
+            return { code: 400, msg: `「${product.name}」积分价格无效`, data: null }
+          }
+          totalPointsNeeded += pointsNeeded
+          prepared.push({
+            product,
+            quantity: item.quantity,
+            pointsNeeded,
+            cashAmount: parseFloat(product.cash_price || '0') * item.quantity,
+          })
         }
-      }
-      orders.push(result.data)
+
+        const available = Number(member.available_points || 0)
+        if (available < totalPointsNeeded) {
+          return {
+            code: 400,
+            msg: `积分不足，需要 ${totalPointsNeeded}，当前可用 ${available}`,
+            data: null,
+          }
+        }
+
+        let balance = available
+        const orders: any[] = []
+        for (const row of prepared) {
+          balance -= row.pointsNeeded
+          const orderNo = `ORD${Date.now()}${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+          const [orderResult] = await connection.query<ResultSetHeader>(
+            `INSERT INTO mall_orders
+               (order_no, member_id, product_id, product_name, quantity, total_amount, points_used, cash_amount,
+                actual_amount, referrer_id, status, payment_method, contact_name, contact_phone, shipping_address, remark)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', 'points', ?, ?, ?, ?)`,
+            [
+              orderNo,
+              data.member_id,
+              row.product.id,
+              row.product.name,
+              row.quantity,
+              row.cashAmount.toString(),
+              row.pointsNeeded,
+              '0',
+              '0',
+              data.referrer_id || null,
+              contactName,
+              contactPhone,
+              shippingAddress,
+              String(data.remark || '').trim() || null,
+            ],
+          )
+
+          await connection.query(
+            'UPDATE mall_products SET stock = stock - ?, sales_count = sales_count + ?, updated_at = NOW() WHERE id = ?',
+            [row.quantity, row.quantity, row.product.id],
+          )
+
+          await this.writePointsSpendRecord(connection, {
+            memberId: data.member_id,
+            points: row.pointsNeeded,
+            balanceAfter: balance,
+            orderId: orderResult.insertId,
+            description: `积分兑换「${row.product.name}」x${row.quantity}`,
+          })
+
+          if (data.referrer_id && row.product.enable_distribution) {
+            await this.processDistribution(
+              connection,
+              data.referrer_id,
+              data.member_id,
+              String(orderResult.insertId),
+              row.product,
+            )
+          }
+
+          const [orderRows] = await connection.query<RowDataPacket[]>(
+            'SELECT * FROM mall_orders WHERE id = ?',
+            [orderResult.insertId],
+          )
+          orders.push(this.formatOrder(orderRows[0] || null))
+        }
+
+        await connection.query(
+          'UPDATE members SET available_points = GREATEST(0, ?), updated_at = NOW() WHERE id = ?',
+          [balance, data.member_id],
+        )
+
+        return {
+          code: 200,
+          msg: '支付成功，等待发货',
+          data: {
+            orders,
+            points_used: totalPointsNeeded,
+            available_points: balance,
+          },
+        }
+      })
+    } catch (error) {
+      this.logger.error('购物车结算失败', error)
+      return { code: 500, msg: '支付失败，请稍后重试', data: null }
     }
-    return { code: 200, msg: '支付成功，等待发货', data: { orders } }
   }
 
   async getMemberOrders(memberId: string, status?: string) {
