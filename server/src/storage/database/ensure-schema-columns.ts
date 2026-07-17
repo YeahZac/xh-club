@@ -250,6 +250,34 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       INDEX idx_created_at (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   },
+  {
+    name: 'project_deal_applications',
+    sql: `CREATE TABLE IF NOT EXISTS project_deal_applications (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      member_id INT NOT NULL,
+      business_id INT NOT NULL,
+      project_name VARCHAR(255) NOT NULL,
+      deal_time DATE NOT NULL,
+      contract_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+      commission_rate DECIMAL(5,2) NOT NULL DEFAULT 0,
+      contact_name VARCHAR(100) NOT NULL,
+      deal_status VARCHAR(20) NOT NULL DEFAULT 'connecting',
+      image_urls JSON NULL,
+      cooperation_description TEXT NULL,
+      audit_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      reject_reason VARCHAR(500) NULL,
+      payment_status VARCHAR(20) NOT NULL DEFAULT 'unpaid',
+      reviewed_by INT NULL,
+      reviewed_at TIMESTAMP NULL,
+      paid_at TIMESTAMP NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_deal_member (member_id),
+      INDEX idx_deal_business (business_id),
+      INDEX idx_deal_audit (audit_status),
+      INDEX idx_deal_payment (payment_status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
 ]
 
 function isDuplicateColumnError(message?: string): boolean {

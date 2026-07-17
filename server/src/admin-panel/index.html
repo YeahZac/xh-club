@@ -127,6 +127,10 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
         商机管理
       </a>
+      <a onclick="switchPage('dealApplications')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="dealApplications">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-2.2 0-4 1.12-4 2.5S9.8 13 12 13s4 1.12 4 2.5S14.2 18 12 18m0-10V6m0 12v2M5 4h14a2 2 0 012 2v14H3V6a2 2 0 012-2z"/></svg>
+        项目成交记录
+      </a>
       <a onclick="switchPage('banners')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="banners">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         Banner管理
@@ -539,6 +543,43 @@
             </tr>
           </thead>
           <tbody id="businessTableBody" class="divide-y divide-gray-50">
+            <tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ====== 项目成交记录 ====== -->
+    <div data-page="dealApplications" class="p-8 fade-in">
+      <div class="flex items-center gap-3 mb-6 flex-wrap">
+        <select id="dealAuditFilter" onchange="loadDealApplications()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+          <option value="">全部审核状态</option>
+          <option value="pending">待审核</option>
+          <option value="approved">审核通过</option>
+          <option value="rejected">审核未通过</option>
+        </select>
+        <select id="dealPaymentFilter" onchange="loadDealApplications()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+          <option value="">全部打款状态</option>
+          <option value="unpaid">未打款</option>
+          <option value="paid">已打款</option>
+        </select>
+        <input id="dealKeyword" onkeydown="if(event.key==='Enter')loadDealApplications()" placeholder="搜索项目、对接人、会员" class="px-4 py-2 border border-gray-200 rounded-xl text-sm w-64 outline-none">
+        <button onclick="loadDealApplications()" class="px-4 py-2 bg-navy-100 text-navy-700 rounded-xl text-sm">搜索</button>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table class="w-full">
+          <thead class="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500">项目 / 会员</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500">成交时间</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500">合同金额</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500">分成比例</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500">审核状态</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500">打款状态</th>
+              <th class="px-4 py-4 text-center text-xs font-semibold text-gray-500">操作</th>
+            </tr>
+          </thead>
+          <tbody id="dealApplicationsTableBody" class="divide-y divide-gray-50">
             <tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
           </tbody>
         </table>
@@ -1365,10 +1406,10 @@ function switchPage(page) {
     const navItem = document.querySelector(`[data-nav="${page}"]`)
     if (navItem) navItem.classList.add('active')
   }
-  const titles = { dashboard: '数据看板', homepage: '首页管理', members: '会员管理', talents: '人才管理', events: '活动管理', projects: '项目管理', business: '商机管理', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', 'project-edit': '编辑项目', industries: '行业配置', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
+  const titles = { dashboard: '数据看板', homepage: '首页管理', members: '会员管理', talents: '人才管理', events: '活动管理', projects: '项目管理', business: '商机管理', dealApplications: '项目成交记录', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', 'project-edit': '编辑项目', industries: '行业配置', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
   document.getElementById('pageTitle').textContent = titles[page] || page
   // 加载数据（role-edit页面不加载数据）
-  const loaders = { dashboard: loadDashboard, homepage: loadHomepage, members: loadMembers, talents: loadTalents, events: loadEvents, projects: loadProjects, business: loadBusiness, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, industries: loadIndustries, memberLevels: loadMemberLevels, invitations: loadInvitationRules, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
+  const loaders = { dashboard: loadDashboard, homepage: loadHomepage, members: loadMembers, talents: loadTalents, events: loadEvents, projects: loadProjects, business: loadBusiness, dealApplications: loadDealApplications, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, industries: loadIndustries, memberLevels: loadMemberLevels, invitations: loadInvitationRules, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
   if (loaders[page]) loaders[page]()
 }
 
@@ -4191,6 +4232,7 @@ const PERMISSION_PAGES = [
   { key: 'members', name: '会员管理' },
   { key: 'talents', name: '人才管理' },
   { key: 'business', name: '商机管理' },
+  { key: 'dealApplications', name: '项目成交记录' },
   { key: 'events', name: '活动管理' },
   { key: 'projects', name: '项目管理' },
   { key: 'banners', name: 'Banner管理' },
@@ -5211,6 +5253,120 @@ async function deleteDepartment(id) {
   const res = await api(`/admin/departments/${id}`, { method: 'DELETE' })
   if (res.code === 200) { toast('已删除'); loadDepartments(); }
   else toast(res.msg || '删除失败', 'error')
+}
+
+// ===== 项目成交记录 =====
+const DEAL_AUDIT_META = {
+  pending: ['待审核', 'bg-yellow-100 text-yellow-700'],
+  approved: ['审核通过', 'bg-green-100 text-green-700'],
+  rejected: ['审核未通过', 'bg-red-100 text-red-700'],
+}
+
+async function loadDealApplications() {
+  const audit = document.getElementById('dealAuditFilter')?.value || ''
+  const payment = document.getElementById('dealPaymentFilter')?.value || ''
+  const keyword = document.getElementById('dealKeyword')?.value?.trim() || ''
+  const qs = new URLSearchParams()
+  if (audit) qs.set('audit_status', audit)
+  if (payment) qs.set('payment_status', payment)
+  if (keyword) qs.set('keyword', keyword)
+  const res = await api('/admin/deal-applications' + (qs.toString() ? `?${qs}` : ''))
+  if (res.code !== 200) return toast(res.msg || '加载失败', 'error')
+  const list = Array.isArray(res.data) ? res.data : []
+  const body = document.getElementById('dealApplicationsTableBody')
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">暂无成交申请</td></tr>'
+    return
+  }
+  body.innerHTML = list.map((item) => {
+    const auditMeta = DEAL_AUDIT_META[item.audit_status] || [item.audit_status, 'bg-gray-100 text-gray-600']
+    const paymentClass = item.payment_status === 'paid' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+    return `
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-4">
+          <p class="text-sm font-medium text-navy-800">${escapeHtml(item.project_name || '-')}</p>
+          <p class="mt-1 text-xs text-gray-400">${escapeHtml(item.member_name || '-')} · ${escapeHtml(item.contact_name || '-')}</p>
+        </td>
+        <td class="px-4 py-4 text-sm text-gray-600">${escapeHtml(String(item.deal_time || '').slice(0, 10))}</td>
+        <td class="px-4 py-4 text-sm font-medium text-navy-800">¥${Number(item.contract_amount || 0).toLocaleString()}</td>
+        <td class="px-4 py-4 text-sm text-gray-600">${Number(item.commission_rate || 0)}%</td>
+        <td class="px-4 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${auditMeta[1]}">${auditMeta[0]}</span></td>
+        <td class="px-4 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${paymentClass}">${item.payment_status === 'paid' ? '已打款' : '未打款'}</span></td>
+        <td class="px-4 py-4 text-center">
+          <button onclick="showDealApplication('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-700 mr-1">详情</button>
+          ${item.audit_status === 'pending' ? `<button onclick="auditDealApplication('${item.id}','approved')" class="px-2.5 py-1 text-xs rounded-lg bg-green-100 text-green-700 mr-1">通过</button><button onclick="auditDealApplication('${item.id}','rejected')" class="px-2.5 py-1 text-xs rounded-lg bg-red-100 text-red-700 mr-1">拒绝</button>` : ''}
+          ${item.audit_status === 'approved' ? `<button onclick="updateDealPayment('${item.id}','${item.payment_status === 'paid' ? 'unpaid' : 'paid'}')" class="px-2.5 py-1 text-xs rounded-lg bg-amber-100 text-amber-700">${item.payment_status === 'paid' ? '改为未打款' : '标记已打款'}</button>` : ''}
+        </td>
+      </tr>`
+  }).join('')
+}
+
+async function showDealApplication(id) {
+  const res = await api(`/admin/deal-applications/${id}`)
+  if (res.code !== 200) return toast(res.msg || '加载失败', 'error')
+  const item = res.data
+  const images = Array.isArray(item.image_urls) ? item.image_urls : []
+  const auditMeta = DEAL_AUDIT_META[item.audit_status] || [item.audit_status, 'bg-gray-100 text-gray-600']
+  showModal(`
+    <div class="p-6" style="max-width:760px">
+      <div class="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <h3 class="text-lg font-bold text-navy-800">${escapeHtml(item.project_name || '-')}</h3>
+          <p class="text-xs text-gray-400 mt-1">申请会员：${escapeHtml(item.member_name || '-')} · ${escapeHtml(item.member_phone || '-')}</p>
+        </div>
+        <span class="text-xs px-2.5 py-1 rounded-full ${auditMeta[1]}">${auditMeta[0]}</span>
+      </div>
+      <div class="grid grid-cols-2 gap-4 text-sm">
+        <div class="rounded-xl bg-gray-50 p-3"><p class="text-xs text-gray-400">成交时间</p><p class="mt-1 text-navy-800">${escapeHtml(String(item.deal_time || '').slice(0,10))}</p></div>
+        <div class="rounded-xl bg-gray-50 p-3"><p class="text-xs text-gray-400">对接状态</p><p class="mt-1 text-navy-800">${escapeHtml(item.deal_status_label || '-')}</p></div>
+        <div class="rounded-xl bg-gray-50 p-3"><p class="text-xs text-gray-400">合同金额</p><p class="mt-1 text-navy-800">¥${Number(item.contract_amount || 0).toLocaleString()}</p></div>
+        <div class="rounded-xl bg-gray-50 p-3"><p class="text-xs text-gray-400">分成比例</p><p class="mt-1 text-navy-800">${Number(item.commission_rate || 0)}%</p></div>
+        <div class="rounded-xl bg-gray-50 p-3"><p class="text-xs text-gray-400">对接人</p><p class="mt-1 text-navy-800">${escapeHtml(item.contact_name || '-')}</p></div>
+        <div class="rounded-xl bg-gray-50 p-3"><p class="text-xs text-gray-400">打款状态</p><p class="mt-1 text-navy-800">${item.payment_status === 'paid' ? '已打款' : '未打款'}</p></div>
+      </div>
+      <div class="mt-4"><p class="text-sm font-medium text-gray-700 mb-2">合作描述</p><p class="rounded-xl bg-gray-50 p-3 text-sm text-gray-600 whitespace-pre-wrap">${escapeHtml(item.cooperation_description || '未填写')}</p></div>
+      ${item.reject_reason ? `<div class="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">未通过原因：${escapeHtml(item.reject_reason)}</div>` : ''}
+      ${images.length ? `<div class="mt-4"><p class="text-sm font-medium text-gray-700 mb-2">申请图片</p><div class="grid grid-cols-3 gap-3">${images.map(url => `<img src="${escapeHtml(url)}" class="w-full h-32 rounded-xl object-cover border border-gray-100">`).join('')}</div></div>` : ''}
+      <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+        <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm">关闭</button>
+        ${item.audit_status === 'pending' ? `<button onclick="closeModal();auditDealApplication('${item.id}','rejected')" class="px-5 py-2.5 bg-red-100 text-red-700 rounded-xl text-sm">审核不通过</button><button onclick="closeModal();auditDealApplication('${item.id}','approved')" class="px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm">审核通过</button>` : ''}
+      </div>
+    </div>
+  `, { wide: true })
+}
+
+async function auditDealApplication(id, status) {
+  let rejectReason = ''
+  if (status === 'rejected') {
+    rejectReason = prompt('请输入审核未通过原因') || ''
+    if (!rejectReason.trim()) return toast('请填写未通过原因', 'error')
+  } else if (!confirm('确定审核通过该成交申请？')) {
+    return
+  }
+  const res = await api(`/admin/deal-applications/${id}/audit`, {
+    method: 'POST',
+    body: { audit_status: status, reject_reason: rejectReason },
+  })
+  if (res.code === 200) {
+    toast(status === 'approved' ? '审核已通过' : '审核已拒绝')
+    loadDealApplications()
+  } else {
+    toast(res.msg || '审核失败', 'error')
+  }
+}
+
+async function updateDealPayment(id, status) {
+  if (!confirm(`确定改为${status === 'paid' ? '已打款' : '未打款'}？`)) return
+  const res = await api(`/admin/deal-applications/${id}/payment`, {
+    method: 'PUT',
+    body: { payment_status: status },
+  })
+  if (res.code === 200) {
+    toast('打款状态已更新')
+    loadDealApplications()
+  } else {
+    toast(res.msg || '更新失败', 'error')
+  }
 }
 
 // ===== 数据库初始化 =====
