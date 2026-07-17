@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
+import * as https from 'https'
 import { queryOne, queryExecute } from '@/storage/database/mysql-client'
 import { signAuthToken } from './jwt'
 import { PointsEngineService } from '@/points/points-engine.service'
@@ -11,38 +12,107 @@ interface WeChatSessionResponse {
   errmsg?: string
 }
 
+interface PhoneNumberResponse {
+  errcode?: number
+  errmsg?: string
+  phone_info?: {
+    phoneNumber?: string
+    purePhoneNumber?: string
+    countryCode?: string
+  }
+}
+
+export interface WxLoginInput {
+  code?: string
+  openidFromHeader?: string
+  avatar?: string
+  nickname?: string
+  phoneCode?: string
+  phoneCloudId?: string
+}
+
 @Injectable()
 export class AuthService {
   constructor(private readonly pointsEngine: PointsEngineService) {}
 
-  async wxLogin(code: string, avatar: string, nickname: string) {
+  async wxLogin(input: WxLoginInput) {
     try {
-      const openid = await this.exchangeCodeForOpenid(code)
+      const openid =
+        (input.openidFromHeader || '').trim()
+        || (input.code ? await this.exchangeCodeForOpenid(input.code) : '')
 
-      // Try to find existing member by openid
-      const existing = await queryOne('SELECT id FROM members WHERE wx_openid = ?', [openid])
-      if (existing) {
-        const updates: string[] = ['updated_at = NOW()']
-        const params: any[] = [(existing as any).id]
-        if (avatar) { updates.push('avatar = ?'); params.splice(0, 0, avatar) }
-        if (nickname) { updates.push('name = ?'); params.splice(0, 0, nickname) }
-        await queryExecute(`UPDATE members SET ${updates.join(', ')} WHERE id = ?`, params)
-        return this.buildLoginResult((existing as any).id, openid)
+      if (!openid) {
+        throw new HttpException(
+          '无法识别微信用户，请在小程序内重新打开后登录',
+          HttpStatus.UNAUTHORIZED,
+        )
       }
 
-      // Create new member
-      const phone = `wx_${openid.substring(0, 20)}`
+      const safeName = String(input.nickname || '').trim() || '微信用户'
+      const safeAvatar = String(input.avatar || '').trim()
+
+      let phone = ''
+      if (input.phoneCode?.trim()) {
+        phone = await this.exchangePhoneCode(input.phoneCode.trim(), openid)
+      } else if (input.phoneCloudId?.trim()) {
+        phone = await this.exchangePhoneCloudId(input.phoneCloudId.trim(), openid)
+      }
+
+      if (!phone) {
+        throw new HttpException('请授权微信手机号后再登录', HttpStatus.BAD_REQUEST)
+      }
+
+      const existing = await queryOne(
+        'SELECT id, name, avatar, phone FROM members WHERE wx_openid = ?',
+        [openid],
+      )
+
+      if (existing) {
+        const memberId = (existing as any).id
+        const updates: string[] = ['updated_at = NOW()', 'phone = ?']
+        const params: any[] = [phone]
+
+        if (safeName && !(existing as any).name) {
+          updates.push('name = ?')
+          params.push(safeName)
+        }
+        if (safeAvatar && !(existing as any).avatar) {
+          updates.push('avatar = ?')
+          params.push(safeAvatar)
+        }
+
+        params.push(memberId)
+        await queryExecute(`UPDATE members SET ${updates.join(', ')} WHERE id = ?`, params)
+        return this.buildLoginResult(memberId, openid)
+      }
+
+      // 若手机号已被旧账号占用，优先绑定到当前 openid
+      const byPhone = await queryOne('SELECT id, wx_openid FROM members WHERE phone = ?', [phone])
+      if (byPhone) {
+        const memberId = (byPhone as any).id
+        await queryExecute(
+          `UPDATE members SET wx_openid = ?, name = COALESCE(NULLIF(name, ''), ?),
+           avatar = COALESCE(avatar, ?), updated_at = NOW() WHERE id = ?`,
+          [openid, safeName, safeAvatar || null, memberId],
+        )
+        return this.buildLoginResult(memberId, openid)
+      }
+
       await queryExecute(
-        `INSERT INTO members (name, avatar, wx_openid, phone, password_hash, membership_level, member_type, status, credit_score, active_score, contribution_score, total_points, available_points)
-         VALUES (?, ?, ?, ?, ?, 'normal', 'individual', 'active', 100, 0, 0, 0, 0)`,
-        [nickname || '微信用户', avatar || '', openid, phone, 'wx_oauth_no_password']
+        `INSERT INTO members (
+           name, avatar, wx_openid, phone, password_hash,
+           membership_level, member_type, status,
+           credit_score, active_score, contribution_score, total_points, available_points,
+           join_source
+         ) VALUES (?, ?, ?, ?, ?, 'normal', 'individual', 'active', 100, 0, 0, 0, 0, 'wechat')`,
+        [safeName, safeAvatar || null, openid, phone, 'wx_oauth_no_password'],
       )
 
       const newMember = await queryOne('SELECT id, wx_openid FROM members WHERE wx_openid = ?', [openid])
       return this.buildLoginResult((newMember as any)?.id, (newMember as any)?.wx_openid)
     } catch (error) {
       console.error('[AuthService] wxLogin error:', JSON.stringify(error))
-      console.error('[AuthService] wxLogin error details:', error?.message, error?.details, error?.hint)
+      console.error('[AuthService] wxLogin error details:', error?.message, error?.cause)
       throw error
     }
   }
@@ -53,10 +123,49 @@ export class AuthService {
         .onMemberActive(memberId)
         .catch((err) => console.warn('[AuthService] points onMemberActive failed', err))
     }
+
+    const profile = await queryOne(
+      `SELECT id, name, avatar, phone, wx_openid, membership_level, member_type, status,
+              available_points, total_points, credit_score, company_name, company_position
+       FROM members WHERE id = ?`,
+      [memberId],
+    )
+
     return {
       member_id: memberId,
       openid,
       token: signAuthToken({ sub: String(memberId), type: 'member' }),
+      profile: profile || null,
+    }
+  }
+
+  /**
+   * 云托管推荐：用 HTTP 调 api.weixin.qq.com（开放接口服务），避免 HTTPS 自签证书错误
+   */
+  private async weixinFetch(url: string, init?: RequestInit): Promise<any> {
+    const httpUrl = url.replace(/^https:\/\//i, 'http://')
+    try {
+      const response = await fetch(httpUrl, init)
+      if (!response.ok) {
+        throw new HttpException('微信服务暂不可用', HttpStatus.BAD_GATEWAY)
+      }
+      return await response.json()
+    } catch (error: any) {
+      // 本地调试等场景再试 HTTPS（忽略自签，仅作兜底）
+      if (String(error?.cause?.code || error?.code || '').includes('CERT') || String(error?.message || '').includes('fetch failed')) {
+        console.warn('[AuthService] HTTP 微信接口失败，尝试 HTTPS 兜底', error?.cause?.code || error?.message)
+        const agent = new https.Agent({ rejectUnauthorized: false })
+        const response = await fetch(url.replace(/^http:\/\//i, 'https://'), {
+          ...init,
+          // @ts-expect-error undici/node fetch agent
+          agent,
+        } as any)
+        if (!response.ok) {
+          throw new HttpException('微信服务暂不可用', HttpStatus.BAD_GATEWAY)
+        }
+        return await response.json()
+      }
+      throw error
     }
   }
 
@@ -64,7 +173,10 @@ export class AuthService {
     const appId = process.env.WX_APP_ID
     const appSecret = process.env.WX_APP_SECRET
     if (!appId || !appSecret) {
-      throw new HttpException('微信登录配置不完整', HttpStatus.SERVICE_UNAVAILABLE)
+      throw new HttpException(
+        '微信登录配置不完整，请在云托管配置 WX_APP_ID / WX_APP_SECRET',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      )
     }
 
     const params = new URLSearchParams({
@@ -73,18 +185,80 @@ export class AuthService {
       js_code: code,
       grant_type: 'authorization_code',
     })
-    const response = await fetch(`https://api.weixin.qq.com/sns/jscode2session?${params}`)
-    if (!response.ok) {
-      throw new HttpException('微信登录服务暂不可用', HttpStatus.BAD_GATEWAY)
-    }
+    // 优先 HTTP，规避云托管开放接口服务的自签证书问题
+    const session = await this.weixinFetch(
+      `http://api.weixin.qq.com/sns/jscode2session?${params}`,
+    ) as WeChatSessionResponse
 
-    const session = await response.json() as WeChatSessionResponse
     if (!session.openid) {
-      throw new HttpException(
-        `微信登录失败${session.errcode ? `（${session.errcode}）` : ''}`,
-        HttpStatus.UNAUTHORIZED,
-      )
+      const codeHint: Record<number, string> = {
+        40029: '登录码无效，请重试',
+        40163: '登录码已使用，请重试',
+        40125: '小程序密钥配置错误，请检查 WX_APP_SECRET',
+        40013: '小程序 AppID 无效',
+        45011: '操作过于频繁，请稍后再试',
+      }
+      const tip = session.errcode
+        ? (codeHint[session.errcode] || `微信登录失败（${session.errcode}）`)
+        : '微信登录失败'
+      console.error('[AuthService] jscode2session failed:', session)
+      throw new HttpException(tip, HttpStatus.UNAUTHORIZED)
     }
     return session.openid
+  }
+
+  /** 新版手机号组件：detail.code */
+  private async exchangePhoneCode(phoneCode: string, _openid: string): Promise<string> {
+    const data = await this.weixinFetch(
+      'http://api.weixin.qq.com/wxa/business/getuserphonenumber',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code: phoneCode }),
+      },
+    ) as PhoneNumberResponse
+
+    const phone = data?.phone_info?.purePhoneNumber || data?.phone_info?.phoneNumber || ''
+    if (!phone) {
+      console.error('[AuthService] getuserphonenumber failed:', data)
+      const tip = data?.errcode
+        ? `手机号授权失败（${data.errcode}）`
+        : '手机号授权失败，请重试'
+      throw new HttpException(tip, HttpStatus.BAD_REQUEST)
+    }
+    return phone
+  }
+
+  /** 旧版/云调用：cloudID → getopendata */
+  private async exchangePhoneCloudId(cloudId: string, openid: string): Promise<string> {
+    const data = await this.weixinFetch(
+      `http://api.weixin.qq.com/wxa/getopendata?openid=${encodeURIComponent(openid)}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ cloudid_list: [cloudId] }),
+      },
+    )
+
+    const list = data?.data_list || data?.data || []
+    const raw = Array.isArray(list) ? list[0] : null
+    let parsed: any = raw
+    if (typeof raw === 'string') {
+      try {
+        parsed = JSON.parse(raw)
+      } catch {
+        parsed = null
+      }
+    }
+    const phone =
+      parsed?.data?.phoneNumber
+      || parsed?.phoneNumber
+      || parsed?.purePhoneNumber
+      || ''
+    if (!phone) {
+      console.error('[AuthService] getopendata phone failed:', data)
+      throw new HttpException('手机号授权失败，请重试', HttpStatus.BAD_REQUEST)
+    }
+    return String(phone)
   }
 }

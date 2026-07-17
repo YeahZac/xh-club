@@ -1672,14 +1672,16 @@ async function loadMembers() {
     <tr class="hover:bg-gray-50 transition">
       <td class="px-6 py-4">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-navy-600 to-navy-800 flex items-center justify-center text-white font-bold text-sm">${(m.name || '?')[0]}</div>
+          ${m.avatar
+            ? `<img src="${escapeHtml(m.avatar)}" class="w-10 h-10 rounded-full object-cover" alt="">`
+            : `<div class="w-10 h-10 rounded-full bg-gradient-to-br from-navy-600 to-navy-800 flex items-center justify-center text-white font-bold text-sm">${(m.name || '?')[0]}</div>`}
           <div>
-            <p class="font-medium text-navy-800">${m.name}</p>
-            <p class="text-xs text-gray-400">${m.phone || ''}</p>
+            <p class="font-medium text-navy-800">${escapeHtml(m.name || '未命名')}</p>
+            <p class="text-xs text-gray-400">${escapeHtml(m.phone || '')}${m.join_source === 'wechat' ? ' · 微信' : ''}</p>
           </div>
         </div>
       </td>
-      <td class="px-6 py-4"><p class="text-sm">${m.company_name || '-'}</p><p class="text-xs text-gray-400">${m.company_position || ''}</p></td>
+      <td class="px-6 py-4"><p class="text-sm">${escapeHtml(m.company_name || '-')}</p><p class="text-xs text-gray-400">${escapeHtml(m.company_position || '')}</p></td>
       <td class="px-6 py-4 text-sm">${INDUSTRY_MAP[m.industry_primary] || m.industry_primary || '-'}</td>
       <td class="px-6 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${m.membership_level === 'diamond' ? 'bg-blue-100 text-blue-700' : m.membership_level === 'gold' ? 'bg-yellow-100 text-yellow-700' : m.membership_level === 'silver' ? 'bg-gray-200 text-gray-700' : 'bg-gray-100 text-gray-500'}">${LEVEL_MAP[m.membership_level] || '普通'}</span></td>
       <td class="px-6 py-4"><span class="font-medium ${m.credit_score >= 80 ? 'text-green-600' : m.credit_score >= 60 ? 'text-yellow-600' : 'text-red-600'}">${m.credit_score || 60}</span></td>

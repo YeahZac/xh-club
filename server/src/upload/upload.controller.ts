@@ -8,6 +8,7 @@ import {
   UploadedFile,
   Query,
   UseGuards,
+  HttpCode,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadService } from './upload.service';
@@ -91,6 +92,21 @@ export class UploadController {
     }
 
     const result = await this.uploadService.uploadDocument(file);
+    return {
+      code: 200,
+      msg: 'Upload successful',
+      data: result,
+    };
+  }
+
+  /** 管理端：登记小程序/控制台云存储 fileID */
+  @Post('from-cloud')
+  @HttpCode(200)
+  async fromCloud(@Body() body: { fileID?: string; filename?: string }) {
+    if (!body?.fileID?.trim()) {
+      throw new Error('fileID is required');
+    }
+    const result = await this.uploadService.registerCloudFile(body.fileID.trim(), body.filename);
     return {
       code: 200,
       msg: 'Upload successful',
@@ -190,6 +206,24 @@ export class MemberUploadController {
       throw new Error('No file uploaded');
     }
     const result = await this.uploadService.uploadImage(file, 'member');
+    return {
+      code: 200,
+      msg: 'Upload successful',
+      data: result,
+    };
+  }
+
+  /**
+   * 小程序 callContainer 场景：先 wx.cloud.uploadFile，再登记为业务可用 URL
+   * （callContainer 无法直接传 multipart 大图）
+   */
+  @Post('from-cloud')
+  @HttpCode(200)
+  async fromCloud(@Body() body: { fileID?: string; filename?: string }) {
+    if (!body?.fileID?.trim()) {
+      throw new Error('fileID is required');
+    }
+    const result = await this.uploadService.registerCloudFile(body.fileID.trim(), body.filename);
     return {
       code: 200,
       msg: 'Upload successful',

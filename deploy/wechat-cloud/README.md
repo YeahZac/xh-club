@@ -76,32 +76,37 @@
 
 ## 小程序端配置
 
-部署到微信云托管后，小程序调用后端 API 的方式需要调整：
+部署到微信云托管后，**推荐使用 callContainer**（免配服务器域名）：
 
-### 方式一：使用云托管 SDK（推荐）
+### 方式一：使用云托管 callContainer（已接入项目 Network）
 
-```javascript
-// 小程序端调用云托管 API
-wx.cloud.callContainer({
-  config: {
-    env: '你的云托管环境ID'
-  },
-  path: '/api/events',
-  method: 'GET',
-  header: {
-    'X-WX-SERVICE': 'xinghe-server'
-  },
-  success(res) {
-    console.log(res.data)
-  }
-})
+环境变量（根目录 `.env`）：
+
+```bash
+TARO_APP_WX_CLOUD_ENV=prod-d6g34e4cna470ab7e
+TARO_APP_WX_CLOUD_SERVICE=xh-server
 ```
 
-### 方式二：使用云托管提供的域名
+小程序端 [`src/network.ts`](../../src/network.ts) 在微信环境下会自动：
 
-云托管部署成功后会提供一个域名（如 `https://xxx.ap-shanghai.tcb.qcloud.la`），你可以：
-1. 在小程序后台把这个域名加到 **「服务器域名」** 白名单
-2. 或者直接用 `wx.request` 调用
+1. `Taro.cloud.init` + `callContainer` 调用 `/api/*`（请求头带 `X-WX-SERVICE`）
+2. 上传：先 `wx.cloud.uploadFile` 到对象存储，再 `POST /api/upload/member/from-cloud` 换业务 URL
+
+因此 **无需** 在公众平台配置 request / uploadFile 合法域名。
+
+请确认：
+
+- 云托管环境已绑定小程序 AppID
+- 服务名与 `TARO_APP_WX_CLOUD_SERVICE` 一致
+- 公众平台「基础库最低版本」≥ `2.23.0`
+
+### 方式二：使用云托管域名（非 callContainer 场景）
+
+- **内网域名**（当前项目 `PROJECT_DOMAIN`）：`http://vfvpilcv.xh-server.rp2kla7i.0y09mxrz.com`  
+  仅云托管内网/微信侧可达，浏览器公网一般无法直接访问。
+- **公网域名**（仅测试/对外 H5）：如 `https://xxx.sh.run.tcloudbase.com`，需在小程序后台配置服务器域名白名单。
+
+小程序业务请求请优先使用方式一 callContainer，无需也不应依赖公网域名。
 
 ---
 

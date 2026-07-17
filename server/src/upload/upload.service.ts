@@ -614,6 +614,69 @@ export class UploadService {
     return this.uploadFile(file, folder);
   }
 
+  /**
+   * 登记小程序 wx.cloud.uploadFile 产生的 cloud:// fileID，返回与 uploadImage 一致的结构
+   */
+  async registerCloudFile(fileID: string, filename?: string): Promise<{
+    fileId: string;
+    url: string;
+    canonicalUrl: string;
+    fileName: string;
+    size: number;
+    mimeType: string;
+    reused?: boolean;
+  }> {
+    await this.ensureCOSInitialized();
+
+    const info = extractCosObjectInfo(fileID);
+    if (!info?.key) {
+      throw new Error('无效的云文件 ID');
+    }
+
+    const bucket = info.bucket || this.bucket;
+    const region = info.region || this.region;
+    if (!this.cos || !bucket) {
+      throw new Error('云存储未初始化');
+    }
+
+    const headOnce = () =>
+      new Promise<boolean>((resolve) => {
+        this.cos!.headObject(
+          { Bucket: bucket, Region: region, Key: info.key },
+          (err) => resolve(!err),
+        );
+      });
+
+    let exists = await headOnce();
+    if (!exists) {
+      await new Promise((r) => setTimeout(r, 400));
+      exists = await headOnce();
+      if (!exists) {
+        this.logger.warn(`云文件尚未在 COS 可见: ${fileID} -> ${info.key}`);
+      }
+    }
+
+    const canonicalUrl = this.buildCanonicalUrl(info.key, bucket, region);
+    const signedUrl = await this.signMediaUrl(fileID);
+    const fileName = filename || info.key.split('/').pop() || 'file';
+    const ext = this.getExtension(fileName);
+    const mimeType = IMAGE_EXTS.has(ext)
+      ? `image/${ext === 'jpg' ? 'jpeg' : ext}`
+      : VIDEO_EXTS.has(ext)
+        ? `video/${ext}`
+        : 'application/octet-stream';
+
+    return {
+      fileId: fileID,
+      url: signedUrl || canonicalUrl,
+      canonicalUrl,
+      fileName,
+      size: 0,
+      mimeType,
+      reused: true,
+    };
+  }
+
   /** 上传内容视频 */
   async uploadVideo(file: Express.Multer.File, folder: string = 'videos') {
     const allowedTypes = ['video/mp4', 'video/webm', 'video/quicktime'];

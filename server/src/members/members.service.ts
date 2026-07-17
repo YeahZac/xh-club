@@ -120,8 +120,24 @@ export class MembersService {
   /** 更新会员档案 */
   async updateProfile(id: string, dto: any) {
     console.log('[MembersService] updateProfile - id:', id)
+
+    const { data: current } = await this.client()
+      .from('members')
+      .select('id, name, avatar')
+      .eq('id', id)
+      .single()
+    if (!current) throw new HttpException('会员不存在', HttpStatus.NOT_FOUND)
+
+    // 微信头像/昵称锁定：已有值后不允许再改
+    if (dto.name !== undefined) {
+      throw new HttpException('昵称来自微信授权，不可修改', HttpStatus.BAD_REQUEST)
+    }
+    if (dto.avatar !== undefined && current.avatar) {
+      throw new HttpException('头像来自微信授权，不可修改', HttpStatus.BAD_REQUEST)
+    }
+
+    // name 由微信授权写入后锁定，禁止业务侧自行修改昵称
     const allowedFields = [
-      'name',
       'avatar',
       'gender',
       'birthday',
