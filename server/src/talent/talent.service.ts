@@ -342,7 +342,12 @@ export class TalentService {
     }
     if (dto.photo_url !== undefined) assign('photo_url', normalizeOptionalImage(dto.photo_url))
     if (dto.card_image_url !== undefined) assign('card_image_url', normalizeOptionalImage(dto.card_image_url))
-    if (dto.avatar_url !== undefined) assign('avatar_url', normalizeOptionalImage(dto.avatar_url))
+    if (dto.avatar_url !== undefined) {
+      assign('avatar_url', normalizeOptionalImage(dto.avatar_url))
+    } else if (dto.photo_url !== undefined && !existing.avatar_url) {
+      // 后台仅改职业照时，补齐空头像字段
+      assign('avatar_url', normalizeOptionalImage(dto.photo_url))
+    }
     if (dto.status !== undefined) {
       if (!TALENT_STATUSES.includes(dto.status)) {
         throw new HttpException('状态无效', HttpStatus.BAD_REQUEST)
