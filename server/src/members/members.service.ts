@@ -167,7 +167,7 @@ export class MembersService {
     }
     const { data, error } = await this.client()
       .from('members')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update({ ...updates, updated_at: new Date() })
       .eq('id', id)
       .select()
       .single()

@@ -6,6 +6,20 @@
 import { getPool } from './mysql-client'
 import { RowDataPacket, ResultSetHeader } from 'mysql2'
 
+/** MySQL DATETIME/TIMESTAMP 不接受带 Z 的 ISO 字符串，统一转成 Date 交给 mysql2 */
+function toMysqlParam(value: any): any {
+  if (value instanceof Date) return value
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.test(value)) {
+    const parsed = new Date(value)
+    if (!Number.isNaN(parsed.getTime())) return parsed
+  }
+  return value
+}
+
+function mapMysqlParams(values: any[]): any[] {
+  return values.map(toMysqlParam)
+}
+
 class QueryBuilder {
   private tableName: string
   private conditions: string[] = []
@@ -259,7 +273,7 @@ class InsertBuilder {
       for (const item of this.data) {
         const fields = Object.keys(item)
         const placeholders = fields.map(() => '?').join(', ')
-        const values = Object.values(item)
+        const values = mapMysqlParams(Object.values(item))
 
         const sql = `INSERT INTO ${this.tableName} (${fields.join(', ')}) VALUES (${placeholders})`
         const [result] = await pool.query(sql, values) as [ResultSetHeader, any]
@@ -352,7 +366,7 @@ class UpdateBuilder {
 
       for (const [key, value] of Object.entries(this.data)) {
         setClauses.push(`${key} = ?`)
-        setValues.push(value)
+        setValues.push(toMysqlParam(value))
       }
 
       if (setClauses.length === 0) {
