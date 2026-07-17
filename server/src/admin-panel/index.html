@@ -4465,11 +4465,10 @@ async function loadTalents() {
     return
   }
   document.getElementById('talentTableBody').innerHTML = list.map((item) => {
-    // 优先展示用户提交的职业照/头像，再回退会员微信头像
     const avatar = item.avatar_url || item.photo_url || item.member_avatar || ''
     const avatarHtml = avatar
-      ? `<img src="${escapeHtml(avatar)}" class="w-10 h-10 rounded-full object-cover" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='flex')"><div class="w-10 h-10 rounded-full bg-navy-100 text-navy-700 items-center justify-center text-sm font-bold" style="display:none">${escapeHtml((item.real_name || '?')[0])}</div>`
-      : `<div class="w-10 h-10 rounded-full bg-navy-100 text-navy-700 flex items-center justify-center text-sm font-bold">${escapeHtml((item.real_name || '?')[0])}</div>`
+      ? `<img src="${escapeHtml(avatar)}" class="w-10 h-12 rounded-lg object-cover" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='flex')"><div class="w-10 h-12 rounded-lg bg-navy-100 text-navy-700 items-center justify-center text-sm font-bold" style="display:none">${escapeHtml((item.real_name || '?')[0])}</div>`
+      : `<div class="w-10 h-12 rounded-lg bg-navy-100 text-navy-700 flex items-center justify-center text-sm font-bold">${escapeHtml((item.real_name || '?')[0])}</div>`
     return `
     <tr class="hover:bg-gray-50">
       <td class="px-6 py-4">
@@ -4523,8 +4522,8 @@ async function showTalentModal(id) {
             <label class="block text-sm font-medium text-gray-700 mb-1">头像</label>
             <div class="flex items-start gap-3">
               ${(item.avatar_url || item.photo_url)
-                ? `<img src="${escapeHtml(item.avatar_url || item.photo_url)}" class="w-16 h-16 rounded-xl object-cover border border-gray-100" alt="">`
-                : `<div class="w-16 h-16 rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center text-xs">无图</div>`}
+                ? `<img src="${escapeHtml(item.avatar_url || item.photo_url)}" class="w-16 h-20 rounded-lg object-cover border border-gray-100" alt="">`
+                : `<div class="w-16 h-20 rounded-lg bg-gray-100 text-gray-400 flex items-center justify-center text-xs">无图</div>`}
               <div class="flex-1 flex items-center gap-3">
                 <input id="talAvatar" value="${escapeHtml(item.avatar_url || item.photo_url || '')}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
                 ${mediaSelectBtn('talAvatar', { type: 'image' })}

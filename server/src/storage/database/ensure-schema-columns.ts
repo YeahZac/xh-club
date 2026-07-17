@@ -217,6 +217,39 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   },
+  {
+    name: 'invitation_records',
+    sql: `CREATE TABLE IF NOT EXISTS invitation_records (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      inviter_id INT NOT NULL,
+      invitee_id INT NOT NULL,
+      invitation_code VARCHAR(32) NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      reward_points INT DEFAULT 0,
+      reward_contribution INT DEFAULT 0,
+      accepted_at TIMESTAMP NULL,
+      rewarded_at TIMESTAMP NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_inviter_id (inviter_id),
+      INDEX idx_invitee_id (invitee_id),
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
+  {
+    name: 'invitation_rewards',
+    sql: `CREATE TABLE IF NOT EXISTS invitation_rewards (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      record_id BIGINT NOT NULL,
+      member_id INT NOT NULL,
+      reward_type VARCHAR(32) NOT NULL,
+      reward_value INT NOT NULL,
+      rule_id INT NULL,
+      description VARCHAR(255) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_member_id (member_id),
+      INDEX idx_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
 ]
 
 function isDuplicateColumnError(message?: string): boolean {

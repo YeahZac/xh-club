@@ -3,6 +3,7 @@ import * as https from 'https'
 import { queryOne, queryExecute } from '@/storage/database/mysql-client'
 import { signAuthToken } from './jwt'
 import { PointsEngineService } from '@/points/points-engine.service'
+import { InvitationEngineService } from '@/invitation/invitation-engine.service'
 
 interface WeChatSessionResponse {
   openid?: string
@@ -29,11 +30,15 @@ export interface WxLoginInput {
   nickname?: string
   phoneCode?: string
   phoneCloudId?: string
+  inviteCode?: string
 }
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly pointsEngine: PointsEngineService) {}
+  constructor(
+    private readonly pointsEngine: PointsEngineService,
+    private readonly invitationEngine: InvitationEngineService,
+  ) {}
 
   async wxLogin(input: WxLoginInput) {
     try {
@@ -83,6 +88,7 @@ export class AuthService {
 
         params.push(memberId)
         await queryExecute(`UPDATE members SET ${updates.join(', ')} WHERE id = ?`, params)
+        await this.tryBindInviteCode(memberId, input.inviteCode)
         return this.buildLoginResult(memberId, openid)
       }
 
@@ -95,6 +101,7 @@ export class AuthService {
            avatar = COALESCE(avatar, ?), updated_at = NOW() WHERE id = ?`,
           [openid, safeName, safeAvatar || null, memberId],
         )
+        await this.tryBindInviteCode(memberId, input.inviteCode)
         return this.buildLoginResult(memberId, openid)
       }
 
@@ -109,11 +116,26 @@ export class AuthService {
       )
 
       const newMember = await queryOne('SELECT id, wx_openid FROM members WHERE wx_openid = ?', [openid])
-      return this.buildLoginResult((newMember as any)?.id, (newMember as any)?.wx_openid)
+      const memberId = (newMember as any)?.id
+      if (memberId) {
+        await this.tryBindInviteCode(memberId, input.inviteCode)
+      }
+      return this.buildLoginResult(memberId, (newMember as any)?.wx_openid)
     } catch (error) {
       console.error('[AuthService] wxLogin error:', JSON.stringify(error))
       console.error('[AuthService] wxLogin error details:', error?.message, error?.cause)
       throw error
+    }
+  }
+
+  private async tryBindInviteCode(memberId: string | number, inviteCodeRaw?: string) {
+    const inviteCode = String(inviteCodeRaw || '').trim()
+    if (!inviteCode || !memberId) return null
+    try {
+      return await this.invitationEngine.bindReferrerOnLogin(memberId, inviteCode)
+    } catch (error) {
+      console.warn('[AuthService] bind invite code failed:', error)
+      return null
     }
   }
 

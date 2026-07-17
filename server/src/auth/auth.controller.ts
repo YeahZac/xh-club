@@ -25,6 +25,7 @@ export class AuthController {
       nickname?: string
       phoneCode?: string
       phoneCloudId?: string
+      inviteCode?: string
     },
     @Req() req: any,
     @Headers() headers: Record<string, string>,
@@ -45,6 +46,7 @@ export class AuthController {
       nickname: dto.nickname || '',
       phoneCode: dto.phoneCode || '',
       phoneCloudId: dto.phoneCloudId || '',
+      inviteCode: dto.inviteCode || '',
     })
     return { code: 200, msg: '登录成功', data: result }
   }
