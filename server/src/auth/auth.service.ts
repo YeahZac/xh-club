@@ -152,21 +152,62 @@ export class AuthService {
       return await response.json()
     } catch (error: any) {
       // 本地调试等场景再试 HTTPS（忽略自签，仅作兜底）
-      if (String(error?.cause?.code || error?.code || '').includes('CERT') || String(error?.message || '').includes('fetch failed')) {
-        console.warn('[AuthService] HTTP 微信接口失败，尝试 HTTPS 兜底', error?.cause?.code || error?.message)
-        const agent = new https.Agent({ rejectUnauthorized: false })
-        const response = await fetch(url.replace(/^http:\/\//i, 'https://'), {
-          ...init,
-          // @ts-expect-error undici/node fetch agent
-          agent,
-        } as any)
-        if (!response.ok) {
-          throw new HttpException('微信服务暂不可用', HttpStatus.BAD_GATEWAY)
-        }
-        return await response.json()
+      const errCode = String(error?.cause?.code || error?.code || '')
+      const errMsg = String(error?.message || '')
+      if (errCode.includes('CERT') || errMsg.includes('fetch failed') || errMsg.includes('certificate')) {
+        console.warn('[AuthService] HTTP 微信接口失败，尝试 HTTPS 兜底', errCode || errMsg)
+        return await this.weixinFetchHttpsInsecure(url.replace(/^http:\/\//i, 'https://'), init)
       }
       throw error
     }
+  }
+
+  /** HTTPS 兜底：忽略自签证书（仅云托管/代理异常时使用） */
+  private weixinFetchHttpsInsecure(url: string, init?: RequestInit): Promise<any> {
+    return new Promise((resolve, reject) => {
+      try {
+        const parsed = new URL(url)
+        const body = typeof init?.body === 'string' ? init.body : init?.body ? JSON.stringify(init.body) : undefined
+        const headers: Record<string, string> = {
+          ...(init?.headers as Record<string, string> | undefined),
+        }
+        if (body && !headers['content-type'] && !headers['Content-Type']) {
+          headers['content-type'] = 'application/json'
+        }
+        const req = https.request(
+          {
+            protocol: parsed.protocol,
+            hostname: parsed.hostname,
+            port: parsed.port || 443,
+            path: `${parsed.pathname}${parsed.search}`,
+            method: (init?.method || 'GET').toUpperCase(),
+            headers,
+            rejectUnauthorized: false,
+          },
+          (res) => {
+            const chunks: Buffer[] = []
+            res.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+            res.on('end', () => {
+              const text = Buffer.concat(chunks).toString('utf8')
+              if ((res.statusCode || 500) >= 400) {
+                reject(new HttpException('微信服务暂不可用', HttpStatus.BAD_GATEWAY))
+                return
+              }
+              try {
+                resolve(JSON.parse(text))
+              } catch (e) {
+                reject(e)
+              }
+            })
+          },
+        )
+        req.on('error', reject)
+        if (body) req.write(body)
+        req.end()
+      } catch (e) {
+        reject(e)
+      }
+    })
   }
 
   private async exchangeCodeForOpenid(code: string): Promise<string> {
