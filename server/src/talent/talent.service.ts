@@ -229,6 +229,7 @@ export class TalentService {
     }
 
     const payload = this.validateApplicationPayload(dto, false)
+    const avatarUrl = payload.avatar_url || payload.photo_url || null
     await queryExecute(
       `INSERT INTO talent_applications
         (member_id, real_name, contact, photo_url, industry_tags, experience, card_image_url, avatar_url, status)
@@ -241,7 +242,7 @@ export class TalentService {
         JSON.stringify(payload.industry_tags),
         payload.experience || null,
         payload.card_image_url || null,
-        payload.avatar_url || null,
+        avatarUrl,
       ],
     )
     return this.getMine(memberId)
@@ -261,6 +262,7 @@ export class TalentService {
       avatar_url: dto.avatar_url !== undefined ? dto.avatar_url : existing.avatar_url,
     }
     const payload = this.validateApplicationPayload(merged, false)
+    const avatarUrl = payload.avatar_url || payload.photo_url || null
 
     await queryExecute(
       `UPDATE talent_applications SET
@@ -275,7 +277,7 @@ export class TalentService {
         JSON.stringify(payload.industry_tags),
         payload.experience || null,
         payload.card_image_url || null,
-        payload.avatar_url || null,
+        avatarUrl,
         memberId,
       ],
     )

@@ -142,6 +142,7 @@ const TalentSettlePage = () => {
         real_name: realName.trim(),
         contact: contact.trim(),
         photo_url: photoUrl,
+        avatar_url: photoUrl,
         card_image_url: cardImageUrl || null,
         experience: experience.trim(),
         industry_tags: selectedTags,
