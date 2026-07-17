@@ -97,6 +97,12 @@ export default defineConfig<'vite'>(async (merge, _env) => {
           process.env.COZE_PROJECT_DOMAIN_DEFAULT ||
           '',
       ),
+      WX_CLOUD_ENV: JSON.stringify(
+        process.env.TARO_APP_WX_CLOUD_ENV || process.env.WX_CLOUD_ENV || '',
+      ),
+      WX_CLOUD_SERVICE: JSON.stringify(
+        process.env.TARO_APP_WX_CLOUD_SERVICE || process.env.WX_CLOUD_SERVICE || '',
+      ),
       TARO_ENV: JSON.stringify(process.env.TARO_ENV),
     },
     copy: {

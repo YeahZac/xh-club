@@ -42,6 +42,9 @@ pnpm-debug.log*
 # Preview files
 .preview
 
+# 微信开发者工具本地私有配置
+project.private.config.json
+
 .cozeproj/reduction
 node-compile-cache/
 .codegraph

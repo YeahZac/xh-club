@@ -1,6 +1,8 @@
 /// <reference types="@tarojs/taro" />
 
 declare const PROJECT_DOMAIN: string | undefined;
+declare const WX_CLOUD_ENV: string | undefined;
+declare const WX_CLOUD_SERVICE: string | undefined;
 declare const TARO_ENV: "weapp" | "h5" | undefined;
 
 declare module '*.png';

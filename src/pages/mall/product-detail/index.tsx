@@ -1,14 +1,12 @@
 import { useState, useEffect } from "react"
 import { View, Text, ScrollView, Image } from "@tarojs/components"
 import Taro from "@tarojs/taro"
-import {
-  ShoppingCart, Share2, Minus, Plus, ChevronLeft, Package
-} from "lucide-react-taro"
-import { Card, CardContent } from "@/components/ui/card"
+import { ShoppingCart, Share2, Minus, Plus, ChevronLeft, Package } from "lucide-react-taro"
 import { Button } from "@/components/ui/button"
 import { RichHtml } from "@/components/rich-html"
 import { Network } from "@/network"
 import { addToCart } from "@/lib/mall-cart"
+import { ensureLogin } from "@/lib/auth"
 
 interface Product {
   id: string
@@ -68,19 +66,9 @@ const ProductDetailPage = () => {
   const canAfford = product ? userPoints >= product.points_price * quantity : false
   const totalPoints = product ? product.points_price * quantity : 0
 
-  const ensureLogin = () => {
-    const memberId = Taro.getStorageSync("member_id")
-    const token = Taro.getStorageSync("member_token")
-    if (!memberId || !token) {
-      Taro.showToast({ title: "请先登录", icon: "none" })
-      return false
-    }
-    return true
-  }
-
-  const handleAddCart = () => {
+  const handleAddCart = async () => {
     if (!product || product.stock <= 0) return
-    if (!ensureLogin()) return
+    if (!(await ensureLogin())) return
     addToCart({
       product_id: product.id,
       name: product.name,
@@ -92,9 +80,9 @@ const ProductDetailPage = () => {
     Taro.showToast({ title: "已加入购物车", icon: "success" })
   }
 
-  const handleBuyNow = () => {
+  const handleBuyNow = async () => {
     if (!product || product.stock <= 0) return
-    if (!ensureLogin()) return
+    if (!(await ensureLogin())) return
     if (!canAfford) {
       Taro.showToast({ title: "积分不足", icon: "none" })
       return
@@ -124,7 +112,7 @@ const ProductDetailPage = () => {
 
   if (loading) {
     return (
-      <View className="flex justify-center items-center h-screen bg-gray-50">
+      <View className="flex justify-center items-center h-screen bg-[#F7F5F1]">
         <Text className="text-gray-400 text-sm">加载中...</Text>
       </View>
     )
@@ -132,90 +120,103 @@ const ProductDetailPage = () => {
 
   if (!product) {
     return (
-      <View className="flex flex-col justify-center items-center h-screen bg-gray-50">
+      <View className="flex flex-col justify-center items-center h-screen bg-[#F7F5F1]">
         <Text className="text-gray-400 text-sm">商品不存在</Text>
         <Button variant="outline" className="mt-4" onClick={() => Taro.navigateBack()}>
-          返回
+          <Text>返回</Text>
         </Button>
       </View>
     )
   }
 
   return (
-    <ScrollView scrollY className="h-screen bg-gray-50">
-      <View className="relative">
-        <Image
-          src={product.image_url}
-          className="w-full aspect-square"
-          mode="aspectFill"
-        />
-        <View
-          className="absolute top-4 left-4 bg-black bg-opacity-30 rounded-full p-2"
-          onClick={() => Taro.navigateBack()}
-        >
-          <ChevronLeft size={20} color="#fff" />
-        </View>
-        <View
-          className="absolute top-4 right-4 bg-black bg-opacity-30 rounded-full p-2"
-          onClick={() => Taro.navigateTo({ url: "/pages/mall/orders/index" })}
-        >
-          <Package size={18} color="#fff" />
-        </View>
-      </View>
-
-      <View className="bg-white px-4 py-5">
-        <Text className="block text-xl font-bold text-gray-900">
-          {product.name}
-        </Text>
-        <View className="flex items-baseline gap-2 mt-4">
-          <Text className="text-[#C9A96E] text-3xl font-bold">
-            {product.points_price}
-          </Text>
-          <Text className="text-[#C9A96E] text-sm">积分</Text>
-        </View>
-        <View className="flex items-center gap-4 mt-4 text-sm text-gray-500">
-          <Text>库存 {product.stock}</Text>
-          <Text>已售 {product.sales_count || 0}</Text>
-          <Text>可用积分 {userPoints}</Text>
-        </View>
-      </View>
-
-      <Card className="mx-4 mt-4">
-        <CardContent className="p-4">
-          <Text className="block text-base font-semibold text-gray-900 mb-3">
-            购买数量
-          </Text>
-          <View className="flex items-center gap-3">
-            <View
-              className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center"
-              onClick={() => quantity > 1 && setQuantity(quantity - 1)}
-            >
-              <Minus size={16} color="#6b7280" />
-            </View>
-            <Text className="text-base font-medium w-10 text-center">{quantity}</Text>
-            <View
-              className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center"
-              onClick={() => quantity < product.stock && setQuantity(quantity + 1)}
-            >
-              <Plus size={16} color="#6b7280" />
-            </View>
-            <Text className="text-sm text-gray-500 ml-2">合计 {totalPoints} 积分</Text>
+    <View className="h-screen bg-white">
+      <ScrollView scrollY className="h-screen">
+        {/* 全宽主图，无圆角、无边距 */}
+        <View className="relative w-full">
+          <Image
+            src={product.image_url}
+            className="w-full aspect-square"
+            mode="aspectFill"
+          />
+          <View
+            className="absolute top-3 left-3 w-9 h-9 rounded-full bg-black/35 flex items-center justify-center"
+            onClick={() => Taro.navigateBack()}
+          >
+            <ChevronLeft size={20} color="#fff" />
           </View>
-        </CardContent>
-      </Card>
+          <View
+            className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/35 flex items-center justify-center"
+            onClick={() => Taro.navigateTo({ url: "/pages/mall/orders/index" })}
+          >
+            <Package size={17} color="#fff" />
+          </View>
+          {product.stock <= 0 ? (
+            <View className="absolute inset-0 bg-black/40 flex items-center justify-center">
+              <Text className="text-white text-base font-medium">已售罄</Text>
+            </View>
+          ) : null}
+        </View>
 
-      <Card className="mx-4 mt-4 mb-4">
-        <CardContent className="p-4">
-          <Text className="block text-base font-semibold text-gray-900 mb-3">
-            商品详情
+        {/* 信息区：用间距分层，少用线框卡片 */}
+        <View className="px-4 pt-5 pb-2">
+          <Text className="block text-xl font-bold text-[#1A1D2E] leading-snug">
+            {product.name}
           </Text>
+          <View className="flex flex-row items-baseline mt-3">
+            <Text className="text-[#C9A96E] text-3xl font-bold leading-none">
+              {product.points_price}
+            </Text>
+            <Text className="text-[#C9A96E] text-sm ml-1.5">积分</Text>
+          </View>
+          <View className="flex flex-row items-center mt-3 gap-4">
+            <Text className="block text-xs text-gray-400">库存 {product.stock}</Text>
+            <Text className="block text-xs text-gray-400">已兑 {product.sales_count || 0}</Text>
+            <Text className="block text-xs text-gray-400">可用 {userPoints}</Text>
+          </View>
+        </View>
+
+        <View className="h-2 bg-[#F7F5F1]" />
+
+        <View className="px-4 py-5">
+          <Text className="block text-sm font-semibold text-[#1A1D2E] mb-3">兑换数量</Text>
+          <View className="flex flex-row items-center justify-between">
+            <View className="flex flex-row items-center gap-3">
+              <View
+                className={`w-9 h-9 rounded-full flex items-center justify-center ${
+                  quantity > 1 ? "bg-[#F0EDE7]" : "bg-gray-100"
+                }`}
+                onClick={() => quantity > 1 && setQuantity(quantity - 1)}
+              >
+                <Minus size={16} color={quantity > 1 ? "#1B2A4A" : "#9CA3AF"} />
+              </View>
+              <Text className="text-base font-semibold text-[#1A1D2E] w-8 text-center">{quantity}</Text>
+              <View
+                className={`w-9 h-9 rounded-full flex items-center justify-center ${
+                  quantity < product.stock ? "bg-[#F0EDE7]" : "bg-gray-100"
+                }`}
+                onClick={() => quantity < product.stock && setQuantity(quantity + 1)}
+              >
+                <Plus size={16} color={quantity < product.stock ? "#1B2A4A" : "#9CA3AF"} />
+              </View>
+            </View>
+            <Text className="block text-sm text-gray-500">
+              合计 <Text className="text-[#C9A96E] font-semibold">{totalPoints}</Text> 积分
+            </Text>
+          </View>
+        </View>
+
+        <View className="h-2 bg-[#F7F5F1]" />
+
+        <View className="px-4 pt-5 pb-28">
+          <Text className="block text-sm font-semibold text-[#1A1D2E] mb-3">商品详情</Text>
           <RichHtml
             html={product.description}
             className="text-sm"
             emptyText="暂无商品图文详情"
           />
-        </CardContent>
-      </Card>
+        </View>
+      </ScrollView>
 
       <View
         style={{
@@ -225,39 +226,47 @@ const ProductDetailPage = () => {
           right: 0,
           display: "flex",
           flexDirection: "row",
-          gap: "8px",
-          padding: "12px",
-          paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+          alignItems: "center",
+          gap: "10px",
+          padding: "10px 16px",
+          paddingBottom: "calc(10px + env(safe-area-inset-bottom))",
           backgroundColor: "#fff",
-          borderTop: "1px solid #e5e5e5",
+          boxShadow: "0 -6px 24px rgba(27,42,74,0.06)",
           zIndex: 100,
         }}
       >
-        <View style={{ flexShrink: 0 }}>
-          <Button variant="outline" onClick={handleShare}>
-            <Share2 size={16} color="#666" className="mr-1" />
-            分享
-          </Button>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Button variant="outline" className="w-full" onClick={handleAddCart} disabled={product.stock <= 0}>
-            <ShoppingCart size={16} color="#666" className="mr-1" />
-            加购物车
-          </Button>
+        <View
+          className="w-11 h-11 rounded-full bg-[#F7F5F1] flex items-center justify-center"
+          onClick={handleShare}
+        >
+          <Share2 size={18} color="#1B2A4A" />
         </View>
         <View style={{ flex: 1 }}>
           <Button
-            className="w-full bg-[#1B2A4A]"
+            variant="outline"
+            className="w-full h-11 rounded-full border-[#E5E1D8]"
+            onClick={handleAddCart}
+            disabled={product.stock <= 0}
+          >
+            <View className="flex flex-row items-center justify-center gap-1.5">
+              <ShoppingCart size={16} color="#1B2A4A" />
+              <Text className="text-sm text-[#1B2A4A]">加购</Text>
+            </View>
+          </Button>
+        </View>
+        <View style={{ flex: 1.2 }}>
+          <Button
+            className="w-full h-11 rounded-full bg-[#1B2A4A]"
             disabled={!canAfford || product.stock <= 0}
             onClick={handleBuyNow}
           >
-            {product.stock <= 0 ? "已售罄" : canAfford ? "立即兑换" : "积分不足"}
+            <Text className="text-white text-sm font-semibold">
+              {product.stock <= 0 ? "已售罄" : canAfford ? "立即兑换" : "积分不足"}
+            </Text>
           </Button>
         </View>
       </View>
-
-      <View className="h-24" />
-    </ScrollView>
+    </View>
   )
 }
 

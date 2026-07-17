@@ -2,7 +2,7 @@
   "containerPort": 80,
   "dockerfilePath": "Dockerfile",
   "buildDir": "",
-  "minNum": 0,
+  "minNum": 1,
   "maxNum": 5,
   "cpu": 0.5,
   "mem": 1,
@@ -14,7 +14,10 @@
     "SUPABASE_SERVICE_ROLE_KEY": "",
     "JWT_SECRET": "xh-club-jwt-secret-change-in-production",
     "ADMIN_USERNAME": "admin",
-    "ADMIN_PASSWORD": "admin123"
+    "ADMIN_PASSWORD": "admin123",
+    "PROJECT_DOMAIN": "http://vfvpilcv.xh-server.rp2kla7i.0y09mxrz.com",
+    "WX_APP_ID": "",
+    "WX_APP_SECRET": ""
   },
   "customLogs": "stdout",
   "initialDelaySeconds": 10,

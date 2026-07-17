@@ -8,6 +8,7 @@ import {
   initializeH5ErrorHandling,
 } from './h5-error-boundary';
 import { IS_H5_ENV } from './env';
+import { ensureCloudReady } from '@/network';
 
 export const Preset = ({ children }: PropsWithChildren) => {
   if (IS_H5_ENV) {
@@ -17,6 +18,11 @@ export const Preset = ({ children }: PropsWithChildren) => {
   useLaunch(() => {
     devDebug();
     injectH5Styles();
+    if (!IS_H5_ENV) {
+      void ensureCloudReady().catch((error) => {
+        console.warn('[Preset] cloud init skipped/failed', error);
+      });
+    }
   });
 
   if (IS_H5_ENV) {

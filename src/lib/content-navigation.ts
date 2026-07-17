@@ -23,7 +23,7 @@ export const normalizeDetailType = (type?: string): ContentDetailType | '' => {
 export const openContentDetail = (type: string | undefined, id: string | number | undefined) => {
   const targetId = pickId(id)
   if (!targetId) {
-    Taro.showToast({ title: '内容不存在', icon: 'none' })
+    Taro.showToast({ title: '跳转目标未配置', icon: 'none' })
     return
   }
 
@@ -33,12 +33,25 @@ export const openContentDetail = (type: string | undefined, id: string | number 
     return
   }
 
+  const fail = (err?: { errMsg?: string }) => {
+    console.error('[导航] navigateTo 失败:', detailType, targetId, err)
+    Taro.showToast({ title: '页面跳转失败', icon: 'none' })
+  }
+
   if (detailType === 'product') {
-    Taro.navigateTo({ url: `/pages/mall/product-detail/index?id=${targetId}` })
+    Taro.navigateTo({
+      url: `/pages/mall/product-detail/index?id=${targetId}`,
+      success: () => console.log('[导航] navigateTo 成功:', detailType, targetId),
+      fail,
+    })
     return
   }
 
-  Taro.navigateTo({ url: `/pages/content-detail/index?type=${detailType}&id=${targetId}` })
+  Taro.navigateTo({
+    url: `/pages/content-detail/index?type=${detailType}&id=${targetId}`,
+    success: () => console.log('[导航] navigateTo 成功:', detailType, targetId),
+    fail,
+  })
 }
 
 export const openExternalUrl = (url: string) => {

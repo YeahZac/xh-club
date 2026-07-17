@@ -8,7 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { isDisplayableImageUrl } from '@/lib/media-url'
 import { Network } from '@/network'
+import { ensureLogin } from '@/lib/auth'
 
 interface IndustryItem {
   id: string | number
@@ -29,9 +31,6 @@ interface TalentApplication {
   status: 'pending' | 'approved' | 'rejected'
   reject_reason?: string
 }
-
-const isCloudStorageImageUrl = (url?: string) =>
-  !!url && /^https:\/\/[^/]*(?:\.myqcloud\.com|\.tcb\.qcloud\.la)/i.test(url)
 
 const STATUS_META = {
   pending: { label: '审核中', color: 'bg-amber-50 text-amber-700', tip: '资料已提交，审核期间可修改后重新提交' },
@@ -60,11 +59,8 @@ const TalentSettlePage = () => {
   const bootstrap = async () => {
     setLoading(true)
     try {
-      const memberId = Taro.getStorageSync('member_id')
-      const token = Taro.getStorageSync('member_token')
-      if (!memberId || !token) {
-        Taro.showToast({ title: '请先登录', icon: 'none' })
-        setTimeout(() => Taro.navigateBack(), 800)
+      if (!(await ensureLogin(''))) {
+        setTimeout(() => Taro.navigateBack(), 400)
         return
       }
       const [industryRes, mineRes] = await Promise.all([
@@ -236,12 +232,12 @@ const TalentSettlePage = () => {
         {showDetail ? (
           <View className="px-4 py-4 pb-10">
             <Card className="shadow-sm border-0 overflow-hidden">
-              {isCloudStorageImageUrl(application.photo_url) && (
+              {isDisplayableImageUrl(application.photo_url) && (
                 <Image src={application.photo_url} mode="aspectFill" className="w-full aspect-[4/3]" />
               )}
               <CardContent className="p-5">
                 <View className="flex flex-row items-center gap-3 mb-4">
-                  {isCloudStorageImageUrl(displayAvatar) ? (
+                  {isDisplayableImageUrl(displayAvatar) ? (
                     <Image src={displayAvatar!} mode="aspectFill" className="w-14 h-14 rounded-full" />
                   ) : (
                     <View className="w-14 h-14 rounded-full bg-[#1B2A4A] flex items-center justify-center">
@@ -268,7 +264,7 @@ const TalentSettlePage = () => {
                     </Text>
                   </View>
                 )}
-                {isCloudStorageImageUrl(application.card_image_url) && (
+                {isDisplayableImageUrl(application.card_image_url) && (
                   <View>
                     <Text className="block text-sm font-semibold text-[#1A1D2E] mb-2">个人名片</Text>
                     <Image src={application.card_image_url!} mode="widthFix" className="w-full rounded-xl" />
@@ -311,7 +307,7 @@ const TalentSettlePage = () => {
                     className="rounded-xl border border-dashed border-gray-300 bg-gray-50 overflow-hidden"
                     onClick={() => uploadImage('photo')}
                   >
-                    {isCloudStorageImageUrl(photoUrl) ? (
+                    {isDisplayableImageUrl(photoUrl) ? (
                       <Image src={photoUrl} mode="aspectFill" className="w-full aspect-[4/3]" />
                     ) : (
                       <View className="flex flex-col items-center justify-center py-10">
@@ -365,7 +361,7 @@ const TalentSettlePage = () => {
                     className="rounded-xl border border-dashed border-gray-300 bg-gray-50 overflow-hidden"
                     onClick={() => uploadImage('card')}
                   >
-                    {isCloudStorageImageUrl(cardImageUrl) ? (
+                    {isDisplayableImageUrl(cardImageUrl) ? (
                       <Image src={cardImageUrl} mode="widthFix" className="w-full" />
                     ) : (
                       <View className="flex flex-col items-center justify-center py-8">

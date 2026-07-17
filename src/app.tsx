@@ -1,8 +1,8 @@
-import { PropsWithChildren } from 'react';
-import { LucideTaroProvider } from 'lucide-react-taro';
-import '@/app.css';
-import { Toaster } from '@/components/ui/toast';
-import { Preset } from './presets';
+import { PropsWithChildren } from 'react'
+import { LucideTaroProvider } from 'lucide-react-taro'
+import '@/app.css'
+import { Toaster } from '@/components/ui/toast'
+import { Preset } from './presets'
 
 const App = ({ children }: PropsWithChildren) => {
   return (
@@ -10,7 +10,7 @@ const App = ({ children }: PropsWithChildren) => {
       <Preset>{children}</Preset>
       <Toaster />
     </LucideTaroProvider>
-  );
-};
+  )
+}
 
-export default App;
+export default App
