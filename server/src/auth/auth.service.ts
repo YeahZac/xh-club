@@ -18,24 +18,43 @@ export class AuthService {
   async wxLogin(code: string, avatar: string, nickname: string) {
     try {
       const openid = await this.exchangeCodeForOpenid(code)
+      const safeName = String(nickname || '').trim() || '微信用户'
+      const safeAvatar = String(avatar || '').trim()
 
-      // Try to find existing member by openid
-      const existing = await queryOne('SELECT id FROM members WHERE wx_openid = ?', [openid])
+      const existing = await queryOne(
+        'SELECT id, name, avatar FROM members WHERE wx_openid = ?',
+        [openid],
+      )
+
       if (existing) {
+        const memberId = (existing as any).id
         const updates: string[] = ['updated_at = NOW()']
-        const params: any[] = [(existing as any).id]
-        if (avatar) { updates.push('avatar = ?'); params.splice(0, 0, avatar) }
-        if (nickname) { updates.push('name = ?'); params.splice(0, 0, nickname) }
+        const params: any[] = []
+
+        // 仅在资料为空时用微信授权信息补齐，避免覆盖已同步资料
+        if (safeName && !(existing as any).name) {
+          updates.push('name = ?')
+          params.push(safeName)
+        }
+        if (safeAvatar && !(existing as any).avatar) {
+          updates.push('avatar = ?')
+          params.push(safeAvatar)
+        }
+
+        params.push(memberId)
         await queryExecute(`UPDATE members SET ${updates.join(', ')} WHERE id = ?`, params)
-        return this.buildLoginResult((existing as any).id, openid)
+        return this.buildLoginResult(memberId, openid)
       }
 
-      // Create new member
       const phone = `wx_${openid.substring(0, 20)}`
       await queryExecute(
-        `INSERT INTO members (name, avatar, wx_openid, phone, password_hash, membership_level, member_type, status, credit_score, active_score, contribution_score, total_points, available_points)
-         VALUES (?, ?, ?, ?, ?, 'normal', 'individual', 'active', 100, 0, 0, 0, 0)`,
-        [nickname || '微信用户', avatar || '', openid, phone, 'wx_oauth_no_password']
+        `INSERT INTO members (
+           name, avatar, wx_openid, phone, password_hash,
+           membership_level, member_type, status,
+           credit_score, active_score, contribution_score, total_points, available_points,
+           join_source
+         ) VALUES (?, ?, ?, ?, ?, 'normal', 'individual', 'active', 100, 0, 0, 0, 0, 'wechat')`,
+        [safeName, safeAvatar || null, openid, phone, 'wx_oauth_no_password'],
       )
 
       const newMember = await queryOne('SELECT id, wx_openid FROM members WHERE wx_openid = ?', [openid])
@@ -53,10 +72,19 @@ export class AuthService {
         .onMemberActive(memberId)
         .catch((err) => console.warn('[AuthService] points onMemberActive failed', err))
     }
+
+    const profile = await queryOne(
+      `SELECT id, name, avatar, phone, wx_openid, membership_level, member_type, status,
+              available_points, total_points, credit_score, company_name, company_position
+       FROM members WHERE id = ?`,
+      [memberId],
+    )
+
     return {
       member_id: memberId,
       openid,
       token: signAuthToken({ sub: String(memberId), type: 'member' }),
+      profile: profile || null,
     }
   }
 
@@ -64,7 +92,7 @@ export class AuthService {
     const appId = process.env.WX_APP_ID
     const appSecret = process.env.WX_APP_SECRET
     if (!appId || !appSecret) {
-      throw new HttpException('微信登录配置不完整', HttpStatus.SERVICE_UNAVAILABLE)
+      throw new HttpException('微信登录配置不完整，请配置 WX_APP_ID / WX_APP_SECRET', HttpStatus.SERVICE_UNAVAILABLE)
     }
 
     const params = new URLSearchParams({

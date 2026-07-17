@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { RichHtml } from '@/components/rich-html'
 import { isDisplayableImageUrl } from '@/lib/media-url'
 import { Network } from '@/network'
+import { ensureLogin } from '@/lib/auth'
 
 type ContentType = 'article' | 'project' | 'event' | 'business' | 'talent'
 
@@ -208,18 +209,8 @@ const ContentDetailPage = () => {
   const scoreDimensions = Array.isArray(detail?.score_dimensions) ? detail.score_dimensions : []
   const formFields = parseFormFields(detail?.form_fields)
 
-  const ensureLoggedIn = () => {
-    const memberId = Taro.getStorageSync('member_id')
-    const token = Taro.getStorageSync('member_token')
-    if (!memberId || !token) {
-      Taro.showToast({ title: '请先登录', icon: 'none' })
-      return false
-    }
-    return true
-  }
-
-  const openRoadshowRegister = () => {
-    if (!ensureLoggedIn()) return
+  const openRoadshowRegister = async () => {
+    if (!(await ensureLogin())) return
     if (formFields.length > 0) {
       setRegisterAnswers({})
       setRegisterOpen(true)
@@ -229,7 +220,7 @@ const ContentDetailPage = () => {
   }
 
   const submitRoadshowRegister = async (answers: Record<string, string>) => {
-    if (!detail?.id || !ensureLoggedIn()) return
+    if (!detail?.id || !(await ensureLogin())) return
     setSubmitting(true)
     try {
       const response = await Network.request({
@@ -255,7 +246,7 @@ const ContentDetailPage = () => {
   }
 
   const submitRoadshowScores = async () => {
-    if (!detail?.id || !ensureLoggedIn()) return
+    if (!detail?.id || !(await ensureLogin())) return
     const scores = Object.entries(scoreDraft)
       .filter(([, stars]) => stars > 0)
       .map(([key, stars]) => {
@@ -291,7 +282,7 @@ const ContentDetailPage = () => {
 
   const goRegister = async () => {
     if (!detail?.id) return
-    if (!ensureLoggedIn()) return
+    if (!(await ensureLogin())) return
     const fields = detail.form_fields
     const hasFields = Array.isArray(fields)
       ? fields.length > 0

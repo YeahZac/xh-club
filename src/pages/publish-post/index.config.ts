@@ -1,3 +1,3 @@
 export default definePageConfig({
-  navigationBarTitleText: '发布动态',
+  navigationBarTitleText: '发布商机',
 })

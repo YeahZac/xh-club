@@ -14,7 +14,10 @@
     "SUPABASE_SERVICE_ROLE_KEY": "",
     "JWT_SECRET": "xh-club-jwt-secret-change-in-production",
     "ADMIN_USERNAME": "admin",
-    "ADMIN_PASSWORD": "admin123"
+    "ADMIN_PASSWORD": "admin123",
+    "WX_APP_ID": "wx1c89abf32e4b6084",
+    "WX_APP_SECRET": "35bdb81d4868b3afc0b8957998001fac",
+    "PROJECT_DOMAIN": "https://xh-server-278826-6-1451142205.sh.run.tcloudbase.com"
   },
   "customLogs": "stdout",
   "initialDelaySeconds": 10,

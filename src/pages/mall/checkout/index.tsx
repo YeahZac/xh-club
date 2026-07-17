@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Network } from "@/network"
 import { CartItem, clearCart, getCartTotalPoints } from "@/lib/mall-cart"
+import { ensureLogin } from "@/lib/auth"
 
 const ADDRESS_KEY = "mall_shipping_address"
 
@@ -59,6 +60,7 @@ const MallCheckoutPage = () => {
 
   const handlePay = async () => {
     if (submitting) return
+    if (!(await ensureLogin())) return
     if (!contactName.trim() || !contactPhone.trim() || !shippingAddress.trim()) {
       Taro.showToast({ title: "请完善收货信息", icon: "none" })
       return

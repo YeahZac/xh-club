@@ -123,25 +123,7 @@ export default defineConfig<'vite'>(async (merge, _env) => {
             }
           },
         },
-        {
-          name: 'hmr-config-plugin',
-          config() {
-            if (!process.env.PROJECT_DOMAIN) {
-              return;
-            }
-            return {
-              server: {
-                hmr: {
-                  overlay: true,
-                  path: '/hot/vite-hmr',
-                  port: 6000,
-                  clientPort: 443,
-                  timeout: 30000,
-                },
-              },
-            };
-          },
-        },
+        // 使用 Vite 默认 HMR，避免注入固定 localhost:443 导致连接失败
         ...(isH5
           ? []
           : [

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { RichHtml } from '@/components/rich-html'
 import { Network } from '@/network'
+import { ensureLogin, isLoggedIn } from '@/lib/auth'
 
 interface InviteeItem {
   id: string | number
@@ -59,10 +60,9 @@ const InvitePage = () => {
   }, [])
 
   const loadData = async () => {
-    const memberId = Taro.getStorageSync('member_id')
-    const token = Taro.getStorageSync('member_token')
-    const loggedIn = !!(memberId && token)
+    const loggedIn = isLoggedIn()
     setNeedLogin(!loggedIn)
+    const memberId = Taro.getStorageSync('member_id')
 
     try {
       setLoading(true)
@@ -102,10 +102,14 @@ const InvitePage = () => {
     }
   }
 
-  const copyInviteCode = () => {
+  const copyInviteCode = async () => {
     const code = dashboard?.invite_code
     if (!code) {
-      Taro.showToast({ title: needLogin ? '请先登录' : '暂无推荐码', icon: 'none' })
+      if (needLogin) {
+        if (await ensureLogin()) await loadData()
+        return
+      }
+      Taro.showToast({ title: '暂无推荐码', icon: 'none' })
       return
     }
     Taro.setClipboardData({
@@ -114,8 +118,8 @@ const InvitePage = () => {
     })
   }
 
-  const goLogin = () => {
-    Taro.switchTab({ url: '/pages/profile/index' })
+  const goLogin = async () => {
+    if (await ensureLogin()) await loadData()
   }
 
   if (loading) {

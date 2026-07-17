@@ -7,9 +7,9 @@ export class AuthController {
 
   @Post('wx-login')
   @HttpCode(200)
-  async wxLogin(@Body() dto: { code: string; avatar: string; nickname: string }) {
+  async wxLogin(@Body() dto: { code: string; avatar?: string; nickname?: string }) {
     if (!dto.code?.trim()) throw new BadRequestException('缺少微信登录 code')
-    const result = await this.authService.wxLogin(dto.code, dto.avatar, dto.nickname)
+    const result = await this.authService.wxLogin(dto.code, dto.avatar || '', dto.nickname || '')
     return { code: 200, msg: '登录成功', data: result }
   }
 }
