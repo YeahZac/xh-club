@@ -19,6 +19,7 @@ import { TalentModule } from './talent/talent.module'
 import { InvitationModule } from './invitation/invitation.module'
 import { PointsModule } from './points/points.module'
 import { DealApplicationsModule } from './deal-applications/deal-applications.module'
+import { SearchModule } from './search/search.module'
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { DealApplicationsModule } from './deal-applications/deal-applications.mo
     InvitationModule,
     PointsModule,
     DealApplicationsModule,
+    SearchModule,
   ],
   controllers: [AppController],
   providers: [AppService],
