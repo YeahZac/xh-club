@@ -78,10 +78,8 @@ export class DealApplicationsService {
 
   async projectOptions() {
     return queryRows(
-      `SELECT id, title, category
-       FROM business_opportunities
-       WHERE status = 'published'
-         AND (audit_status = 'approved' OR audit_status IS NULL OR audit_status = '')
+      `SELECT id, title, industry AS category, status
+       FROM projects
        ORDER BY created_at DESC`,
     )
   }
@@ -89,12 +87,10 @@ export class DealApplicationsService {
   async create(memberId: string | number, dto: any) {
     const payload = this.validate(dto)
     const project = await queryOne(
-      `SELECT id, title FROM business_opportunities
-       WHERE id = ? AND status = 'published'
-         AND (audit_status = 'approved' OR audit_status IS NULL OR audit_status = '')`,
+      `SELECT id, title FROM projects WHERE id = ?`,
       [payload.businessId],
     )
-    if (!project) throw new HttpException('所选项目不存在或未上架', HttpStatus.BAD_REQUEST)
+    if (!project) throw new HttpException('所选项目不存在', HttpStatus.BAD_REQUEST)
 
     const result = await queryExecute(
       `INSERT INTO project_deal_applications
@@ -127,7 +123,7 @@ export class DealApplicationsService {
       throw new HttpException('已打款记录不可修改', HttpStatus.BAD_REQUEST)
     }
     const payload = this.validate({ ...existing, ...dto })
-    const project = await queryOne('SELECT id, title FROM business_opportunities WHERE id = ?', [payload.businessId])
+    const project = await queryOne('SELECT id, title FROM projects WHERE id = ?', [payload.businessId])
     if (!project) throw new HttpException('所选项目不存在', HttpStatus.BAD_REQUEST)
 
     await queryExecute(

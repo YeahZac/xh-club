@@ -169,6 +169,10 @@
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
             邀请奖励
           </a>
+          <a onclick="switchPage('memberInvitations')" class="sidebar-item flex items-center gap-3 px-5 py-2.5 pl-12 cursor-pointer text-sm text-navy-300 transition hover:text-white" data-nav="memberInvitations">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            会员邀请
+          </a>
           <a onclick="switchPage('pointsRules')" class="sidebar-item flex items-center gap-3 px-5 py-2.5 pl-12 cursor-pointer text-sm text-navy-300 transition hover:text-white" data-nav="pointsRules">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             积分规则
@@ -877,6 +881,45 @@
       </div>
     </div>
 
+    <!-- ====== 会员邀请记录 ====== -->
+    <div data-page="memberInvitations" class="p-8 fade-in">
+      <div class="bg-gradient-to-r from-navy-800 to-navy-700 rounded-2xl p-5 mb-6 text-white">
+        <h3 class="font-bold text-lg">会员邀请记录</h3>
+        <p class="text-sm text-white/80 mt-2 leading-relaxed">
+          记录小程序「邀请新会员」分享表单提交的信息：邀请人、被邀请人、邀请时间、表单内容，以及手机号是否已注册小程序。
+        </p>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div class="flex flex-wrap gap-3 mb-4">
+          <select id="memberInviteRegisteredFilter" onchange="loadMemberInvitations()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+            <option value="">全部注册状态</option>
+            <option value="1">已注册</option>
+            <option value="0">未注册</option>
+          </select>
+          <input id="memberInviteKeyword" onkeydown="if(event.key==='Enter')loadMemberInvitations()" placeholder="搜索姓名、手机号、推荐码、邀请人" class="px-4 py-2 border border-gray-200 rounded-xl text-sm w-80 outline-none">
+          <button onclick="loadMemberInvitations()" class="px-4 py-2 bg-navy-100 text-navy-700 rounded-xl text-sm">搜索</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-gray-500 border-b border-gray-100">
+                <th class="py-3 pr-3 font-medium">被邀请人</th>
+                <th class="py-3 pr-3 font-medium">手机号</th>
+                <th class="py-3 pr-3 font-medium">单位 / 职位</th>
+                <th class="py-3 pr-3 font-medium">邀请人</th>
+                <th class="py-3 pr-3 font-medium">推荐码</th>
+                <th class="py-3 pr-3 font-medium">注册状态</th>
+                <th class="py-3 font-medium">邀请时间</th>
+              </tr>
+            </thead>
+            <tbody id="memberInvitationsTableBody" class="divide-y divide-gray-50">
+              <tr><td colspan="7" class="py-8 text-center text-gray-400">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ====== 积分规则 ====== -->
     <div data-page="pointsRules" class="p-8 fade-in">
       <div class="bg-gradient-to-r from-navy-800 to-navy-700 rounded-2xl p-5 mb-6 text-white">
@@ -1406,10 +1449,10 @@ function switchPage(page) {
     const navItem = document.querySelector(`[data-nav="${page}"]`)
     if (navItem) navItem.classList.add('active')
   }
-  const titles = { dashboard: '数据看板', homepage: '首页管理', members: '会员管理', talents: '人才管理', events: '活动管理', projects: '项目管理', business: '商机管理', dealApplications: '项目成交记录', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', 'project-edit': '编辑项目', industries: '行业配置', memberLevels: '会员等级', invitations: '邀请奖励', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
+  const titles = { dashboard: '数据看板', homepage: '首页管理', members: '会员管理', talents: '人才管理', events: '活动管理', projects: '项目管理', business: '商机管理', dealApplications: '项目成交记录', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', 'project-edit': '编辑项目', industries: '行业配置', memberLevels: '会员等级', invitations: '邀请奖励', memberInvitations: '会员邀请', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
   document.getElementById('pageTitle').textContent = titles[page] || page
   // 加载数据（role-edit页面不加载数据）
-  const loaders = { dashboard: loadDashboard, homepage: loadHomepage, members: loadMembers, talents: loadTalents, events: loadEvents, projects: loadProjects, business: loadBusiness, dealApplications: loadDealApplications, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, industries: loadIndustries, memberLevels: loadMemberLevels, invitations: loadInvitationRules, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
+  const loaders = { dashboard: loadDashboard, homepage: loadHomepage, members: loadMembers, talents: loadTalents, events: loadEvents, projects: loadProjects, business: loadBusiness, dealApplications: loadDealApplications, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, industries: loadIndustries, memberLevels: loadMemberLevels, invitations: loadInvitationRules, memberInvitations: loadMemberInvitations, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
   if (loaders[page]) loaders[page]()
 }
 
@@ -4244,6 +4287,7 @@ const PERMISSION_PAGES = [
   { key: 'industries', name: '行业配置' },
   { key: 'memberLevels', name: '会员等级' },
   { key: 'invitations', name: '邀请奖励' },
+  { key: 'memberInvitations', name: '会员邀请' },
   { key: 'pointsRules', name: '积分规则' },
   { key: 'contributions', name: '贡献值规则' },
   { key: 'departments', name: '部门管理' },
@@ -4426,7 +4470,7 @@ function togglePagePerms(page, checked) {
 }
 
 async function updateRole(id) {
-  const pages = ['dashboard','members','talents','business','events','projects','banners','articles','mall','org','admins','roles','industries','memberLevels','invitations','pointsRules','contributions','departments','config']
+  const pages = ['dashboard','members','talents','business','events','projects','banners','articles','mall','org','admins','roles','industries','memberLevels','invitations','memberInvitations','pointsRules','contributions','departments','config']
   const permissions = {}
   
   pages.forEach(page => {
@@ -5023,6 +5067,37 @@ async function deleteInvitationRule(id) {
   const res = await api(`/admin/invitation-rules/${id}`, { method: 'DELETE' })
   if (res.code === 200) { toast('已删除'); loadInvitationRules(); }
   else toast(res.msg || '删除失败', 'error')
+}
+
+async function loadMemberInvitations() {
+  const keyword = document.getElementById('memberInviteKeyword')?.value || ''
+  const registered = document.getElementById('memberInviteRegisteredFilter')?.value || ''
+  const qs = new URLSearchParams()
+  if (keyword.trim()) qs.set('keyword', keyword.trim())
+  if (registered !== '') qs.set('is_registered', registered)
+  const res = await api(`/admin/member-invitations?${qs.toString()}`)
+  const body = document.getElementById('memberInvitationsTableBody')
+  if (!body) return
+  const list = Array.isArray(res?.data) ? res.data : []
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-400">暂无邀请记录</td></tr>'
+    return
+  }
+  body.innerHTML = list.map((item) => {
+    const registeredLabel = item.is_registered
+      ? `<span class="px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700">已注册${item.registered_member_name ? ` · ${escapeHtml(item.registered_member_name)}` : ''}</span>`
+      : '<span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">未注册</span>'
+    const companyPos = [item.company_name, item.position].filter(Boolean).map(escapeHtml).join(' / ') || '-'
+    return `<tr>
+      <td class="py-3 pr-3 text-navy-800 font-medium">${escapeHtml(item.invitee_name || '-')}</td>
+      <td class="py-3 pr-3 text-gray-600">${escapeHtml(item.invitee_phone || '-')}</td>
+      <td class="py-3 pr-3 text-gray-600">${companyPos}</td>
+      <td class="py-3 pr-3 text-gray-600">${escapeHtml(item.inviter_name || '-')}${item.inviter_phone ? `<div class="text-xs text-gray-400">${escapeHtml(item.inviter_phone)}</div>` : ''}</td>
+      <td class="py-3 pr-3 text-gray-600">${escapeHtml(item.invite_code || '-')}</td>
+      <td class="py-3 pr-3">${registeredLabel}</td>
+      <td class="py-3 text-gray-500">${item.created_at ? escapeHtml(new Date(item.created_at).toLocaleString('zh-CN')) : '-'}</td>
+    </tr>`
+  }).join('')
 }
 
 // ===== 积分规则 =====

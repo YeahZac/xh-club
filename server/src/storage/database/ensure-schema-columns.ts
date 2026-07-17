@@ -278,6 +278,25 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       INDEX idx_deal_payment (payment_status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   },
+  {
+    name: 'member_invitations',
+    sql: `CREATE TABLE IF NOT EXISTS member_invitations (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      inviter_id INT NOT NULL,
+      invite_code VARCHAR(64) NOT NULL,
+      invitee_name VARCHAR(100) NOT NULL,
+      invitee_phone VARCHAR(20) NOT NULL,
+      company_name VARCHAR(255) NULL,
+      position VARCHAR(100) NULL,
+      is_registered TINYINT(1) NOT NULL DEFAULT 0,
+      registered_member_id INT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_member_invite_inviter (inviter_id),
+      INDEX idx_member_invite_phone (invitee_phone),
+      INDEX idx_member_invite_code (invite_code),
+      INDEX idx_member_invite_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
 ]
 
 function isDuplicateColumnError(message?: string): boolean {
