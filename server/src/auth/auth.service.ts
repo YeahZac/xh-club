@@ -140,18 +140,47 @@ export class AuthService {
   }
 
   /**
-   * 云托管推荐：用 HTTP 调 api.weixin.qq.com（开放接口服务），避免 HTTPS 自签证书错误
+   * 云托管推荐：用 HTTP 调 api.weixin.qq.com（开放接口服务），避免 HTTPS 自签证书错误。
+   * 需要 access_token 的接口：云托管可传空 access_token= 由平台注入；否则用 AppSecret 换取。
    */
+  private accessTokenCache: { token: string; expireAt: number } | null = null
+
   private async weixinFetch(url: string, init?: RequestInit): Promise<any> {
     const httpUrl = url.replace(/^https:\/\//i, 'http://')
     try {
       const response = await fetch(httpUrl, init)
-      if (!response.ok) {
-        throw new HttpException('微信服务暂不可用', HttpStatus.BAD_GATEWAY)
+      const text = await response.text()
+      let json: any = null
+      try {
+        json = text ? JSON.parse(text) : null
+      } catch {
+        json = null
       }
-      return await response.json()
+
+      if (!response.ok) {
+        console.error('[AuthService] weixinFetch HTTP error', {
+          url: httpUrl,
+          status: response.status,
+          body: text.slice(0, 500),
+        })
+        const tip =
+          json?.errmsg
+          || json?.message
+          || `微信接口 HTTP ${response.status}`
+        throw new HttpException(
+          String(tip).includes('access_token')
+            ? '微信 access_token 无效，请检查开放接口服务权限或 AppSecret'
+            : '微信服务暂不可用',
+          HttpStatus.BAD_GATEWAY,
+        )
+      }
+
+      if (json && typeof json.errcode === 'number' && json.errcode !== 0) {
+        console.error('[AuthService] weixinFetch biz error', { url: httpUrl, json })
+      }
+      return json
     } catch (error: any) {
-      // 本地调试等场景再试 HTTPS（忽略自签，仅作兜底）
+      if (error instanceof HttpException) throw error
       const errCode = String(error?.cause?.code || error?.code || '')
       const errMsg = String(error?.message || '')
       if (errCode.includes('CERT') || errMsg.includes('fetch failed') || errMsg.includes('certificate')) {
@@ -190,6 +219,11 @@ export class AuthService {
             res.on('end', () => {
               const text = Buffer.concat(chunks).toString('utf8')
               if ((res.statusCode || 500) >= 400) {
+                console.error('[AuthService] weixin HTTPS error', {
+                  url,
+                  status: res.statusCode,
+                  body: text.slice(0, 500),
+                })
                 reject(new HttpException('微信服务暂不可用', HttpStatus.BAD_GATEWAY))
                 return
               }
@@ -210,6 +244,56 @@ export class AuthService {
     })
   }
 
+  /** 获取接口调用凭据；云托管开放接口服务下也可先试空 token 由平台注入 */
+  private async getAccessToken(forceRefresh = false): Promise<string> {
+    if (
+      !forceRefresh
+      && this.accessTokenCache
+      && this.accessTokenCache.expireAt > Date.now() + 60_000
+    ) {
+      return this.accessTokenCache.token
+    }
+
+    const appId = process.env.WX_APP_ID
+    const appSecret = process.env.WX_APP_SECRET
+    if (!appId || !appSecret) {
+      throw new HttpException(
+        '微信登录配置不完整，请在云托管配置 WX_APP_ID / WX_APP_SECRET',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      )
+    }
+
+    const data = await this.weixinFetch(
+      `http://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${encodeURIComponent(appId)}&secret=${encodeURIComponent(appSecret)}`,
+    )
+
+    if (!data?.access_token) {
+      console.error('[AuthService] getAccessToken failed:', data)
+      const tip = data?.errcode
+        ? `获取微信凭据失败（${data.errcode}${data.errmsg ? `: ${data.errmsg}` : ''}）`
+        : '获取微信凭据失败，请检查 AppSecret 与开放接口服务'
+      throw new HttpException(tip, HttpStatus.BAD_GATEWAY)
+    }
+
+    this.accessTokenCache = {
+      token: String(data.access_token),
+      expireAt: Date.now() + (Number(data.expires_in || 7200) - 120) * 1000,
+    }
+    return this.accessTokenCache.token
+  }
+
+  private buildWeixinApiUrl(pathAndQuery: string, accessToken: string): string {
+    const base = pathAndQuery.startsWith('http')
+      ? pathAndQuery
+      : `http://api.weixin.qq.com${pathAndQuery.startsWith('/') ? '' : '/'}${pathAndQuery}`
+    const cleaned = base
+      .replace(/([?&])access_token=[^&]*/gi, '$1')
+      .replace(/\?&/, '?')
+      .replace(/[?&]$/, '')
+    const join = cleaned.includes('?') ? '&' : '?'
+    return `${cleaned}${join}access_token=${encodeURIComponent(accessToken)}`
+  }
+
   private async exchangeCodeForOpenid(code: string): Promise<string> {
     const appId = process.env.WX_APP_ID
     const appSecret = process.env.WX_APP_SECRET
@@ -226,7 +310,6 @@ export class AuthService {
       js_code: code,
       grant_type: 'authorization_code',
     })
-    // 优先 HTTP，规避云托管开放接口服务的自签证书问题
     const session = await this.weixinFetch(
       `http://api.weixin.qq.com/sns/jscode2session?${params}`,
     ) as WeChatSessionResponse
@@ -248,22 +331,44 @@ export class AuthService {
     return session.openid
   }
 
-  /** 新版手机号组件：detail.code */
+  /** 新版手机号组件：detail.code → getuserphonenumber（必须带 access_token） */
   private async exchangePhoneCode(phoneCode: string, _openid: string): Promise<string> {
-    const data = await this.weixinFetch(
-      'http://api.weixin.qq.com/wxa/business/getuserphonenumber',
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ code: phoneCode }),
-      },
-    ) as PhoneNumberResponse
+    const callApi = async (token: string) =>
+      (await this.weixinFetch(
+        this.buildWeixinApiUrl('/wxa/business/getuserphonenumber', token),
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ code: phoneCode }),
+        },
+      )) as PhoneNumberResponse
+
+    let data: PhoneNumberResponse
+    try {
+      // 优先用 AppSecret 换取真实 token（云托管开放接口 HTTP 通道）
+      const token = await this.getAccessToken()
+      data = await callApi(token)
+    } catch (error) {
+      // 兜底：部分环境下由云托管注入空 access_token
+      console.warn('[AuthService] credential phone lookup failed, try empty access_token', error)
+      data = await callApi('')
+    }
+
+    // token 失效时刷新重试一次
+    if (
+      data?.errcode === 40001
+      || data?.errcode === 40014
+      || data?.errcode === 42001
+    ) {
+      const token = await this.getAccessToken(true)
+      data = await callApi(token)
+    }
 
     const phone = data?.phone_info?.purePhoneNumber || data?.phone_info?.phoneNumber || ''
     if (!phone) {
       console.error('[AuthService] getuserphonenumber failed:', data)
       const tip = data?.errcode
-        ? `手机号授权失败（${data.errcode}）`
+        ? `手机号授权失败（${data.errcode}${data.errmsg ? `: ${data.errmsg}` : ''}）`
         : '手机号授权失败，请重试'
       throw new HttpException(tip, HttpStatus.BAD_REQUEST)
     }
@@ -272,8 +377,9 @@ export class AuthService {
 
   /** 旧版/云调用：cloudID → getopendata */
   private async exchangePhoneCloudId(cloudId: string, openid: string): Promise<string> {
+    const token = await this.getAccessToken()
     const data = await this.weixinFetch(
-      `http://api.weixin.qq.com/wxa/getopendata?openid=${encodeURIComponent(openid)}`,
+      this.buildWeixinApiUrl(`/wxa/getopendata?openid=${encodeURIComponent(openid)}`, token),
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
