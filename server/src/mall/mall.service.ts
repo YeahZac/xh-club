@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
 import { queryRows, queryOne, queryExecute, withTransaction } from '@/storage/database/mysql-client';
 import { ensureSchemaColumns } from '@/storage/database/ensure-schema-columns';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
@@ -42,22 +41,11 @@ export class MallService {
   constructor(
     private readonly uploadService: UploadService,
     private readonly pointsEngine: PointsEngineService,
-    private readonly moduleRef: ModuleRef,
+    private readonly invitationEngine: InvitationEngineService,
   ) {}
 
-  /** 运行时取邀请引擎，避免 MallModule 静态 import InvitationModule 形成循环依赖 */
-  private getInvitationEngine(): InvitationEngineService | null {
-    try {
-      return this.moduleRef.get(InvitationEngineService, { strict: false })
-    } catch {
-      return null
-    }
-  }
-
   private grantInviteMallReward(memberId: string | number, referenceId?: string | number) {
-    const engine = this.getInvitationEngine()
-    if (!engine) return
-    void engine
+    void this.invitationEngine
       .grantConditionRewards(memberId, 'invitee_mall_order', {
         description: '推荐会员完成商城兑换',
         referenceId,
