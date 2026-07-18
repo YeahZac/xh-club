@@ -213,6 +213,20 @@ export class MemberUploadController {
     };
   }
 
+  @Post('video')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 200 * 1024 * 1024 } }))
+  async uploadVideo(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+    const result = await this.uploadService.uploadVideo(file, 'member');
+    return {
+      code: 200,
+      msg: 'Upload successful',
+      data: result,
+    };
+  }
+
   /**
    * 小程序 callContainer 场景：先 wx.cloud.uploadFile，再登记为业务可用 URL
    * （callContainer 无法直接传 multipart 大图）

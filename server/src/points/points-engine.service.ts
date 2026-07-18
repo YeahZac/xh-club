@@ -76,7 +76,8 @@ export class PointsEngineService {
         try {
           const apps = await queryOne<RowDataPacket>(
             `SELECT COUNT(*) AS cnt FROM project_deal_applications
-             WHERE member_id = ? AND audit_status = 'approved'`,
+             WHERE member_id = ?
+               AND (is_deal = 1 OR deal_status = 'completed')`,
             [memberId],
           )
           dealApps = Number(apps?.cnt || 0)

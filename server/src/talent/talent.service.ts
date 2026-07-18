@@ -4,6 +4,7 @@ import { UploadService } from '@/upload/upload.service'
 import { assertCloudStorageImageUrl } from '@/utils/media-validators'
 import { PointsEngineService } from '@/points/points-engine.service'
 import { InvitationEngineService } from '@/invitation/invitation-engine.service'
+import { createNotification } from '@/common/notify'
 
 export const TALENT_STATUSES = ['pending', 'approved', 'rejected'] as const
 export type TalentStatus = (typeof TALENT_STATUSES)[number]
@@ -521,6 +522,26 @@ export class TalentService {
     await queryExecute(`UPDATE talent_applications SET ${updates.join(', ')} WHERE id = ?`, params)
     const result = await this.adminGetById(id)
     const memberId = (result as any)?.member_id
+    if (
+      memberId
+      && dto.status
+      && String(existing.status) !== String(dto.status)
+      && (dto.status === 'approved' || dto.status === 'rejected')
+    ) {
+      await createNotification({
+        memberId,
+        type: 'approval',
+        title: dto.status === 'approved' ? '人才入驻审核通过' : '人才入驻审核未通过',
+        content:
+          dto.status === 'approved'
+            ? `您的人才入驻申请「${(result as any).real_name || ''}」已通过审核`
+            : `您的人才入驻申请未通过审核${(result as any).reject_reason ? `：${(result as any).reject_reason}` : ''}`,
+        link: '/pages/talent-settle/index',
+        bizType: 'talent_audit',
+        bizId: id,
+        result: dto.status,
+      })
+    }
     if (dto.status === 'approved' && memberId) {
       void this.pointsEngine
         .evaluate(memberId, 'talent_settle', {

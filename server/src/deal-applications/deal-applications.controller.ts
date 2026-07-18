@@ -12,6 +12,11 @@ export class DealApplicationsController {
     return { code: 200, msg: 'success', data: await this.service.projectOptions() }
   }
 
+  @Get('members')
+  async members(@Query('keyword') keyword?: string) {
+    return { code: 200, msg: 'success', data: await this.service.memberOptions(keyword) }
+  }
+
   @Get('mine')
   async mine(@Req() request: any) {
     return { code: 200, msg: 'success', data: await this.service.listMine(request.user.sub) }
@@ -19,20 +24,38 @@ export class DealApplicationsController {
 
   @Get('mine/:id')
   async detail(@Param('id') id: string, @Req() request: any) {
-    return { code: 200, msg: 'success', data: await this.service.getMineById(id, request.user.sub) }
+    return { code: 200, msg: 'success', data: await this.service.getAccessibleById(id, request.user.sub) }
   }
 
   @Post()
   async create(@Req() request: any, @Body() body: any) {
-    return { code: 200, msg: '已提交审核', data: await this.service.create(request.user.sub, body) }
+    return { code: 200, msg: '已提交，等待负责人确认', data: await this.service.create(request.user.sub, body) }
   }
 
   @Put(':id')
   async update(@Param('id') id: string, @Req() request: any, @Body() body: any) {
     return {
       code: 200,
-      msg: '已重新提交审核',
+      msg: '已更新',
       data: await this.service.updateMine(id, request.user.sub, body),
+    }
+  }
+
+  @Put(':id/status')
+  async updateStatus(@Param('id') id: string, @Req() request: any, @Body() body: any) {
+    return {
+      code: 200,
+      msg: '状态已更新',
+      data: await this.service.updateStatuses(id, request.user.sub, body),
+    }
+  }
+
+  @Post(':id/confirm')
+  async confirm(@Param('id') id: string, @Req() request: any, @Body() body: any) {
+    return {
+      code: 200,
+      msg: '处理完成',
+      data: await this.service.ownerConfirm(id, request.user.sub, body),
     }
   }
 }
@@ -52,11 +75,20 @@ export class DealApplicationsAdminController {
     return { code: 200, msg: 'success', data: await this.service.adminGetById(id) }
   }
 
+  @Put(':id')
+  async update(@Param('id') id: string, @Body() body: any) {
+    return {
+      code: 200,
+      msg: '已保存',
+      data: await this.service.adminUpdate(id, body),
+    }
+  }
+
   @Post(':id/audit')
   async audit(@Param('id') id: string, @Req() request: any, @Body() body: any) {
     return {
       code: 200,
-      msg: '审核完成',
+      msg: '已更新',
       data: await this.service.audit(id, request.user.sub, body),
     }
   }

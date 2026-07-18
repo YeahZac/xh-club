@@ -17,6 +17,7 @@ import {
   formatPointsRuleRow,
   normalizePointsRuleDto,
 } from '@/points/points-rule.util'
+import { createNotification } from '@/common/notify'
 
 interface UserRow extends RowDataPacket {
   id: number
@@ -311,6 +312,16 @@ export class AdminService {
   async approveMember(id: string, approvedBy: string) {
     try {
       await queryExecute('UPDATE members SET status = "approved" WHERE id = ?', [id])
+      await createNotification({
+        memberId: id,
+        type: 'approval',
+        title: '会员审核通过',
+        content: '您的会员资料已通过审核，可正常使用平台功能',
+        link: '/pages/profile/index',
+        bizType: 'member_audit',
+        bizId: id,
+        result: 'approved',
+      })
       return { success: true }
     } catch (error) {
       console.error('[AdminService] approveMember error:', error)
@@ -321,6 +332,16 @@ export class AdminService {
   async rejectMember(id: string, reason: string) {
     try {
       await queryExecute('UPDATE members SET status = "rejected" WHERE id = ?', [id])
+      await createNotification({
+        memberId: id,
+        type: 'approval',
+        title: '会员审核未通过',
+        content: `您的会员资料未通过审核${reason ? `：${reason}` : ''}`,
+        link: '/pages/profile/index',
+        bizType: 'member_audit',
+        bizId: id,
+        result: 'rejected',
+      })
       return { success: true }
     } catch (error) {
       console.error('[AdminService] rejectMember error:', error)
@@ -576,9 +597,83 @@ export class AdminService {
   }
 
   /** ====== 项目管理 ====== */
+  private normalizeScoreDimensions(input: unknown): Array<{ id?: number; name: string; sort_order: number }> {
+    if (!Array.isArray(input)) return []
+    return input
+      .map((item, index) => ({
+        id: item?.id != null && Number(item.id) > 0 ? Number(item.id) : undefined,
+        name: String(item?.name || '').trim(),
+        sort_order: Number.isFinite(Number(item?.sort_order)) ? Number(item.sort_order) : index,
+      }))
+      .filter((item) => item.name)
+  }
+
+  private async syncProjectScoreDimensions(
+    projectId: string | number,
+    dimensions: Array<{ id?: number; name: string; sort_order: number }>,
+  ) {
+    const existing = await queryRows(
+      'SELECT id FROM project_score_dimensions WHERE project_id = ?',
+      [projectId],
+    )
+    const keepIds = new Set<number>()
+    for (const item of dimensions) {
+      if (item.id) {
+        const hit = existing.find((row: any) => Number(row.id) === Number(item.id))
+        if (hit) {
+          await queryExecute(
+            'UPDATE project_score_dimensions SET name = ?, sort_order = ? WHERE id = ? AND project_id = ?',
+            [item.name, item.sort_order, item.id, projectId],
+          )
+          keepIds.add(Number(item.id))
+          continue
+        }
+      }
+      const result = await queryExecute(
+        `INSERT INTO project_score_dimensions (project_id, name, sort_order) VALUES (?, ?, ?)`,
+        [projectId, item.name, item.sort_order],
+      )
+      keepIds.add(Number(result.insertId))
+    }
+    const removeIds = (existing || [])
+      .map((row: any) => Number(row.id))
+      .filter((id) => !keepIds.has(id))
+    if (removeIds.length) {
+      const placeholders = removeIds.map(() => '?').join(',')
+      await queryExecute(
+        `DELETE FROM project_scores WHERE project_id = ? AND dimension_id IN (${placeholders})`,
+        [projectId, ...removeIds],
+      )
+      await queryExecute(
+        `DELETE FROM project_score_dimensions WHERE project_id = ? AND id IN (${placeholders})`,
+        [projectId, ...removeIds],
+      )
+      const scoreAgg = await queryOne(
+        `SELECT AVG(stars) AS avg_score, COUNT(DISTINCT member_id) AS score_count
+         FROM project_scores WHERE project_id = ?`,
+        [projectId],
+      )
+      await queryExecute(
+        `UPDATE projects SET avg_score = ?, score_count = ?, updated_at = NOW() WHERE id = ?`,
+        [
+          Number(scoreAgg?.avg_score || 0).toFixed(2),
+          Number(scoreAgg?.score_count || 0),
+          projectId,
+        ],
+      )
+    }
+  }
+
   async getAllProjects(query: any) {
     try {
-      const rows = await queryRows('SELECT * FROM projects ORDER BY created_at DESC')
+      const rows = await queryRows(
+        `SELECT p.*,
+                (SELECT COUNT(*) FROM project_score_dimensions d WHERE d.project_id = p.id) AS dimension_count
+         FROM projects p
+         ORDER BY
+           CASE WHEN p.audit_status = 'pending' THEN 0 ELSE 1 END,
+           p.created_at DESC`,
+      )
       return this.uploadService.signRowsFields(rows, ['cover_image', 'video_url'])
     } catch (error) {
       console.error('[AdminService] getAllProjects error:', error)
@@ -590,7 +685,15 @@ export class AdminService {
     try {
       const row = await queryOne('SELECT * FROM projects WHERE id = ?', [id])
       if (!row) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
-      return this.uploadService.signRowFields(row, ['cover_image', 'video_url'])
+      const dimensions = await queryRows(
+        `SELECT id, project_id, name, sort_order
+         FROM project_score_dimensions
+         WHERE project_id = ?
+         ORDER BY sort_order ASC, id ASC`,
+        [id],
+      )
+      const signed = await this.uploadService.signRowFields(row, ['cover_image', 'video_url'])
+      return { ...signed, score_dimensions: dimensions || [] }
     } catch (error) {
       console.error('[AdminService] getProjectById error:', error)
       if (error instanceof HttpException) throw error
@@ -604,8 +707,9 @@ export class AdminService {
       const videoUrl = normalizeOptionalVideoUrl(dto.video_url)
       const result = await queryExecute(
         `INSERT INTO projects
-           (title, description, cover_image, video_url, industry, stage, amount_max, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (title, description, cover_image, video_url, industry, stage, amount_max, status,
+            audit_status, avg_score, score_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved', 0, 0)`,
         [
           dto.title,
           dto.description || null,
@@ -614,10 +718,14 @@ export class AdminService {
           dto.industry || null,
           dto.stage || 'seed',
           dto.amount_max || null,
-          dto.status || 'draft',
-        ]
+          dto.status || 'active',
+        ],
       )
-      return await queryOne('SELECT * FROM projects WHERE id = ?', [result.insertId])
+      const dimensions = this.normalizeScoreDimensions(dto.score_dimensions)
+      if (dimensions.length) {
+        await this.syncProjectScoreDimensions(result.insertId, dimensions)
+      }
+      return await this.getProjectById(String(result.insertId))
     } catch (error) {
       console.error('[AdminService] createProject error:', error)
       if (error instanceof HttpException) throw error
@@ -627,7 +735,7 @@ export class AdminService {
 
   async updateProject(id: string, dto: any) {
     try {
-      const existing = await queryOne('SELECT id FROM projects WHERE id = ?', [id])
+      const existing = await queryOne('SELECT * FROM projects WHERE id = ?', [id])
       if (!existing) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
 
       const updates: string[] = []
@@ -645,13 +753,59 @@ export class AdminService {
       if (dto.stage !== undefined) assign('stage', dto.stage || 'seed')
       if (dto.amount_max !== undefined) assign('amount_max', dto.amount_max || null)
       if (dto.status !== undefined) assign('status', dto.status || 'draft')
+      if (dto.audit_status !== undefined) {
+        const audit = String(dto.audit_status)
+        if (!['pending', 'approved', 'rejected'].includes(audit)) {
+          throw new HttpException('审核状态无效', HttpStatus.BAD_REQUEST)
+        }
+        assign('audit_status', audit)
+        if (audit === 'approved' && (dto.status === undefined || !dto.status)) {
+          assign('status', existing.status === 'draft' ? 'active' : existing.status)
+        }
+        if (audit === 'rejected') {
+          assign('reject_reason', String(dto.reject_reason || '').trim() || '未通过审核')
+        } else if (dto.reject_reason !== undefined) {
+          assign('reject_reason', String(dto.reject_reason || '').trim() || null)
+        }
+      } else if (dto.reject_reason !== undefined) {
+        assign('reject_reason', String(dto.reject_reason || '').trim() || null)
+      }
 
-      if (!updates.length) throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
-      params.push(id)
-      await queryExecute(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`, params)
-      const row = await queryOne('SELECT * FROM projects WHERE id = ?', [id])
-      if (!row) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
-      return this.uploadService.signRowFields(row, ['cover_image', 'video_url'])
+      if (updates.length) {
+        params.push(id)
+        await queryExecute(`UPDATE projects SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`, params)
+      }
+
+      if (dto.score_dimensions !== undefined) {
+        await this.syncProjectScoreDimensions(id, this.normalizeScoreDimensions(dto.score_dimensions))
+      }
+
+      const next = (await this.getProjectById(id)) as Record<string, any>
+      if (
+        dto.audit_status
+        && existing.submitter_id
+        && String(existing.audit_status) !== String(dto.audit_status)
+        && (dto.audit_status === 'approved' || dto.audit_status === 'rejected')
+      ) {
+        await createNotification({
+          memberId: existing.submitter_id,
+          type: 'approval',
+          title: dto.audit_status === 'approved' ? '项目审核通过' : '项目审核未通过',
+          content:
+            dto.audit_status === 'approved'
+              ? `您发布的项目「${next?.title || existing.title}」已通过审核`
+              : `您发布的项目「${next?.title || existing.title}」未通过审核${
+                  next?.reject_reason || existing.reject_reason
+                    ? `：${next?.reject_reason || existing.reject_reason}`
+                    : ''
+                }`,
+          link: `/pages/content-detail/index?type=project&id=${id}`,
+          bizType: 'project_audit',
+          bizId: id,
+          result: dto.audit_status,
+        })
+      }
+      return next
     } catch (error) {
       console.error('[AdminService] updateProject error:', error)
       if (error instanceof HttpException) throw error
@@ -659,8 +813,18 @@ export class AdminService {
     }
   }
 
+  async auditProject(id: string, dto: { audit_status: string; reject_reason?: string; status?: string }) {
+    return this.updateProject(id, {
+      audit_status: dto.audit_status,
+      reject_reason: dto.reject_reason,
+      status: dto.status,
+    })
+  }
+
   async deleteProject(id: string) {
     try {
+      await queryExecute('DELETE FROM project_scores WHERE project_id = ?', [id])
+      await queryExecute('DELETE FROM project_score_dimensions WHERE project_id = ?', [id])
       await queryExecute('DELETE FROM projects WHERE id = ?', [id])
       return { success: true }
     } catch (error) {

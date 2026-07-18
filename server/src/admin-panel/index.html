@@ -440,7 +440,8 @@
             <tr>
               <th class="px-6 py-3 text-left">项目名称</th>
               <th class="px-6 py-3 text-left">添加日期</th>
-              <th class="px-6 py-3 text-left">状态</th>
+              <th class="px-6 py-3 text-left">综合评分</th>
+              <th class="px-6 py-3 text-left">状态/审核</th>
               <th class="px-6 py-3 text-center">操作</th>
             </tr>
           </thead>
@@ -494,6 +495,25 @@
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">项目描述</label>
           <div id="pjEditDescEditor"></div>
+        </div>
+        <div class="pt-2">
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-sm font-medium text-gray-700">评分维度（可增删改，会员仅可评分一次）</label>
+            <button type="button" onclick="addProjectScoreDimension()" class="px-3 py-1.5 text-xs rounded-lg bg-navy-100 text-navy-700 hover:bg-navy-200">添加维度</button>
+          </div>
+          <div id="pjScoreDimensions" class="space-y-2"></div>
+          <p class="text-xs text-gray-400 mt-2">示例：商业模式、团队能力、市场前景。未配置维度时小程序不展示评分按钮。</p>
+        </div>
+        <div id="pjAuditBox" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p class="text-sm font-medium text-amber-800 mb-2">会员提交审核</p>
+          <div class="flex flex-wrap items-center gap-3">
+            <select id="pjEditAuditStatus" class="px-3 py-2 border border-amber-200 rounded-xl text-sm bg-white">
+              <option value="pending">待审核</option>
+              <option value="approved">通过</option>
+              <option value="rejected">拒绝</option>
+            </select>
+            <input id="pjEditRejectReason" class="flex-1 min-w-[220px] px-3 py-2 border border-amber-200 rounded-xl text-sm bg-white" placeholder="拒绝原因（拒绝时填写）">
+          </div>
         </div>
         <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
           <button onclick="switchPage('projects')" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">返回列表</button>
@@ -2122,6 +2142,8 @@ async function submitUpdateEvent(id) {
 }
 
 // ===== 项目管理 =====
+let _pjScoreDimensions = []
+
 function populateProjectEditSelects() {
   const stageSel = document.getElementById('pjEditStage')
   const industrySel = document.getElementById('pjEditIndustry')
@@ -2135,8 +2157,31 @@ function populateProjectEditSelects() {
   if (hint) hint.textContent = mediaHint('project')
 }
 
+function renderProjectScoreDimensions() {
+  const box = document.getElementById('pjScoreDimensions')
+  if (!box) return
+  if (!_pjScoreDimensions.length) {
+    box.innerHTML = '<p class="text-xs text-gray-400 py-2">暂无评分维度，可点击右上角添加</p>'
+    return
+  }
+  box.innerHTML = _pjScoreDimensions.map((item, index) => `
+    <div class="flex items-center gap-2">
+      <input value="${escapeHtml(item.name || '')}" oninput="_pjScoreDimensions[${index}].name=this.value"
+        class="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="维度名称，如：商业模式">
+      <button type="button" onclick="_pjScoreDimensions.splice(${index},1);renderProjectScoreDimensions()"
+        class="px-3 py-2 text-xs rounded-xl bg-red-50 text-red-600 hover:bg-red-100">删除</button>
+    </div>
+  `).join('')
+}
+
+function addProjectScoreDimension() {
+  _pjScoreDimensions.push({ name: '', sort_order: _pjScoreDimensions.length })
+  renderProjectScoreDimensions()
+}
+
 async function openProjectEditPage(id) {
   _editingProjectId = id || null
+  _pjScoreDimensions = []
   populateProjectEditSelects()
   document.getElementById('projectEditTitle').textContent = id ? '编辑项目' : '创建项目'
   document.getElementById('pjEditTitle').value = ''
@@ -2146,6 +2191,10 @@ async function openProjectEditPage(id) {
   document.getElementById('pjEditVideo').value = ''
   document.getElementById('pjEditIndustry').value = Object.keys(INDUSTRY_MAP)[0] || ''
   document.getElementById('pjEditAmount').value = ''
+  document.getElementById('pjEditAuditStatus').value = 'approved'
+  document.getElementById('pjEditRejectReason').value = ''
+  document.getElementById('pjAuditBox').classList.add('hidden')
+  renderProjectScoreDimensions()
   switchPage('project-edit')
   initRichEditor('pjEditDescEditor', '')
   if (!id) return
@@ -2163,11 +2212,23 @@ async function openProjectEditPage(id) {
   document.getElementById('pjEditVideo').value = p.video_url || ''
   document.getElementById('pjEditIndustry').value = p.industry || Object.keys(INDUSTRY_MAP)[0] || ''
   document.getElementById('pjEditAmount').value = p.amount_max ? Math.round(p.amount_max / 10000) : ''
+  document.getElementById('pjEditAuditStatus').value = p.audit_status || 'approved'
+  document.getElementById('pjEditRejectReason').value = p.reject_reason || ''
+  if (p.submitter_id || p.audit_status === 'pending' || p.audit_status === 'rejected') {
+    document.getElementById('pjAuditBox').classList.remove('hidden')
+  }
+  _pjScoreDimensions = Array.isArray(p.score_dimensions)
+    ? p.score_dimensions.map((d, i) => ({ id: d.id, name: d.name || '', sort_order: d.sort_order ?? i }))
+    : []
+  renderProjectScoreDimensions()
   initRichEditor('pjEditDescEditor', p.description || '')
 }
 
 async function saveProjectEdit() {
   if (!assertNoUploading()) return
+  const dimensions = _pjScoreDimensions
+    .map((item, index) => ({ id: item.id, name: String(item.name || '').trim(), sort_order: index }))
+    .filter((item) => item.name)
   const body = {
     title: document.getElementById('pjEditTitle').value,
     cover_image: document.getElementById('pjEditCover').value,
@@ -2177,6 +2238,16 @@ async function saveProjectEdit() {
     amount_max: parseInt(document.getElementById('pjEditAmount').value || '0', 10) * 10000 || null,
     description: getRichEditorHtml('pjEditDescEditor'),
     status: document.getElementById('pjEditStatus').value,
+    score_dimensions: dimensions,
+  }
+  const auditBox = document.getElementById('pjAuditBox')
+  if (auditBox && !auditBox.classList.contains('hidden')) {
+    body.audit_status = document.getElementById('pjEditAuditStatus').value
+    body.reject_reason = document.getElementById('pjEditRejectReason').value || null
+    if (body.audit_status === 'rejected' && !String(body.reject_reason || '').trim()) {
+      return toast('请填写拒绝原因', 'error')
+    }
+    if (body.audit_status === 'approved' && body.status === 'draft') body.status = 'active'
   }
   if (!body.title.trim()) return toast('请输入项目名称', 'error')
   if (!body.cover_image.trim()) return toast('项目封面图片为必填项', 'error')
@@ -2201,24 +2272,57 @@ async function loadProjects() {
   const tbody = document.getElementById('projectTableBody')
   if (!tbody) return
   if (!projects.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-gray-400">暂无项目</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-12 text-center text-gray-400">暂无项目</td></tr>'
     return
   }
-  tbody.innerHTML = projects.map(p => `
+  const auditMeta = {
+    pending: ['待审核', 'bg-yellow-100 text-yellow-700'],
+    approved: ['已通过', 'bg-green-100 text-green-700'],
+    rejected: ['未通过', 'bg-red-100 text-red-700'],
+  }
+  tbody.innerHTML = projects.map(p => {
+    const audit = auditMeta[p.audit_status] || [p.audit_status || '已通过', 'bg-gray-100 text-gray-500']
+    const scoreText = Number(p.score_count || 0) > 0
+      ? `${Number(p.avg_score || 0).toFixed(1)}（${p.score_count}人）`
+      : '暂无评分'
+    return `
     <tr class="border-t border-gray-50 hover:bg-gray-50/50">
       <td class="px-6 py-4">
         <p class="text-sm font-medium text-navy-800">${escapeHtml(p.title || '-')}</p>
-        <p class="text-xs text-gray-400 mt-0.5">${escapeHtml(INDUSTRY_MAP[p.industry] || p.industry || '')}${p.stage ? ' · ' + escapeHtml(STAGE_MAP[p.stage] || p.stage) : ''}</p>
+        <p class="text-xs text-gray-400 mt-0.5">${escapeHtml(INDUSTRY_MAP[p.industry] || p.industry || '')}${p.stage ? ' · ' + escapeHtml(STAGE_MAP[p.stage] || p.stage) : ''}${p.dimension_count ? ' · ' + p.dimension_count + '个评分维度' : ''}</p>
       </td>
       <td class="px-6 py-4 text-sm text-gray-600">${p.created_at ? new Date(p.created_at).toLocaleDateString('zh-CN') : '-'}</td>
+      <td class="px-6 py-4 text-sm text-gray-700">${escapeHtml(scoreText)}</td>
       <td class="px-6 py-4">
         <span class="text-xs px-2.5 py-1 rounded-full ${PROJECT_STATUS_COLORS[p.status] || 'bg-gray-100 text-gray-500'}">${PROJECT_STATUS_MAP[p.status] || p.status || '-'}</span>
+        <span class="ml-1 text-xs px-2.5 py-1 rounded-full ${audit[1]}">${audit[0]}</span>
       </td>
       <td class="px-6 py-4 text-center">
         <button onclick="openProjectEditPage('${p.id}')" class="px-3 py-1.5 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200">编辑</button>
+        ${p.audit_status === 'pending' ? `<button onclick="auditProjectQuick('${p.id}','approved')" class="ml-1 px-3 py-1.5 text-xs rounded-lg bg-green-100 text-green-700">通过</button><button onclick="auditProjectQuick('${p.id}','rejected')" class="ml-1 px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-700">拒绝</button>` : ''}
       </td>
-    </tr>
-  `).join('')
+    </tr>`
+  }).join('')
+}
+
+async function auditProjectQuick(id, status) {
+  let rejectReason = ''
+  if (status === 'rejected') {
+    rejectReason = prompt('请输入拒绝原因') || ''
+    if (!rejectReason.trim()) return toast('请填写拒绝原因', 'error')
+  } else if (!confirm('确定通过该项目审核？')) {
+    return
+  }
+  const res = await api(`/admin/projects/${id}/audit`, {
+    method: 'POST',
+    body: { audit_status: status, reject_reason: rejectReason, status: status === 'approved' ? 'active' : undefined },
+  })
+  if (res.code === 200) {
+    toast(status === 'approved' ? '已通过' : '已拒绝')
+    loadProjects()
+  } else {
+    toast(res.msg || '审核失败', 'error')
+  }
 }
 
 function showProjectModal() {
@@ -5597,9 +5701,9 @@ async function deleteDepartment(id) {
 
 // ===== 项目成交记录 =====
 const DEAL_AUDIT_META = {
-  pending: ['待审核', 'bg-yellow-100 text-yellow-700'],
-  approved: ['审核通过', 'bg-green-100 text-green-700'],
-  rejected: ['审核未通过', 'bg-red-100 text-red-700'],
+  pending: ['待负责人确认', 'bg-yellow-100 text-yellow-700'],
+  approved: ['负责人已同意', 'bg-green-100 text-green-700'],
+  rejected: ['负责人已拒绝', 'bg-red-100 text-red-700'],
 }
 
 async function loadDealApplications() {
@@ -5633,9 +5737,8 @@ async function loadDealApplications() {
         <td class="px-4 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${auditMeta[1]}">${auditMeta[0]}</span></td>
         <td class="px-4 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${paymentClass}">${item.payment_status === 'paid' ? '已打款' : '未打款'}</span></td>
         <td class="px-4 py-4 text-center">
-          <button onclick="showDealApplication('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-700 mr-1">详情</button>
-          ${item.audit_status === 'pending' ? `<button onclick="auditDealApplication('${item.id}','approved')" class="px-2.5 py-1 text-xs rounded-lg bg-green-100 text-green-700 mr-1">通过</button><button onclick="auditDealApplication('${item.id}','rejected')" class="px-2.5 py-1 text-xs rounded-lg bg-red-100 text-red-700 mr-1">拒绝</button>` : ''}
-          ${item.audit_status === 'approved' ? `<button onclick="updateDealPayment('${item.id}','${item.payment_status === 'paid' ? 'unpaid' : 'paid'}')" class="px-2.5 py-1 text-xs rounded-lg bg-amber-100 text-amber-700">${item.payment_status === 'paid' ? '改为未打款' : '标记已打款'}</button>` : ''}
+          <button onclick="showDealApplication('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-700 mr-1">详情/编辑</button>
+          <button onclick="updateDealPayment('${item.id}','${item.payment_status === 'paid' ? 'unpaid' : 'paid'}')" class="px-2.5 py-1 text-xs rounded-lg bg-amber-100 text-amber-700">${item.payment_status === 'paid' ? '改为未打款' : '标记已打款'}</button>
         </td>
       </tr>`
   }).join('')
@@ -5647,51 +5750,85 @@ async function showDealApplication(id) {
   const item = res.data
   const images = Array.isArray(item.image_urls) ? item.image_urls : []
   const auditMeta = DEAL_AUDIT_META[item.audit_status] || [item.audit_status, 'bg-gray-100 text-gray-600']
+  window.__dealEditDraft = {
+    id: item.id,
+    contract_amount: item.contract_amount,
+    commission_rate: item.commission_rate,
+    contact_name: item.contact_name || '',
+    deal_status: item.deal_status || 'connecting',
+    is_deal: item.is_deal ? 1 : 0,
+    payment_status: item.payment_status || 'unpaid',
+    audit_status: item.audit_status || 'pending',
+    reject_reason: item.reject_reason || '',
+    cooperation_description: item.cooperation_description || '',
+    deal_time: String(item.deal_time || '').slice(0, 10),
+  }
   showModal(`
     <div class="p-6" style="max-width:760px">
       <div class="flex items-start justify-between gap-4 mb-5">
         <div>
           <h3 class="text-lg font-bold text-navy-800">${escapeHtml(item.project_name || '-')}</h3>
-          <p class="text-xs text-gray-400 mt-1">申请会员：${escapeHtml(item.member_name || '-')} · ${escapeHtml(item.member_phone || '-')}</p>
+          <p class="text-xs text-gray-400 mt-1">申请人：${escapeHtml(item.member_name || '-')} · 负责人：${escapeHtml(item.owner_name || '-')}</p>
         </div>
         <span class="text-xs px-2.5 py-1 rounded-full ${auditMeta[1]}">${auditMeta[0]}</span>
       </div>
       <div class="grid grid-cols-2 gap-4 text-sm">
-        <div class="rounded-xl bg-gray-50 p-3"><p class="text-xs text-gray-400">成交时间</p><p class="mt-1 text-navy-800">${escapeHtml(String(item.deal_time || '').slice(0,10))}</p></div>
-        <div class="rounded-xl bg-gray-50 p-3"><p class="text-xs text-gray-400">对接状态</p><p class="mt-1 text-navy-800">${escapeHtml(item.deal_status_label || '-')}</p></div>
-        <div class="rounded-xl bg-gray-50 p-3"><p class="text-xs text-gray-400">合同金额</p><p class="mt-1 text-navy-800">¥${Number(item.contract_amount || 0).toLocaleString()}</p></div>
-        <div class="rounded-xl bg-gray-50 p-3"><p class="text-xs text-gray-400">分成比例</p><p class="mt-1 text-navy-800">${Number(item.commission_rate || 0)}%</p></div>
-        <div class="rounded-xl bg-gray-50 p-3"><p class="text-xs text-gray-400">对接人</p><p class="mt-1 text-navy-800">${escapeHtml(item.contact_name || '-')}</p></div>
-        <div class="rounded-xl bg-gray-50 p-3"><p class="text-xs text-gray-400">打款状态</p><p class="mt-1 text-navy-800">${item.payment_status === 'paid' ? '已打款' : '未打款'}</p></div>
+        <div><label class="text-xs text-gray-400">成交时间</label><input id="dealEditTime" value="${escapeHtml(String(item.deal_time || '').slice(0,10))}" class="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl"></div>
+        <div><label class="text-xs text-gray-400">对接人</label><input id="dealEditContact" value="${escapeHtml(item.contact_name || '')}" class="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl"></div>
+        <div><label class="text-xs text-gray-400">合同金额</label><input id="dealEditAmount" type="number" value="${Number(item.contract_amount || 0)}" class="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl"></div>
+        <div><label class="text-xs text-gray-400">分成比例%</label><input id="dealEditRate" type="number" value="${Number(item.commission_rate || 0)}" class="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl"></div>
+        <div><label class="text-xs text-gray-400">负责人确认</label>
+          <select id="dealEditConfirm" class="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl">
+            <option value="pending" ${item.audit_status==='pending'?'selected':''}>待确认</option>
+            <option value="approved" ${item.audit_status==='approved'?'selected':''}>已同意</option>
+            <option value="rejected" ${item.audit_status==='rejected'?'selected':''}>已拒绝</option>
+          </select>
+        </div>
+        <div><label class="text-xs text-gray-400">是否成交</label>
+          <select id="dealEditIsDeal" class="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl">
+            <option value="0" ${!item.is_deal?'selected':''}>未成交</option>
+            <option value="1" ${item.is_deal?'selected':''}>已成交</option>
+          </select>
+        </div>
+        <div><label class="text-xs text-gray-400">打款状态</label>
+          <select id="dealEditPayment" class="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl">
+            <option value="unpaid" ${item.payment_status!=='paid'?'selected':''}>未打款</option>
+            <option value="paid" ${item.payment_status==='paid'?'selected':''}>已打款</option>
+          </select>
+        </div>
+        <div><label class="text-xs text-gray-400">拒绝原因</label><input id="dealEditReject" value="${escapeHtml(item.reject_reason || '')}" class="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl"></div>
       </div>
-      <div class="mt-4"><p class="text-sm font-medium text-gray-700 mb-2">合作描述</p><p class="rounded-xl bg-gray-50 p-3 text-sm text-gray-600 whitespace-pre-wrap">${escapeHtml(item.cooperation_description || '未填写')}</p></div>
-      ${item.reject_reason ? `<div class="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">未通过原因：${escapeHtml(item.reject_reason)}</div>` : ''}
+      <div class="mt-4"><label class="text-sm font-medium text-gray-700">合作描述</label><textarea id="dealEditDesc" class="mt-2 w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" rows="4">${escapeHtml(item.cooperation_description || '')}</textarea></div>
       ${images.length ? `<div class="mt-4"><p class="text-sm font-medium text-gray-700 mb-2">申请图片</p><div class="grid grid-cols-3 gap-3">${images.map(url => `<img src="${escapeHtml(url)}" class="w-full h-32 rounded-xl object-cover border border-gray-100">`).join('')}</div></div>` : ''}
       <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
         <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm">关闭</button>
-        ${item.audit_status === 'pending' ? `<button onclick="closeModal();auditDealApplication('${item.id}','rejected')" class="px-5 py-2.5 bg-red-100 text-red-700 rounded-xl text-sm">审核不通过</button><button onclick="closeModal();auditDealApplication('${item.id}','approved')" class="px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm">审核通过</button>` : ''}
+        <button onclick="saveDealApplicationEdit('${item.id}')" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm">保存全部字段</button>
       </div>
     </div>
   `, { wide: true })
 }
 
-async function auditDealApplication(id, status) {
-  let rejectReason = ''
-  if (status === 'rejected') {
-    rejectReason = prompt('请输入审核未通过原因') || ''
-    if (!rejectReason.trim()) return toast('请填写未通过原因', 'error')
-  } else if (!confirm('确定审核通过该成交申请？')) {
-    return
+async function saveDealApplicationEdit(id) {
+  const isDeal = document.getElementById('dealEditIsDeal').value === '1'
+  const body = {
+    deal_time: document.getElementById('dealEditTime').value,
+    contact_name: document.getElementById('dealEditContact').value,
+    contract_amount: Number(document.getElementById('dealEditAmount').value || 0),
+    commission_rate: Number(document.getElementById('dealEditRate').value || 0),
+    audit_status: document.getElementById('dealEditConfirm').value,
+    is_deal: isDeal ? 1 : 0,
+    deal_status: isDeal ? 'completed' : 'connecting',
+    payment_status: document.getElementById('dealEditPayment').value,
+    reject_reason: document.getElementById('dealEditReject').value || null,
+    cooperation_description: document.getElementById('dealEditDesc').value || null,
   }
-  const res = await api(`/admin/deal-applications/${id}/audit`, {
-    method: 'POST',
-    body: { audit_status: status, reject_reason: rejectReason },
-  })
+  const res = await api(`/admin/deal-applications/${id}`, { method: 'PUT', body })
   if (res.code === 200) {
-    toast(status === 'approved' ? '审核已通过' : '审核已拒绝')
+    toast('已保存')
+    closeModal()
     loadDealApplications()
   } else {
-    toast(res.msg || '审核失败', 'error')
+    toast(res.msg || '保存失败', 'error')
   }
 }
 

@@ -3,6 +3,7 @@ import { queryRows, queryOne, queryExecute } from '@/storage/database/mysql-clie
 import { UploadService } from '@/upload/upload.service'
 import { assertCloudStorageImageUrl } from '@/utils/media-validators'
 import { RoadshowService } from './roadshow.service'
+import { createNotification } from '@/common/notify'
 
 export const BUSINESS_CATEGORIES = ['roadshow', 'financing', 'resource'] as const
 export type BusinessCategory = (typeof BUSINESS_CATEGORIES)[number]
@@ -65,18 +66,27 @@ export class BusinessService {
 
   private async notifyMember(
     memberId: string | number | null | undefined,
-    payload: { type: string; title: string; content: string; link?: string },
+    payload: {
+      type: string
+      title: string
+      content: string
+      link?: string
+      bizType?: string
+      bizId?: string | number
+      result?: string
+    },
   ) {
     if (!memberId) return
-    try {
-      await queryExecute(
-        `INSERT INTO notifications (member_id, type, title, content, is_read, link)
-         VALUES (?, ?, ?, ?, 0, ?)`,
-        [memberId, payload.type, payload.title, payload.content, payload.link || null],
-      )
-    } catch (error) {
-      console.warn('[BusinessService] 写入通知失败:', (error as Error)?.message || error)
-    }
+    await createNotification({
+      memberId,
+      type: payload.type,
+      title: payload.title,
+      content: payload.content,
+      link: payload.link,
+      bizType: payload.bizType,
+      bizId: payload.bizId,
+      result: payload.result,
+    })
   }
 
   async list(params: { category?: string; status?: string; page?: number; pageSize?: number }) {
@@ -275,7 +285,19 @@ export class BusinessService {
           dimensions: dto.roadshow.dimensions,
         })
       }
-      return this.getAdminById(businessId)
+      const created = await this.getAdminById(businessId)
+      if (source === 'user' && options?.memberId) {
+        await this.notifyMember(options.memberId, {
+          type: 'approval',
+          title: '动态已提交审核',
+          content: `您发布的「${dto.title.trim()}」已提交，请等待后台审核`,
+          link: `/pages/content-detail/index?type=business&id=${businessId}`,
+          bizType: 'business_audit',
+          bizId: businessId,
+          result: 'pending',
+        })
+      }
+      return created
     } catch (error) {
       try {
         await queryExecute('DELETE FROM roadshow_scores WHERE business_id = ?', [businessId])
@@ -396,7 +418,10 @@ export class BusinessService {
         status === 'approved'
           ? `您发布的「${row.title}」已通过审核并上架`
           : `您发布的「${row.title}」未通过审核${rejectReason ? `：${rejectReason}` : ''}`,
-      link: '/pages/my-posts/index',
+      link: `/pages/content-detail/index?type=business&id=${id}`,
+      bizType: 'business_audit',
+      bizId: id,
+      result: status,
     })
 
     return this.getAdminById(id)
@@ -466,6 +491,15 @@ export class BusinessService {
        WHERE id = ?`,
       [id],
     )
+    await this.notifyMember(memberId, {
+      type: 'approval',
+      title: '动态已重新提交审核',
+      content: `您更新的「${payload.title || existing.title}」已重新提交审核`,
+      link: `/pages/content-detail/index?type=business&id=${id}`,
+      bizType: 'business_audit',
+      bizId: id,
+      result: 'pending',
+    })
     return this.getAdminById(id) || result
   }
 

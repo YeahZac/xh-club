@@ -1,6 +1,21 @@
 import { Body, Controller, Get, Post, Delete, Param, Query, Req, UseGuards } from '@nestjs/common'
 import { EventsService } from './events.service'
 import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard'
+import { verifyAuthToken } from '@/auth/jwt'
+
+function tryReadMemberId(request: any): string | number | undefined {
+  try {
+    const authorization = request?.headers?.authorization
+    if (typeof authorization !== 'string') return undefined
+    const [scheme, token] = authorization.trim().split(/\s+/, 2)
+    if (scheme?.toLowerCase() !== 'bearer' || !token) return undefined
+    const principal = verifyAuthToken(token)
+    if (principal.type !== 'member') return undefined
+    return principal.sub
+  } catch {
+    return undefined
+  }
+}
 
 @Controller('events')
 export class EventsController {
@@ -57,11 +72,48 @@ export class ProjectsController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Post('submit')
+  @UseGuards(MemberAuthGuard)
+  async submitProject(@Req() request: any, @Body() body: any) {
+    const result = await this.eventsService.submitMemberProject(request.user.sub, body)
+    return { code: 200, msg: '已提交审核', data: result }
+  }
+
   @Get(':id')
-  async getProject(@Param('id') id: string) {
-    console.log('[ProjectsController] GET /api/projects/:id - id:', id)
-    const result = await this.eventsService.getProjectById(id)
+  async getProject(@Param('id') id: string, @Req() request: any) {
+    const memberId = tryReadMemberId(request)
+    const result = await this.eventsService.getProjectById(id, memberId)
     return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post(':id/scores')
+  @UseGuards(MemberAuthGuard)
+  async submitScores(
+    @Param('id') id: string,
+    @Req() request: any,
+    @Body() body: { scores?: Array<{ dimension_id: number | string; stars: number }> },
+  ) {
+    const result = await this.eventsService.submitProjectScores(
+      id,
+      request.user.sub,
+      body?.scores || [],
+    )
+    return { code: 200, msg: '评分成功', data: result }
+  }
+
+  @Post(':id/share')
+  @UseGuards(MemberAuthGuard)
+  async share(
+    @Param('id') id: string,
+    @Req() request: any,
+    @Body() body: { receiver_id: string | number },
+  ) {
+    const result = await this.eventsService.shareProjectToMember(
+      id,
+      request.user.sub,
+      body.receiver_id,
+    )
+    return { code: 200, msg: '已分享给好友', data: result }
   }
 
   @Post()

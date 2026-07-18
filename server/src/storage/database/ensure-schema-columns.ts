@@ -11,6 +11,20 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['projects', 'stage', `VARCHAR(32) DEFAULT 'seed'`],
   ['projects', 'amount_max', 'DECIMAL(14,2) NULL'],
   ['projects', 'view_count', 'INT NOT NULL DEFAULT 0'],
+  ['projects', 'audit_status', `VARCHAR(16) NOT NULL DEFAULT 'approved'`],
+  ['projects', 'reject_reason', 'VARCHAR(500) NULL'],
+  ['projects', 'submitter_id', 'INT NULL'],
+  ['projects', 'avg_score', 'DECIMAL(4,2) NOT NULL DEFAULT 0'],
+  ['projects', 'score_count', 'INT NOT NULL DEFAULT 0'],
+  // 项目成交对接：负责人确认
+  ['project_deal_applications', 'owner_member_id', 'INT NULL'],
+  ['project_deal_applications', 'is_deal', `TINYINT(1) NOT NULL DEFAULT 0`],
+  // 系统通知扩展
+  ['notifications', 'link', 'VARCHAR(500) NULL'],
+  ['notifications', 'biz_type', 'VARCHAR(32) NULL'],
+  ['notifications', 'biz_id', 'VARCHAR(64) NULL'],
+  ['notifications', 'result', 'VARCHAR(64) NULL'],
+  ['notifications', 'processed_at', 'TIMESTAMP NULL'],
   ['articles', 'subtitle', 'VARCHAR(255) NULL'],
   ['articles', 'video_url', 'VARCHAR(500) NULL'],
   ['articles', 'category', `VARCHAR(50) DEFAULT 'news'`],
@@ -149,6 +163,32 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       sort_order INT NOT NULL DEFAULT 0,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_roadshow_dimension_business (business_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
+  {
+    name: 'project_score_dimensions',
+    sql: `CREATE TABLE IF NOT EXISTS project_score_dimensions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      project_id INT NOT NULL,
+      name VARCHAR(64) NOT NULL,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_project_dimension_project (project_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
+  {
+    name: 'project_scores',
+    sql: `CREATE TABLE IF NOT EXISTS project_scores (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      project_id INT NOT NULL,
+      dimension_id INT NOT NULL,
+      member_id INT NOT NULL,
+      stars TINYINT NOT NULL DEFAULT 5,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_project_score (project_id, dimension_id, member_id),
+      INDEX idx_project_score_project (project_id),
+      INDEX idx_project_score_member (member_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   },
   {
