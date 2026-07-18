@@ -1,9 +1,8 @@
-import { Body, Controller, Delete, Get, Inject, Param, Post, Put, Query, UseGuards, forwardRef } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common'
 import { AdminService } from './admin.service'
 import * as bcrypt from 'bcryptjs'
 import { AdminAuthGuard } from '@/auth/auth.guard'
 import { Public } from '@/auth/public.decorator'
-import { MallService } from '@/mall/mall.service'
 
 // 数据库初始化 SQL（直接嵌入代码，避免文件路径问题）
 const INIT_SQL = `
@@ -680,11 +679,7 @@ INSERT IGNORE INTO homepage_sections (section, display_name, item_limit, sort_or
 @Controller('admin')
 @UseGuards(AdminAuthGuard)
 export class AdminController {
-  constructor(
-    private readonly adminService: AdminService,
-    @Inject(forwardRef(() => MallService))
-    private readonly mallService: MallService,
-  ) {}
+  constructor(private readonly adminService: AdminService) {}
 
   /** 数据库连接状态检查 */
   @Get('db-status')
@@ -1265,19 +1260,6 @@ export class AdminController {
     console.log('[AdminController] DELETE /api/admin/mall-products/:id')
     const result = await this.adminService.deleteMallProduct(id)
     return { code: 200, msg: '删除成功', data: result }
-  }
-
-  @Get('mall-orders')
-  async getMallOrders(@Query('status') status?: string) {
-    return this.mallService.getAllOrders(status)
-  }
-
-  @Post('mall-orders/:id/ship')
-  async shipMallOrder(
-    @Param('id') id: string,
-    @Body() body: { logistics_company: string; logistics_no: string },
-  ) {
-    return this.mallService.shipOrder(id, body)
   }
 
   /** ====== 成交管理 ====== */

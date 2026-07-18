@@ -2,6 +2,28 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpCode, HttpS
 import { MallService } from './mall.service';
 import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard';
 
+/** 管理台商城订单（挂在 /api/admin，避免 AdminModule 反向依赖 MallModule） */
+@Controller('admin')
+@UseGuards(AdminAuthGuard)
+export class AdminMallController {
+  constructor(private readonly mallService: MallService) {}
+
+  @Get('mall-orders')
+  @HttpCode(HttpStatus.OK)
+  async getMallOrders(@Query('status') status?: string) {
+    return this.mallService.getAllOrders(status)
+  }
+
+  @Post('mall-orders/:id/ship')
+  @HttpCode(HttpStatus.OK)
+  async shipMallOrder(
+    @Param('id') id: string,
+    @Body() body: { logistics_company: string; logistics_no: string },
+  ) {
+    return this.mallService.shipOrder(id, body)
+  }
+}
+
 @Controller('mall')
 export class MallController {
   constructor(private readonly mallService: MallService) {}

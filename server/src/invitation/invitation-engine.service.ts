@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { RowDataPacket } from 'mysql2'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
+import { UploadService } from '@/upload/upload.service'
 import {
+  formatInviteRuleRow,
   hasAnyInviteReward,
   normalizeInviteRewards,
   parseInviteConditions,
@@ -10,6 +12,32 @@ import {
 @Injectable()
 export class InvitationEngineService {
   private readonly logger = new Logger(InvitationEngineService.name)
+
+  constructor(private readonly uploadService: UploadService) {}
+
+  /** 小程序端读取启用中的邀请规则（含图文说明、条件、多奖励） */
+  async getActiveRulesForClient() {
+    try {
+      const rows = await queryRows(
+        `SELECT *
+         FROM invitation_reward_rules
+         WHERE is_active = 1
+         ORDER BY id ASC`,
+      )
+      const list = (rows || []).map((row) => formatInviteRuleRow(row))
+      return Promise.all(
+        list.map(async (row: any) => ({
+          ...row,
+          content: row.content
+            ? await this.uploadService.signHtmlMedia(row.content)
+            : '',
+        })),
+      )
+    } catch (error) {
+      this.logger.error('getActiveRulesForClient failed', error)
+      return []
+    }
+  }
 
   /** 登录/注册时绑定推荐人并发放「新会员输入推荐码并登录」类奖励 */
   async bindReferrerOnLogin(

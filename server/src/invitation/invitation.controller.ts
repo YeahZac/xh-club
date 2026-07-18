@@ -1,22 +1,21 @@
-import { Body, Controller, Get, Inject, Post, Query, Req, UseGuards, forwardRef } from '@nestjs/common'
-import { AdminService } from '@/admin/admin.service'
+import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common'
 import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard'
 import { Public } from '@/auth/public.decorator'
+import { InvitationEngineService } from './invitation-engine.service'
 import { MemberInvitationService } from './member-invitation.service'
 
 /** 小程序端公开读取邀请奖励规则（图文 + 条件 + 多奖励） */
 @Controller('invitation')
 export class InvitationController {
   constructor(
-    @Inject(forwardRef(() => AdminService))
-    private readonly adminService: AdminService,
+    private readonly invitationEngine: InvitationEngineService,
     private readonly memberInvitationService: MemberInvitationService,
   ) {}
 
   @Public()
   @Get('rules')
   async getRules() {
-    const list = await this.adminService.getActiveInvitationRulesForClient()
+    const list = await this.invitationEngine.getActiveRulesForClient()
     const summary = {
       points_value: 0,
       growth_value: 0,

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, ModuleRef } from '@nestjs/common';
 import { queryRows, queryOne, queryExecute, withTransaction } from '@/storage/database/mysql-client';
 import { ensureSchemaColumns } from '@/storage/database/ensure-schema-columns';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
@@ -41,9 +41,28 @@ export class MallService {
   constructor(
     private readonly uploadService: UploadService,
     private readonly pointsEngine: PointsEngineService,
-    @Inject(forwardRef(() => InvitationEngineService))
-    private readonly invitationEngine: InvitationEngineService,
+    private readonly moduleRef: ModuleRef,
   ) {}
+
+  /** 运行时取邀请引擎，避免 MallModule 静态 import InvitationModule 形成循环依赖 */
+  private getInvitationEngine(): InvitationEngineService | null {
+    try {
+      return this.moduleRef.get(InvitationEngineService, { strict: false })
+    } catch {
+      return null
+    }
+  }
+
+  private grantInviteMallReward(memberId: string | number, referenceId?: string | number) {
+    const engine = this.getInvitationEngine()
+    if (!engine) return
+    void engine
+      .grantConditionRewards(memberId, 'invitee_mall_order', {
+        description: '推荐会员完成商城兑换',
+        referenceId,
+      })
+      .catch((err) => this.logger.warn(`invitee_mall_order reward failed: ${err?.message || err}`))
+  }
 
   // ==================== 商品管理 ====================
 
@@ -315,12 +334,7 @@ export class MallService {
               description: '完成商城兑换奖励积分',
             })
             .catch((err) => this.logger.warn(`mall_exchange points failed: ${err?.message || err}`))
-          void this.invitationEngine
-            .grantConditionRewards(data.member_id, 'invitee_mall_order', {
-              description: '推荐会员完成商城兑换',
-              referenceId: result.data?.id,
-            })
-            .catch((err) => this.logger.warn(`invitee_mall_order reward failed: ${err?.message || err}`))
+          this.grantInviteMallReward(data.member_id, result.data?.id)
         }
         return result
       })
@@ -542,12 +556,7 @@ export class MallService {
               description: '完成商城兑换奖励积分',
             })
             .catch((err) => this.logger.warn(`mall_exchange points failed: ${err?.message || err}`))
-          void this.invitationEngine
-            .grantConditionRewards(data.member_id, 'invitee_mall_order', {
-              description: '推荐会员完成商城兑换',
-              referenceId: result.data?.orders?.[0]?.id,
-            })
-            .catch((err) => this.logger.warn(`invitee_mall_order reward failed: ${err?.message || err}`))
+          this.grantInviteMallReward(data.member_id, result.data?.orders?.[0]?.id)
         }
         return result
       })

@@ -1,6 +1,6 @@
-import { Module, forwardRef } from '@nestjs/common'
-import { AdminModule } from '@/admin/admin.module'
+import { Module } from '@nestjs/common'
 import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard'
+import { UploadModule } from '@/upload/upload.module'
 import {
   AdminMemberInvitationController,
   InvitationController,
@@ -9,7 +9,7 @@ import { InvitationEngineService } from './invitation-engine.service'
 import { MemberInvitationService } from './member-invitation.service'
 
 @Module({
-  imports: [forwardRef(() => AdminModule)],
+  imports: [UploadModule],
   controllers: [InvitationController, AdminMemberInvitationController],
   providers: [
     InvitationEngineService,
