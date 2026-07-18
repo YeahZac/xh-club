@@ -1492,6 +1492,14 @@ export class AdminService {
   }
 
   /** ====== 部门管理 ====== */
+  private async tryAddColumn(table: string, column: string, definition: string) {
+    try {
+      await queryExecute(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`)
+    } catch {
+      /* column may already exist */
+    }
+  }
+
   private async ensureDepartmentsTable() {
     await queryExecute(`
       CREATE TABLE IF NOT EXISTS departments (
@@ -1511,13 +1519,45 @@ export class AdminService {
         INDEX idx_path (path)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `)
+    await this.tryAddColumn('departments', 'level', 'INT DEFAULT 1')
+    await this.tryAddColumn('departments', 'path', `VARCHAR(500) DEFAULT '/'`)
+    await this.tryAddColumn('departments', 'manager_id', 'INT NULL')
+    await this.tryAddColumn('departments', 'leader_name', 'VARCHAR(100) NULL')
+    await this.tryAddColumn('departments', 'sort_order', 'INT DEFAULT 0')
+    await this.tryAddColumn('departments', 'status', `VARCHAR(20) DEFAULT 'active'`)
+    await this.tryAddColumn('departments', 'description', 'TEXT NULL')
+
+    await queryExecute(`
+      CREATE TABLE IF NOT EXISTS member_departments (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        member_id INT NOT NULL,
+        department_id INT NOT NULL,
+        talent_id INT NULL,
+        position VARCHAR(100) NULL,
+        is_primary TINYINT(1) DEFAULT 0,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_member_department (member_id, department_id),
+        INDEX idx_department_id (department_id),
+        INDEX idx_talent_id (talent_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `)
+    await this.tryAddColumn('member_departments', 'talent_id', 'INT NULL')
+    await this.tryAddColumn('member_departments', 'position', 'VARCHAR(100) NULL')
+    await this.tryAddColumn('member_departments', 'is_primary', 'TINYINT(1) DEFAULT 0')
   }
 
-  /** 按组织架构图写入默认部门（仅空库时） */
-  async ensureDefaultDepartments() {
+  /** 按组织架构图写入默认部门；force=true 时清空后重建 */
+  async ensureDefaultDepartments(force = false) {
     await this.ensureDepartmentsTable()
     const count = await queryOne('SELECT COUNT(*) AS total FROM departments')
-    if (Number((count as any)?.total || 0) > 0) return { seeded: false }
+    const total = Number((count as any)?.total || 0)
+    if (total > 0 && !force) return { seeded: false, total }
+
+    if (force && total > 0) {
+      await queryExecute('DELETE FROM member_departments')
+      await queryExecute('DELETE FROM departments')
+    }
 
     const insertOne = async (
       name: string,
@@ -1540,7 +1580,7 @@ export class AdminService {
         [name, parentId, level, path, sortOrder, description || null],
       )
       const id = result.insertId
-      await queryExecute('UPDATE departments SET path = CONCAT(path, ?, "/") WHERE id = ?', [id, id])
+      await queryExecute('UPDATE departments SET path = CONCAT(?, ?, "/") WHERE id = ?', [path, id, id])
       return id
     }
 
@@ -1571,24 +1611,108 @@ export class AdminService {
     await insertOne('洗护行业会员中心', baoan, 2)
     await insertOne('食品行业会员中心', baoan, 3)
 
-    return { seeded: true }
+    const after = await queryOne('SELECT COUNT(*) AS total FROM departments')
+    return { seeded: true, total: Number((after as any)?.total || 0) }
+  }
+
+  private async listDepartmentMembers(departmentId: string | number) {
+    try {
+      return await queryRows(
+        `SELECT md.id, md.member_id, md.talent_id, md.position, md.is_primary,
+                t.real_name AS talent_name, t.photo_url, t.avatar_url,
+                m.name AS member_name
+         FROM member_departments md
+         LEFT JOIN talent_applications t ON t.id = md.talent_id
+         LEFT JOIN members m ON m.id = md.member_id
+         WHERE md.department_id = ?
+         ORDER BY md.position ASC, md.id ASC`,
+        [departmentId],
+      )
+    } catch (error) {
+      console.warn('[AdminService] listDepartmentMembers failed', error)
+      return []
+    }
   }
 
   async getDepartments() {
     try {
-      await this.ensureDefaultDepartments()
-      return await queryRows(`
-        SELECT d.*,
-               COALESCE(d.leader_name, u.name) AS leader_name,
-               u.name AS manager_name
+      await this.ensureDefaultDepartments(false)
+      const rows = await queryRows(`
+        SELECT d.id, d.name, d.parent_id, d.level, d.path, d.manager_id, d.leader_name,
+               d.sort_order, d.status, d.description, d.created_at, d.updated_at
         FROM departments d
-        LEFT JOIN users u ON d.manager_id = u.id
         ORDER BY d.level ASC, d.sort_order ASC, d.id ASC
       `)
+      const list = Array.isArray(rows) ? rows : []
+      return Promise.all(
+        list.map(async (row: any) => {
+          const members = await this.listDepartmentMembers(row.id)
+          return {
+            ...row,
+            level: Number(row.level || 1),
+            member_count: members.length,
+            members,
+          }
+        }),
+      )
     } catch (error) {
       console.error('[AdminService] getDepartments error:', error)
       throw new HttpException('获取部门列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
+  }
+
+  async listApprovedTalentsForDept(keyword?: string) {
+    await this.ensureDepartmentsTable()
+    const values: any[] = []
+    let where = `t.status = 'approved'`
+    if (keyword) {
+      where += ' AND (t.real_name LIKE ? OR t.contact LIKE ? OR CAST(t.member_id AS CHAR) LIKE ?)'
+      const kw = `%${keyword}%`
+      values.push(kw, kw, kw)
+    }
+    const rows = await queryRows(
+      `SELECT t.id, t.member_id, t.real_name, t.contact, t.photo_url, t.avatar_url
+       FROM talent_applications t
+       WHERE ${where}
+       ORDER BY t.reviewed_at DESC, t.id DESC
+       LIMIT 200`,
+      values,
+    )
+    return this.uploadService.signRowsFields(rows || [], ['photo_url', 'avatar_url'])
+  }
+
+  async setDepartmentMembers(
+    departmentId: string,
+    members: Array<{ talent_id: number | string; position?: string }>,
+  ) {
+    await this.ensureDepartmentsTable()
+    const dept = await queryOne('SELECT id FROM departments WHERE id = ?', [departmentId])
+    if (!dept) throw new HttpException('部门不存在', HttpStatus.NOT_FOUND)
+
+    await queryExecute('DELETE FROM member_departments WHERE department_id = ?', [departmentId])
+    const list = Array.isArray(members) ? members : []
+    for (const item of list) {
+      const talentId = Number(item.talent_id)
+      if (!talentId) continue
+      const talent = await queryOne(
+        `SELECT id, member_id, real_name FROM talent_applications
+         WHERE id = ? AND status = 'approved'`,
+        [talentId],
+      )
+      if (!talent?.member_id) continue
+      const position = String(item.position || '').trim() || null
+      try {
+        await queryExecute(
+          `INSERT INTO member_departments (member_id, department_id, talent_id, position, is_primary)
+           VALUES (?, ?, ?, ?, 0)
+           ON DUPLICATE KEY UPDATE talent_id = VALUES(talent_id), position = VALUES(position)`,
+          [talent.member_id, departmentId, talentId, position],
+        )
+      } catch (error) {
+        console.warn('[AdminService] setDepartmentMembers insert failed', error)
+      }
+    }
+    return this.listDepartmentMembers(departmentId)
   }
 
   async createDepartment(dto: {

@@ -1526,18 +1526,74 @@ export class AdminController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Post('departments/seed')
+  async seedDepartments(@Body() body: { force?: boolean }) {
+    console.log('[AdminController] POST /api/admin/departments/seed', body?.force)
+    const result = await this.adminService.ensureDefaultDepartments(!!body?.force)
+    return {
+      code: 200,
+      msg: result.seeded ? '组织架构已初始化' : '部门已有数据，未重复初始化',
+      data: result,
+    }
+  }
+
+  @Get('departments/talent-options')
+  async departmentTalentOptions(@Query('keyword') keyword?: string) {
+    const result = await this.adminService.listApprovedTalentsForDept(keyword)
+    return { code: 200, msg: 'success', data: result }
+  }
+
   @Post('departments')
-  async createDepartment(@Body() dto: { name: string; parent_id?: number; manager_id?: number; sort_order?: number; description?: string }) {
+  async createDepartment(
+    @Body()
+    dto: {
+      name: string
+      parent_id?: number
+      manager_id?: number
+      leader_name?: string
+      sort_order?: number
+      description?: string
+      members?: Array<{ talent_id: number | string; position?: string }>
+    },
+  ) {
     console.log('[AdminController] POST /api/admin/departments')
     const result = await this.adminService.createDepartment(dto)
+    if (Array.isArray(dto.members) && result?.id) {
+      await this.adminService.setDepartmentMembers(String(result.id), dto.members)
+    }
     return { code: 200, msg: '创建成功', data: result }
   }
 
   @Put('departments/:id')
-  async updateDepartment(@Param('id') id: string, @Body() dto: { name?: string; manager_id?: number; sort_order?: number; status?: string; description?: string }) {
+  async updateDepartment(
+    @Param('id') id: string,
+    @Body()
+    dto: {
+      name?: string
+      parent_id?: number | null
+      manager_id?: number
+      leader_name?: string
+      sort_order?: number
+      status?: string
+      description?: string
+      members?: Array<{ talent_id: number | string; position?: string }>
+    },
+  ) {
     console.log('[AdminController] PUT /api/admin/departments/:id')
     const result = await this.adminService.updateDepartment(id, dto)
+    if (Array.isArray(dto.members)) {
+      await this.adminService.setDepartmentMembers(id, dto.members)
+    }
     return { code: 200, msg: '更新成功', data: result }
+  }
+
+  @Put('departments/:id/members')
+  async setDepartmentMembers(
+    @Param('id') id: string,
+    @Body() body: { members?: Array<{ talent_id: number | string; position?: string }> },
+  ) {
+    const result = await this.adminService.setDepartmentMembers(id, body?.members || [])
+    return { code: 200, msg: '成员已更新', data: result }
   }
 
   @Delete('departments/:id')

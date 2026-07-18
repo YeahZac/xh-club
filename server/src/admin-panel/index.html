@@ -961,9 +961,12 @@
         <p class="text-sm text-white/80 mt-2">首次打开会按组织架构图自动初始化默认部门（理事会→会长→秘书处→分会等），可随时编辑、增删。</p>
       </div>
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex justify-between items-center mb-6 gap-3 flex-wrap">
           <h3 class="font-bold text-navy-800">部门列表</h3>
-          <button onclick="showAddDepartmentModal()" class="px-4 py-2 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg text-sm hover:shadow-lg transition">+ 新增部门</button>
+          <div class="flex gap-2">
+            <button onclick="seedDepartments(false)" class="px-4 py-2 border border-navy-200 text-navy-700 rounded-lg text-sm hover:bg-navy-50 transition">初始化默认架构</button>
+            <button onclick="showAddDepartmentModal()" class="px-4 py-2 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-lg text-sm hover:shadow-lg transition">+ 新增部门</button>
+          </div>
         </div>
         <div id="departmentsList" class="space-y-3">
           <p class="text-gray-400">加载中...</p>
@@ -5325,41 +5328,196 @@ async function deleteContributionRule(id) {
 
 // ===== 部门管理 =====
 let departmentsCache = []
+let deptTalentOptions = []
+let deptMemberDraft = []
+
+function buildDeptTreeOrder(list, excludeId) {
+  const byParent = new Map()
+  ;(list || []).forEach((d) => {
+    if (String(d.id) === String(excludeId || '')) return
+    const key = d.parent_id == null || d.parent_id === '' ? 'root' : String(d.parent_id)
+    if (!byParent.has(key)) byParent.set(key, [])
+    byParent.get(key).push(d)
+  })
+  const out = []
+  const walk = (parentKey, depth) => {
+    const children = (byParent.get(parentKey) || []).slice().sort((a, b) => {
+      const sa = Number(a.sort_order || 0) - Number(b.sort_order || 0)
+      return sa !== 0 ? sa : Number(a.id) - Number(b.id)
+    })
+    children.forEach((c) => {
+      out.push({ ...c, _depth: depth })
+      walk(String(c.id), depth + 1)
+    })
+  }
+  walk('root', 0)
+  // 若因脏数据无法挂到树，仍追加剩余项，避免上级只剩顶级
+  if (out.length < (list || []).filter((d) => String(d.id) !== String(excludeId || '')).length) {
+    const seen = new Set(out.map((d) => String(d.id)))
+    ;(list || []).forEach((d) => {
+      if (String(d.id) === String(excludeId || '') || seen.has(String(d.id))) return
+      out.push({ ...d, _depth: Math.max(0, Number(d.level || 1) - 1) })
+    })
+  }
+  return out
+}
 
 function deptParentOptions(selectedId, excludeId) {
-  return `<option value="">顶级（无上级）</option>` + departmentsCache
-    .filter((d) => String(d.id) !== String(excludeId || ''))
-    .map((d) => `<option value="${d.id}" ${String(d.id) === String(selectedId || '') ? 'selected' : ''}>${'—'.repeat(Math.max(0, (d.level || 1) - 1))} ${escapeHtml(d.name)}</option>`)
+  const ordered = buildDeptTreeOrder(departmentsCache, excludeId)
+  return `<option value="">顶级（无上级）</option>` + ordered
+    .map((d) => {
+      const depth = Number(d._depth || 0)
+      const prefix = depth ? `${'　'.repeat(depth)}└ ` : ''
+      return `<option value="${d.id}" ${String(d.id) === String(selectedId || '') ? 'selected' : ''}>${prefix}${escapeHtml(d.name)}</option>`
+    })
     .join('')
 }
 
 async function loadDepartments() {
-  const res = await api('/admin/departments')
   const list = document.getElementById('departmentsList')
-  departmentsCache = Array.isArray(res.data) ? res.data : []
-  if (res.code === 200 && departmentsCache.length) {
-    list.innerHTML = departmentsCache.map(d => {
-      const indent = Math.max(0, (Number(d.level) || 1) - 1) * 16
+  if (!list) return
+  list.innerHTML = '<p class="text-gray-400 text-center py-8">加载中...</p>'
+  try {
+    const res = await api('/admin/departments')
+    departmentsCache = Array.isArray(res?.data) ? res.data : []
+    if (res?.code !== 200) {
+      list.innerHTML = `<p class="text-red-500 text-center py-8">${escapeHtml(res?.msg || '加载失败')}</p>`
+      return
+    }
+    if (!departmentsCache.length) {
+      list.innerHTML = `
+        <div class="text-center py-10">
+          <p class="text-gray-400 mb-4">暂无部门数据</p>
+          <button onclick="seedDepartments(true)" class="px-4 py-2 bg-navy-800 text-white rounded-lg text-sm">写入默认组织架构</button>
+        </div>`
+      return
+    }
+    const ordered = buildDeptTreeOrder(departmentsCache)
+    list.innerHTML = ordered.map((d) => {
+      const indent = Number(d._depth || 0) * 18
       const parent = departmentsCache.find((x) => String(x.id) === String(d.parent_id))
+      const memberNames = (d.members || []).slice(0, 3).map((m) => m.talent_name || m.member_name || m.member_id).join('、')
+      const more = (d.members || []).length > 3 ? ` 等${d.members.length}人` : ''
       return `
       <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition" style="margin-left:${indent}px">
-        <div>
+        <div class="min-w-0 flex-1">
           <p class="font-medium text-navy-800">${escapeHtml(d.name)}</p>
-          <p class="text-xs text-gray-400">层级 ${d.level || 1} · 上级: ${escapeHtml(parent?.name || '无')} · 负责人: ${escapeHtml(d.leader_name || '未设置')}</p>
+          <p class="text-xs text-gray-400 mt-1">上级: ${escapeHtml(parent?.name || '无')} · 成员 ${Number(d.member_count || 0)} 人${memberNames ? `（${escapeHtml(memberNames)}${escapeHtml(more)}）` : ''}</p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-shrink-0">
           <button onclick="showEditDepartmentModal(${d.id})" class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑</button>
           <button onclick="deleteDepartment(${d.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
         </div>
       </div>`
     }).join('')
-  } else {
-    list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无部门</p>'
+  } catch (error) {
+    console.error('[departments] load failed', error)
+    list.innerHTML = `<p class="text-red-500 text-center py-8">${escapeHtml(error.message || '加载失败')}</p>`
   }
 }
 
-function showDepartmentFormModal(dept) {
+async function seedDepartments(force) {
+  if (force && !confirm('将清空现有部门与成员配置，并按组织架构图重新初始化，是否继续？')) return
+  try {
+    const res = await api('/admin/departments/seed', { method: 'POST', body: { force: !!force } })
+    if (res.code === 200) {
+      toast(res.msg || '完成')
+      if (!res.data?.seeded && !force) {
+        if (confirm('部门已有数据。是否清空后强制写入默认组织架构？')) {
+          return seedDepartments(true)
+        }
+      }
+      loadDepartments()
+    } else toast(res.msg || '初始化失败', 'error')
+  } catch (error) {
+    toast(error.message || '初始化失败', 'error')
+  }
+}
+
+async function ensureDeptTalentOptions() {
+  if (deptTalentOptions.length) return deptTalentOptions
+  const res = await api('/admin/departments/talent-options')
+  deptTalentOptions = Array.isArray(res?.data) ? res.data : []
+  return deptTalentOptions
+}
+
+function collectDeptMembersFromForm() {
+  const rows = Array.from(document.querySelectorAll('[data-dept-member-row]'))
+  const members = []
+  rows.forEach((row) => {
+    const position = row.querySelector('[data-position]')?.value?.trim() || ''
+    const select = row.querySelector('[data-talents]')
+    const selected = Array.from(select?.selectedOptions || []).map((o) => o.value).filter(Boolean)
+    selected.forEach((talentId) => members.push({ talent_id: talentId, position }))
+  })
+  return members
+}
+
+function renderDeptMemberRows() {
+  const box = document.getElementById('deptMemberRows')
+  if (!box) return
+  if (!deptMemberDraft.length) {
+    box.innerHTML = '<p class="text-xs text-gray-400">暂无成员配置，可点击下方「添加职位成员」</p>'
+    return
+  }
+  const optionsHtml = (selectedIds) => deptTalentOptions.map((t) => {
+    const selected = selectedIds.includes(String(t.id)) ? 'selected' : ''
+    return `<option value="${t.id}" ${selected}>${escapeHtml(t.real_name || '')}（ID:${t.member_id}）</option>`
+  }).join('')
+  box.innerHTML = deptMemberDraft.map((row, idx) => `
+    <div data-dept-member-row class="rounded-xl border border-gray-100 p-3 space-y-2 bg-gray-50">
+      <div class="flex items-center justify-between gap-2">
+        <label class="text-sm font-medium text-gray-700">职位名称</label>
+        <button type="button" onclick="removeDeptMemberRow(${idx})" class="text-xs text-red-500">移除</button>
+      </div>
+      <input data-position value="${escapeHtml(row.position || '')}" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none" placeholder="如：部长 / 执行秘书">
+      <label class="block text-sm font-medium text-gray-700">人员（多选，来自已认证人才）</label>
+      <select data-talents multiple class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none h-28">
+        ${optionsHtml((row.talent_ids || []).map(String))}
+      </select>
+      <p class="text-xs text-gray-400">按住 Ctrl/Command 多选</p>
+    </div>
+  `).join('')
+}
+
+function syncDeptMemberDraftFromForm() {
+  const rows = Array.from(document.querySelectorAll('[data-dept-member-row]'))
+  deptMemberDraft = rows.map((row) => ({
+    position: row.querySelector('[data-position]')?.value || '',
+    talent_ids: Array.from(row.querySelector('[data-talents]')?.selectedOptions || []).map((o) => o.value),
+  }))
+}
+
+function addDeptMemberRow() {
+  syncDeptMemberDraftFromForm()
+  deptMemberDraft.push({ position: '', talent_ids: [] })
+  renderDeptMemberRows()
+}
+
+function removeDeptMemberRow(idx) {
+  syncDeptMemberDraftFromForm()
+  deptMemberDraft.splice(idx, 1)
+  renderDeptMemberRows()
+}
+
+function membersToDraft(members) {
+  const map = new Map()
+  ;(members || []).forEach((m) => {
+    const key = String(m.position || '')
+    if (!map.has(key)) map.set(key, { position: m.position || '', talent_ids: [] })
+    if (m.talent_id) map.get(key).talent_ids.push(String(m.talent_id))
+  })
+  return Array.from(map.values())
+}
+
+async function showDepartmentFormModal(dept) {
   const isEdit = !!dept
+  try {
+    await ensureDeptTalentOptions()
+  } catch (error) {
+    toast(error.message || '加载人才列表失败', 'error')
+  }
+  deptMemberDraft = membersToDraft(dept?.members || [])
   showModal(`
     <div class="p-6">
       <h3 class="text-lg font-bold text-navy-800 mb-4">${isEdit ? '编辑部门' : '新增部门'}</h3>
@@ -5367,20 +5525,32 @@ function showDepartmentFormModal(dept) {
         <div><label class="block text-sm font-medium text-gray-700 mb-1">部门名称</label>
           <input id="deptName" value="${escapeHtml(dept?.name || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="如: 会员发展部"></div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">上级部门</label>
-          <select id="deptParent" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${deptParentOptions(dept?.parent_id, dept?.id)}</select></div>
+          <select id="deptParent" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${deptParentOptions(dept?.parent_id, dept?.id)}</select>
+          <p class="text-xs text-gray-400 mt-1">可选任意层级部门作为上级</p></div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">负责人姓名</label>
           <input id="deptLeader" value="${escapeHtml(dept?.leader_name || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="选填"></div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">排序</label>
           <input id="deptSort" type="number" value="${dept?.sort_order ?? 0}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
           <textarea id="deptDesc" rows="2" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${escapeHtml(dept?.description || '')}</textarea></div>
+        <div class="border-t border-gray-100 pt-4">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <p class="text-sm font-semibold text-navy-800">成员配置</p>
+              <p class="text-xs text-gray-400 mt-0.5">按职位配置，人员从已认证人才中多选</p>
+            </div>
+            <button type="button" onclick="addDeptMemberRow()" class="px-3 py-1.5 text-xs rounded-lg bg-navy-100 text-navy-700">+ 添加职位成员</button>
+          </div>
+          <div id="deptMemberRows" class="space-y-3"></div>
+        </div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
           <button onclick="saveDepartment(${isEdit ? dept.id : 'null'})" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
         </div>
       </div>
     </div>
-  `)
+  `, { wide: true })
+  renderDeptMemberRows()
 }
 
 function showAddDepartmentModal() {
@@ -5400,20 +5570,29 @@ async function saveDepartment(id) {
     leader_name: document.getElementById('deptLeader').value.trim(),
     sort_order: Number(document.getElementById('deptSort').value || 0),
     description: document.getElementById('deptDesc').value.trim(),
+    members: collectDeptMembersFromForm(),
   }
   if (!body.name) return toast('请填写部门名称', 'error')
-  const res = id
-    ? await api(`/admin/departments/${id}`, { method: 'PUT', body })
-    : await api('/admin/departments', { method: 'POST', body })
-  if (res.code === 200) { toast(id ? '更新成功' : '创建成功'); closeModal(); loadDepartments(); }
-  else toast(res.msg || '保存失败', 'error')
+  try {
+    const res = id
+      ? await api(`/admin/departments/${id}`, { method: 'PUT', body })
+      : await api('/admin/departments', { method: 'POST', body })
+    if (res.code === 200) { toast(id ? '更新成功' : '创建成功'); closeModal(); loadDepartments(); }
+    else toast(res.msg || '保存失败', 'error')
+  } catch (error) {
+    toast(error.message || '保存失败', 'error')
+  }
 }
 
 async function deleteDepartment(id) {
   if (!confirm('确定删除此部门？')) return
-  const res = await api(`/admin/departments/${id}`, { method: 'DELETE' })
-  if (res.code === 200) { toast('已删除'); loadDepartments(); }
-  else toast(res.msg || '删除失败', 'error')
+  try {
+    const res = await api(`/admin/departments/${id}`, { method: 'DELETE' })
+    if (res.code === 200) { toast('已删除'); loadDepartments(); }
+    else toast(res.msg || '删除失败', 'error')
+  } catch (error) {
+    toast(error.message || '删除失败', 'error')
+  }
 }
 
 // ===== 项目成交记录 =====

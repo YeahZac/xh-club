@@ -93,6 +93,12 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['talent_applications', 'payment_expire_at', 'DATE NULL'],
   // 部门负责人姓名（组织架构展示用）
   ['departments', 'leader_name', 'VARCHAR(100) NULL'],
+  ['departments', 'level', 'INT DEFAULT 1'],
+  ['departments', 'path', `VARCHAR(500) DEFAULT '/'`],
+  ['departments', 'manager_id', 'INT NULL'],
+  ['departments', 'status', `VARCHAR(20) DEFAULT 'active'`],
+  ['member_departments', 'talent_id', 'INT NULL'],
+  ['member_departments', 'position', 'VARCHAR(100) NULL'],
 ]
 
 const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [

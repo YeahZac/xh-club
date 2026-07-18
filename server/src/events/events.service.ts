@@ -1,5 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
+import { queryRows } from '@/storage/database/mysql-client'
 import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url'
 import { UploadService } from '@/upload/upload.service'
 import { PointsEngineService } from '@/points/points-engine.service'
@@ -136,6 +137,52 @@ export class EventsService {
       .catch((err) => console.warn('[EventsService] invite reward failed', err))
 
     return data
+  }
+
+  /** 我的报名：活动 + 路演 */
+  async getMyRegistrations(memberId: string | number) {
+    if (!memberId) throw new HttpException('未登录', HttpStatus.UNAUTHORIZED)
+
+    let eventRows: any[] = []
+    try {
+      eventRows = await queryRows(
+        `SELECT er.id AS registration_id, er.created_at AS registered_at, er.status,
+                e.id AS target_id, e.title, e.cover_image, e.start_time, e.end_time, e.location,
+                'event' AS type, '活动' AS type_label
+         FROM event_registrations er
+         INNER JOIN events e ON e.id = er.event_id
+         WHERE er.member_id = ?
+         ORDER BY er.created_at DESC`,
+        [memberId],
+      )
+    } catch (error) {
+      console.warn('[EventsService] load event registrations failed', error)
+    }
+
+    let roadshowRows: any[] = []
+    try {
+      roadshowRows = await queryRows(
+        `SELECT rr.id AS registration_id, rr.created_at AS registered_at, 'registered' AS status,
+                b.id AS target_id, b.title, b.cover_image, b.start_time, b.end_time, NULL AS location,
+                'roadshow' AS type, '路演' AS type_label
+         FROM roadshow_registrations rr
+         INNER JOIN business_opportunities b ON b.id = rr.business_id
+         WHERE rr.member_id = ?
+         ORDER BY rr.created_at DESC`,
+        [memberId],
+      )
+    } catch (error) {
+      console.warn('[EventsService] load roadshow registrations failed', error)
+    }
+
+    const merged = [...(eventRows || []), ...(roadshowRows || [])].sort((a, b) => {
+      const ta = new Date(a.registered_at || 0).getTime()
+      const tb = new Date(b.registered_at || 0).getTime()
+      return tb - ta
+    })
+
+    const list = await this.uploadService.signRowsFields(merged, ['cover_image'])
+    return { list, total: list.length }
   }
 
   /** 取消报名 */

@@ -226,14 +226,74 @@ export class TalentService {
 
   async getApprovedById(id: string) {
     const row = await queryOne(
-      `SELECT t.*, m.avatar AS member_avatar, m.name AS member_name
+      `SELECT t.*, m.avatar AS member_avatar, m.name AS member_name,
+              m.available_points, m.total_points, m.created_at AS member_created_at
        FROM talent_applications t
        LEFT JOIN members m ON m.id = t.member_id
        WHERE t.id = ? AND t.status = 'approved'`,
       [id],
     )
     if (!row) throw new HttpException('人才不存在或未通过审核', HttpStatus.NOT_FOUND)
-    return this.signTalent(row)
+    const signed = await this.signTalent(row)
+
+    let departments: Array<{ department_id: number; department_name: string; position: string }> = []
+    try {
+      const deptRows = await queryRows(
+        `SELECT md.department_id, md.position, d.name AS department_name
+         FROM member_departments md
+         INNER JOIN departments d ON d.id = md.department_id
+         WHERE md.member_id = ?
+         ORDER BY md.is_primary DESC, md.id ASC`,
+        [row.member_id],
+      )
+      departments = (deptRows || []).map((item: any) => ({
+        department_id: item.department_id,
+        department_name: item.department_name || '',
+        position: item.position || '',
+      }))
+    } catch (error) {
+      console.warn('[TalentService] load departments failed', error)
+    }
+
+    let dealCount = 0
+    try {
+      const dealRow = await queryOne(
+        `SELECT COUNT(*) AS cnt FROM project_deal_applications
+         WHERE member_id = ? AND audit_status = 'approved'`,
+        [row.member_id],
+      )
+      dealCount = Number(dealRow?.cnt || 0)
+    } catch {
+      try {
+        const legacy = await queryOne(
+          `SELECT COUNT(*) AS cnt FROM transactions
+           WHERE status = 'completed'
+             AND (party_a_id = ? OR party_b_id = ? OR matcher_id = ?)`,
+          [row.member_id, row.member_id, row.member_id],
+        )
+        dealCount = Number(legacy?.cnt || 0)
+      } catch {
+        dealCount = 0
+      }
+    }
+
+    const createdAt = row.member_created_at || row.created_at
+    const memberDays = createdAt
+      ? Math.max(1, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000) + 1)
+      : 0
+
+    return {
+      ...signed,
+      departments,
+      department_text: departments
+        .map((d) => [d.department_name, d.position].filter(Boolean).join(' · '))
+        .filter(Boolean)
+        .join('；'),
+      available_points: Number(row.available_points || 0),
+      total_points: Number(row.total_points || 0),
+      member_days: memberDays,
+      deal_count: dealCount,
+    }
   }
 
   async getMine(memberId: string) {

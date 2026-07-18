@@ -13,6 +13,14 @@ export class EventsController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Get('mine/registrations')
+  @UseGuards(MemberAuthGuard)
+  async myRegistrations(@Req() request: any) {
+    console.log('[EventsController] GET /api/events/mine/registrations')
+    const result = await this.eventsService.getMyRegistrations(request.user.sub)
+    return { code: 200, msg: 'success', data: result }
+  }
+
   @Get(':id')
   async getEvent(@Param('id') id: string) {
     console.log('[EventsController] GET /api/events/:id - id:', id)
