@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Inject, Param, Post, Put, Query, UseGuards, forwardRef } from '@nestjs/common'
 import { AdminService } from './admin.service'
 import * as bcrypt from 'bcryptjs'
 import { AdminAuthGuard } from '@/auth/auth.guard'
@@ -682,6 +682,7 @@ INSERT IGNORE INTO homepage_sections (section, display_name, item_limit, sort_or
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
+    @Inject(forwardRef(() => MallService))
     private readonly mallService: MallService,
   ) {}
 

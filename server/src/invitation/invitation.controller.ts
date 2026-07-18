@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Inject, Post, Query, Req, UseGuards, forwardRef } from '@nestjs/common'
 import { AdminService } from '@/admin/admin.service'
 import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard'
 import { Public } from '@/auth/public.decorator'
@@ -8,6 +8,7 @@ import { MemberInvitationService } from './member-invitation.service'
 @Controller('invitation')
 export class InvitationController {
   constructor(
+    @Inject(forwardRef(() => AdminService))
     private readonly adminService: AdminService,
     private readonly memberInvitationService: MemberInvitationService,
   ) {}

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { queryRows, queryOne, queryExecute, withTransaction } from '@/storage/database/mysql-client';
 import { ensureSchemaColumns } from '@/storage/database/ensure-schema-columns';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
@@ -41,6 +41,7 @@ export class MallService {
   constructor(
     private readonly uploadService: UploadService,
     private readonly pointsEngine: PointsEngineService,
+    @Inject(forwardRef(() => InvitationEngineService))
     private readonly invitationEngine: InvitationEngineService,
   ) {}
 
