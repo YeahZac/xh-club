@@ -1,8 +1,11 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getPool, initMySQL } from '../storage/database/mysql-client'
+import { PointsEngineService } from '@/points/points-engine.service'
 
 @Injectable()
 export class CommunityService {
+  constructor(private readonly pointsEngine: PointsEngineService) {}
+
   private async getDb() {
     await initMySQL()
     return getPool()!
@@ -67,7 +70,17 @@ export class CommunityService {
     )
 
     const [rows]: any = await pool.query('SELECT * FROM posts WHERE id = ?', [result.insertId])
-    return rows[0]
+    const post = rows[0]
+    if (dto.member_id) {
+      void this.pointsEngine
+        .evaluate(dto.member_id, 'publish_post', {
+          referenceType: 'post',
+          referenceId: result.insertId,
+          description: '发布动态奖励积分',
+        })
+        .catch((err) => console.warn('[CommunityService] points evaluate failed', err))
+    }
+    return post
   }
 
   /** 获取动态详情 */

@@ -2,6 +2,8 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
 import { UploadService } from '@/upload/upload.service'
 import { assertCloudStorageImageUrl } from '@/utils/media-validators'
+import { PointsEngineService } from '@/points/points-engine.service'
+import { InvitationEngineService } from '@/invitation/invitation-engine.service'
 
 const DEAL_STATUSES = ['connecting', 'completed', 'failed'] as const
 const AUDIT_STATUSES = ['pending', 'approved', 'rejected'] as const
@@ -28,7 +30,11 @@ const toMysqlDate = (value: unknown): string => {
 
 @Injectable()
 export class DealApplicationsService {
-  constructor(private readonly uploadService: UploadService) {}
+  constructor(
+    private readonly uploadService: UploadService,
+    private readonly pointsEngine: PointsEngineService,
+    private readonly invitationEngine: InvitationEngineService,
+  ) {}
 
   private async formatRow(row: any) {
     if (!row) return row
@@ -233,6 +239,21 @@ export class DealApplicationsService {
           : `您提交的「${row.project_name}」成交申请未通过：${reason}`,
       link: `/pages/deal-applications/detail/index?id=${id}`,
     })
+    if (status === 'approved') {
+      void this.pointsEngine
+        .evaluate(row.member_id, 'deal_complete', {
+          referenceType: 'deal_application',
+          referenceId: id,
+          description: '项目成交申请审核通过奖励积分',
+        })
+        .catch((err) => console.warn('[DealApplications] points evaluate failed', err))
+      void this.invitationEngine
+        .grantConditionRewards(row.member_id, 'invitee_deal', {
+          description: '推荐会员完成项目成交',
+          referenceId: id,
+        })
+        .catch((err) => console.warn('[DealApplications] invite reward failed', err))
+    }
     return this.adminGetById(id)
   }
 

@@ -3,12 +3,14 @@ import { getSupabaseClient } from '@/storage/database/supabase-compat'
 import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url'
 import { UploadService } from '@/upload/upload.service'
 import { PointsEngineService } from '@/points/points-engine.service'
+import { InvitationEngineService } from '@/invitation/invitation-engine.service'
 
 @Injectable()
 export class EventsService {
   constructor(
     private readonly uploadService: UploadService,
     private readonly pointsEngine: PointsEngineService,
+    private readonly invitationEngine: InvitationEngineService,
   ) {}
 
   private client() { return getSupabaseClient() }
@@ -125,6 +127,13 @@ export class EventsService {
         description: '参加活动奖励积分',
       })
       .catch((err) => console.warn('[EventsService] points evaluate failed', err))
+
+    void this.invitationEngine
+      .grantConditionRewards(memberId, 'invitee_event', {
+        description: '推荐会员参加活动',
+        referenceId: eventId,
+      })
+      .catch((err) => console.warn('[EventsService] invite reward failed', err))
 
     return data
   }

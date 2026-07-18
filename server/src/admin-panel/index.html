@@ -370,12 +370,13 @@
               <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">用户ID</th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">联系方式</th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">行业标签</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">缴费会员</th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">状态</th>
               <th class="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">操作</th>
             </tr>
           </thead>
           <tbody id="talentTableBody" class="divide-y divide-gray-50">
-            <tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
+            <tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -955,6 +956,10 @@
 
     <!-- ====== 部门管理 ====== -->
     <div data-page="departments" class="p-8 fade-in">
+      <div class="bg-gradient-to-r from-navy-800 to-navy-700 rounded-2xl p-5 mb-6 text-white">
+        <h3 class="font-bold text-lg">组织架构 / 部门管理</h3>
+        <p class="text-sm text-white/80 mt-2">首次打开会按组织架构图自动初始化默认部门（理事会→会长→秘书处→分会等），可随时编辑、增删。</p>
+      </div>
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <div class="flex justify-between items-center mb-6">
           <h3 class="font-bold text-navy-800">部门列表</h3>
@@ -4547,7 +4552,7 @@ async function loadTalents() {
   if (res.code !== 200) return
   const list = Array.isArray(res.data) ? res.data : []
   if (!list.length) {
-    document.getElementById('talentTableBody').innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">暂无人才申请</td></tr>'
+    document.getElementById('talentTableBody').innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">暂无人才申请</td></tr>'
     return
   }
   document.getElementById('talentTableBody').innerHTML = list.map((item) => {
@@ -4555,6 +4560,15 @@ async function loadTalents() {
     const avatarHtml = avatar
       ? `<img src="${escapeHtml(avatar)}" class="w-10 h-12 rounded-lg object-cover" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='flex')"><div class="w-10 h-12 rounded-lg bg-navy-100 text-navy-700 items-center justify-center text-sm font-bold" style="display:none">${escapeHtml((item.real_name || '?')[0])}</div>`
       : `<div class="w-10 h-12 rounded-lg bg-navy-100 text-navy-700 flex items-center justify-center text-sm font-bold">${escapeHtml((item.real_name || '?')[0])}</div>`
+    const payClass = item.membership_active
+      ? 'bg-amber-100 text-amber-800'
+      : item.payment_status === 'expired'
+        ? 'bg-gray-200 text-gray-600'
+        : 'bg-gray-100 text-gray-500'
+    const payLabel = item.membership_active
+      ? (item.membership_years_label || '已缴费')
+      : (item.payment_status_label || '未缴费')
+    const payExpire = item.payment_expire_at ? `<p class="text-xs text-gray-400 mt-0.5">至 ${escapeHtml(String(item.payment_expire_at).slice(0, 10))}</p>` : ''
     return `
     <tr class="hover:bg-gray-50">
       <td class="px-6 py-4">
@@ -4569,6 +4583,10 @@ async function loadTalents() {
       <td class="px-6 py-4 text-sm text-gray-600">${escapeHtml(item.member_id)}</td>
       <td class="px-6 py-4 text-sm">${escapeHtml(item.contact)}</td>
       <td class="px-6 py-4 text-sm text-gray-600">${escapeHtml(formatIndustryTags(item.industry_tags))}</td>
+      <td class="px-6 py-4">
+        <span class="text-xs px-2.5 py-1 rounded-full ${payClass}">${escapeHtml(payLabel)}</span>
+        ${payExpire}
+      </td>
       <td class="px-6 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${TALENT_STATUS_COLOR[item.status] || 'bg-gray-100 text-gray-500'}">${TALENT_STATUS_MAP[item.status] || item.status}</span></td>
       <td class="px-6 py-4 text-center">
         <button onclick="showTalentModal('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 mr-1">编辑</button>
@@ -4651,6 +4669,34 @@ async function showTalentModal(id) {
           </div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">未通过原因</label><input id="talRejectReason" value="${escapeHtml(item.reject_reason || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         </div>
+        <div class="rounded-xl border border-amber-100 bg-amber-50/60 p-4 space-y-3">
+          <p class="text-sm font-semibold text-navy-800">缴费会员</p>
+          <p class="text-xs text-gray-500">到期后会员标识与权益自动失效（访问时校验）</p>
+          <div class="grid grid-cols-3 gap-3">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">缴费状态</label>
+              <select id="talPayStatus" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+                <option value="unpaid" ${item.payment_status==='unpaid'||!item.payment_status?'selected':''}>未缴费</option>
+                <option value="paid" ${item.payment_status==='paid'?'selected':''}>已缴费</option>
+                <option value="expired" ${item.payment_status==='expired'?'selected':''}>已到期</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">缴费开始时间</label>
+              <input id="talPayStart" type="date" value="${escapeHtml((item.payment_start_at || '').toString().slice(0,10))}" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">缴费期限</label>
+              <select id="talPayYears" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
+                <option value="0" ${!item.membership_years?'selected':''}>未设置</option>
+                <option value="1" ${Number(item.membership_years)===1?'selected':''}>一年缴会员</option>
+                <option value="2" ${Number(item.membership_years)===2?'selected':''}>二年缴会员</option>
+                <option value="3" ${Number(item.membership_years)===3?'selected':''}>三年缴会员</option>
+              </select>
+            </div>
+          </div>
+          <p class="text-xs text-gray-500">到期日：${escapeHtml((item.payment_expire_at || '-').toString().slice(0,10))} · 当前权益：${item.membership_active ? '有效' : '无效'}</p>
+        </div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
           <button onclick="saveTalent('${item.id}')" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
@@ -4674,6 +4720,9 @@ async function saveTalent(id) {
     card_image_url: document.getElementById('talCard').value.trim() || null,
     status: document.getElementById('talStatus').value,
     reject_reason: document.getElementById('talRejectReason').value,
+    payment_status: document.getElementById('talPayStatus')?.value || 'unpaid',
+    payment_start_at: document.getElementById('talPayStart')?.value || null,
+    membership_years: Number(document.getElementById('talPayYears')?.value || 0),
   }
   if (!body.real_name || !body.contact || !body.photo_url || !tags.length) {
     return toast('请完善姓名、联系方式、职业照片和行业标签', 'error')
@@ -5108,6 +5157,8 @@ const POINTS_RULE_PRESETS = [
   { code: 'daily_login', label: '每日登录', unit: '次' },
   { code: 'daily_checkin', label: '每日签到', unit: '次' },
   { code: 'talent_settle', label: '完成人才入驻', unit: '次' },
+  { code: 'publish_post', label: '发布动态', unit: '次' },
+  { code: 'mall_exchange', label: '完成商城兑换', unit: '次' },
   { code: 'custom', label: '自定义条件', unit: '次' },
 ]
 
@@ -5273,54 +5324,89 @@ async function deleteContributionRule(id) {
 }
 
 // ===== 部门管理 =====
+let departmentsCache = []
+
+function deptParentOptions(selectedId, excludeId) {
+  return `<option value="">顶级（无上级）</option>` + departmentsCache
+    .filter((d) => String(d.id) !== String(excludeId || ''))
+    .map((d) => `<option value="${d.id}" ${String(d.id) === String(selectedId || '') ? 'selected' : ''}>${'—'.repeat(Math.max(0, (d.level || 1) - 1))} ${escapeHtml(d.name)}</option>`)
+    .join('')
+}
+
 async function loadDepartments() {
   const res = await api('/admin/departments')
   const list = document.getElementById('departmentsList')
-  if (res.code === 200 && res.data?.length) {
-    list.innerHTML = res.data.map(d => `
-      <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
+  departmentsCache = Array.isArray(res.data) ? res.data : []
+  if (res.code === 200 && departmentsCache.length) {
+    list.innerHTML = departmentsCache.map(d => {
+      const indent = Math.max(0, (Number(d.level) || 1) - 1) * 16
+      const parent = departmentsCache.find((x) => String(x.id) === String(d.parent_id))
+      return `
+      <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition" style="margin-left:${indent}px">
         <div>
-          <p class="font-medium text-navy-800">${d.name}</p>
-          <p class="text-xs text-gray-400">${d.parent_id ? '上级部门ID: ' + d.parent_id : '顶级部门'} · 负责人: ${d.leader_name || '未设置'}</p>
+          <p class="font-medium text-navy-800">${escapeHtml(d.name)}</p>
+          <p class="text-xs text-gray-400">层级 ${d.level || 1} · 上级: ${escapeHtml(parent?.name || '无')} · 负责人: ${escapeHtml(d.leader_name || '未设置')}</p>
         </div>
         <div class="flex gap-2">
           <button onclick="showEditDepartmentModal(${d.id})" class="px-3 py-1.5 text-sm text-brand-600 hover:bg-brand-50 rounded-lg">编辑</button>
           <button onclick="deleteDepartment(${d.id})" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg">删除</button>
         </div>
-      </div>
-    `).join('')
+      </div>`
+    }).join('')
   } else {
     list.innerHTML = '<p class="text-gray-400 text-center py-8">暂无部门</p>'
   }
 }
 
-function showAddDepartmentModal() {
+function showDepartmentFormModal(dept) {
+  const isEdit = !!dept
   showModal(`
     <div class="p-6">
-      <h3 class="text-lg font-bold text-navy-800 mb-4">新增部门</h3>
+      <h3 class="text-lg font-bold text-navy-800 mb-4">${isEdit ? '编辑部门' : '新增部门'}</h3>
       <div class="space-y-4">
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">部门名称</label><input id="deptName" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 技术部"></div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">上级部门ID（可选）</label><input id="deptParent" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="留空为顶级部门"></div>
-        <div><label class="block text-sm font-medium text-gray-700 mb-1">负责人姓名</label><input id="deptLeader" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="如: 张三"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">部门名称</label>
+          <input id="deptName" value="${escapeHtml(dept?.name || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="如: 会员发展部"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">上级部门</label>
+          <select id="deptParent" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${deptParentOptions(dept?.parent_id, dept?.id)}</select></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">负责人姓名</label>
+          <input id="deptLeader" value="${escapeHtml(dept?.leader_name || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="选填"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">排序</label>
+          <input id="deptSort" type="number" value="${dept?.sort_order ?? 0}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+          <textarea id="deptDesc" rows="2" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${escapeHtml(dept?.description || '')}</textarea></div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
-          <button onclick="saveDepartment()" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
+          <button onclick="saveDepartment(${isEdit ? dept.id : 'null'})" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">保存</button>
         </div>
       </div>
     </div>
   `)
 }
 
-async function saveDepartment() {
+function showAddDepartmentModal() {
+  showDepartmentFormModal(null)
+}
+
+function showEditDepartmentModal(id) {
+  const dept = departmentsCache.find((d) => String(d.id) === String(id))
+  if (!dept) return toast('部门不存在', 'error')
+  showDepartmentFormModal(dept)
+}
+
+async function saveDepartment(id) {
   const body = {
-    name: document.getElementById('deptName').value,
-    parent_id: parseInt(document.getElementById('deptParent').value) || null,
-    leader_name: document.getElementById('deptLeader').value
+    name: document.getElementById('deptName').value.trim(),
+    parent_id: document.getElementById('deptParent').value ? Number(document.getElementById('deptParent').value) : null,
+    leader_name: document.getElementById('deptLeader').value.trim(),
+    sort_order: Number(document.getElementById('deptSort').value || 0),
+    description: document.getElementById('deptDesc').value.trim(),
   }
   if (!body.name) return toast('请填写部门名称', 'error')
-  const res = await api('/admin/departments', { method: 'POST', body })
-  if (res.code === 200) { toast('创建成功'); closeModal(); loadDepartments(); }
-  else toast(res.msg || '创建失败', 'error')
+  const res = id
+    ? await api(`/admin/departments/${id}`, { method: 'PUT', body })
+    : await api('/admin/departments', { method: 'POST', body })
+  if (res.code === 200) { toast(id ? '更新成功' : '创建成功'); closeModal(); loadDepartments(); }
+  else toast(res.msg || '保存失败', 'error')
 }
 
 async function deleteDepartment(id) {

@@ -1492,13 +1492,98 @@ export class AdminService {
   }
 
   /** ====== 部门管理 ====== */
+  private async ensureDepartmentsTable() {
+    await queryExecute(`
+      CREATE TABLE IF NOT EXISTS departments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        parent_id INT DEFAULT NULL,
+        level INT DEFAULT 1,
+        path VARCHAR(500) DEFAULT '/',
+        manager_id INT NULL,
+        leader_name VARCHAR(100) NULL,
+        sort_order INT DEFAULT 0,
+        status VARCHAR(20) DEFAULT 'active',
+        description TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_parent_id (parent_id),
+        INDEX idx_path (path)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `)
+  }
+
+  /** 按组织架构图写入默认部门（仅空库时） */
+  async ensureDefaultDepartments() {
+    await this.ensureDepartmentsTable()
+    const count = await queryOne('SELECT COUNT(*) AS total FROM departments')
+    if (Number((count as any)?.total || 0) > 0) return { seeded: false }
+
+    const insertOne = async (
+      name: string,
+      parentId: number | null,
+      sortOrder: number,
+      description?: string,
+    ) => {
+      let level = 1
+      let path = '/'
+      if (parentId) {
+        const parent = await queryOne('SELECT level, path FROM departments WHERE id = ?', [parentId])
+        if (parent) {
+          level = Number((parent as any).level || 1) + 1
+          path = `${(parent as any).path || '/'}${parentId}/`
+        }
+      }
+      const result = await queryExecute(
+        `INSERT INTO departments (name, parent_id, level, path, leader_name, sort_order, description, status)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, 'active')`,
+        [name, parentId, level, path, sortOrder, description || null],
+      )
+      const id = result.insertId
+      await queryExecute('UPDATE departments SET path = CONCAT(path, ?, "/") WHERE id = ?', [id, id])
+      return id
+    }
+
+    const board = await insertOne('理事会', null, 1, '最高决策机构')
+    await insertOne('理事长', board, 1)
+    await insertOne('监事长', board, 2)
+    await insertOne('理事会成员', board, 3)
+    const president = await insertOne('会长', board, 4, '执行负责人')
+    await insertOne('专家委员会', president, 1)
+    await insertOne('顾问委员', president, 2)
+    await insertOne('荣誉会长', president, 3)
+    const secretariat = await insertOne('秘书处', president, 4, '日常运营统筹')
+    await insertOne('秘书长', secretariat, 1)
+    await insertOne('副秘书长', secretariat, 2)
+    await insertOne('执行秘书', secretariat, 3)
+    await insertOne('会员发展部', secretariat, 10)
+    await insertOne('品牌宣传部', secretariat, 11)
+    await insertOne('系统运营部', secretariat, 12)
+    await insertOne('项目合作部', secretariat, 13)
+    await insertOne('对外联络部', secretariat, 14)
+    const sz = await insertOne('深圳分会', secretariat, 20)
+    await insertOne('广州分会', secretariat, 21)
+    await insertOne('佛山分会', secretariat, 22)
+    await insertOne('东莞分会', secretariat, 23)
+    const baoan = await insertOne('分会一部部长（宝安）', sz, 1)
+    await insertOne('分会二部部长（南山）', sz, 2)
+    await insertOne('五金行业会员中心', baoan, 1)
+    await insertOne('洗护行业会员中心', baoan, 2)
+    await insertOne('食品行业会员中心', baoan, 3)
+
+    return { seeded: true }
+  }
+
   async getDepartments() {
     try {
+      await this.ensureDefaultDepartments()
       return await queryRows(`
-        SELECT d.*, u.name as manager_name
+        SELECT d.*,
+               COALESCE(d.leader_name, u.name) AS leader_name,
+               u.name AS manager_name
         FROM departments d
         LEFT JOIN users u ON d.manager_id = u.id
-        ORDER BY d.sort_order ASC, d.id ASC
+        ORDER BY d.level ASC, d.sort_order ASC, d.id ASC
       `)
     } catch (error) {
       console.error('[AdminService] getDepartments error:', error)
@@ -1506,9 +1591,16 @@ export class AdminService {
     }
   }
 
-  async createDepartment(dto: { name: string; parent_id?: number; manager_id?: number; sort_order?: number; description?: string }) {
+  async createDepartment(dto: {
+    name: string
+    parent_id?: number
+    manager_id?: number
+    leader_name?: string
+    sort_order?: number
+    description?: string
+  }) {
     try {
-      // 计算层级和路径
+      await this.ensureDepartmentsTable()
       let level = 1
       let path = '/'
 
@@ -1518,17 +1610,23 @@ export class AdminService {
           level = (parent as any).level + 1
           path = `${(parent as any).path}${dto.parent_id}/`
         }
-      } else {
-        path = '/'
       }
 
       const result = await queryExecute(
-        `INSERT INTO departments (name, parent_id, level, path, manager_id, sort_order, description)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [dto.name, dto.parent_id || null, level, path, dto.manager_id || null, dto.sort_order || 0, dto.description || null]
+        `INSERT INTO departments (name, parent_id, level, path, manager_id, leader_name, sort_order, description)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          dto.name,
+          dto.parent_id || null,
+          level,
+          path,
+          dto.manager_id || null,
+          String(dto.leader_name || '').trim() || null,
+          dto.sort_order || 0,
+          dto.description || null,
+        ],
       )
 
-      // 更新路径包含自身ID
       const newId = result.insertId
       await queryExecute('UPDATE departments SET path = CONCAT(path, ?, "/") WHERE id = ?', [newId, newId])
 
@@ -1539,17 +1637,61 @@ export class AdminService {
     }
   }
 
-  async updateDepartment(id: string, dto: { name?: string; manager_id?: number; sort_order?: number; status?: string; description?: string }) {
+  async updateDepartment(
+    id: string,
+    dto: {
+      name?: string
+      parent_id?: number | null
+      manager_id?: number
+      leader_name?: string
+      sort_order?: number
+      status?: string
+      description?: string
+    },
+  ) {
     try {
-      await queryExecute('UPDATE departments SET ? WHERE id = ?', [dto, id])
-      return await queryOne(`
-        SELECT d.*, u.name as manager_name
-        FROM departments d
-        LEFT JOIN users u ON d.manager_id = u.id
-        WHERE d.id = ?
-      `, [id])
+      const existing = await queryOne('SELECT * FROM departments WHERE id = ?', [id])
+      if (!existing) throw new HttpException('部门不存在', HttpStatus.NOT_FOUND)
+
+      const updates: string[] = []
+      const params: any[] = []
+      const assign = (col: string, value: unknown) => {
+        updates.push(`${col} = ?`)
+        params.push(value)
+      }
+
+      if (dto.name !== undefined) assign('name', String(dto.name).trim())
+      if (dto.leader_name !== undefined) assign('leader_name', String(dto.leader_name || '').trim() || null)
+      if (dto.manager_id !== undefined) assign('manager_id', dto.manager_id || null)
+      if (dto.sort_order !== undefined) assign('sort_order', Number(dto.sort_order) || 0)
+      if (dto.status !== undefined) assign('status', dto.status === 'inactive' ? 'inactive' : 'active')
+      if (dto.description !== undefined) assign('description', dto.description || null)
+
+      if (dto.parent_id !== undefined) {
+        const parentId = dto.parent_id || null
+        if (parentId && String(parentId) === String(id)) {
+          throw new HttpException('上级部门不能是自己', HttpStatus.BAD_REQUEST)
+        }
+        let level = 1
+        let path = '/'
+        if (parentId) {
+          const parent = await queryOne('SELECT level, path FROM departments WHERE id = ?', [parentId])
+          if (!parent) throw new HttpException('上级部门不存在', HttpStatus.BAD_REQUEST)
+          level = Number((parent as any).level || 1) + 1
+          path = `${(parent as any).path || '/'}${parentId}/`
+        }
+        assign('parent_id', parentId)
+        assign('level', level)
+        assign('path', `${path}${id}/`)
+      }
+
+      if (!updates.length) throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
+      params.push(id)
+      await queryExecute(`UPDATE departments SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`, params)
+      return await queryOne('SELECT * FROM departments WHERE id = ?', [id])
     } catch (error) {
       console.error('[AdminService] updateDepartment error:', error)
+      if (error instanceof HttpException) throw error
       throw new HttpException('更新部门失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }

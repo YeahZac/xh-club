@@ -86,6 +86,13 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['points_rules', 'threshold_value', 'INT NOT NULL DEFAULT 1'],
   ['points_rules', 'description', 'VARCHAR(500) NULL'],
   ['points_rules', 'repeatable', 'TINYINT(1) NOT NULL DEFAULT 0'],
+  // 人才缴费会员
+  ['talent_applications', 'payment_status', `VARCHAR(20) NOT NULL DEFAULT 'unpaid'`],
+  ['talent_applications', 'payment_start_at', 'DATE NULL'],
+  ['talent_applications', 'membership_years', 'TINYINT NOT NULL DEFAULT 0'],
+  ['talent_applications', 'payment_expire_at', 'DATE NULL'],
+  // 部门负责人姓名（组织架构展示用）
+  ['departments', 'leader_name', 'VARCHAR(100) NULL'],
 ]
 
 const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [

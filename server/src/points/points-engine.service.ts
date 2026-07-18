@@ -66,13 +66,24 @@ export class PointsEngineService {
         return Number(row?.cnt || 0)
       }
       case 'deal_complete': {
-        const row = await queryOne<RowDataPacket>(
+        const legacy = await queryOne<RowDataPacket>(
           `SELECT COUNT(*) AS cnt FROM transactions
            WHERE status = 'completed'
              AND (party_a_id = ? OR party_b_id = ? OR matcher_id = ?)`,
           [memberId, memberId, memberId],
         )
-        return Number(row?.cnt || 0)
+        let dealApps = 0
+        try {
+          const apps = await queryOne<RowDataPacket>(
+            `SELECT COUNT(*) AS cnt FROM project_deal_applications
+             WHERE member_id = ? AND audit_status = 'approved'`,
+            [memberId],
+          )
+          dealApps = Number(apps?.cnt || 0)
+        } catch {
+          dealApps = 0
+        }
+        return Number(legacy?.cnt || 0) + dealApps
       }
       case 'member_days': {
         const member = await queryOne<RowDataPacket>(
@@ -87,9 +98,102 @@ export class PointsEngineService {
       case 'daily_login':
       case 'daily_checkin':
       case 'talent_settle':
+      case 'publish_post':
+      case 'mall_exchange':
+      case 'custom':
         return 1
       default:
         return 1
+    }
+  }
+
+  /** 每日签到：写入签到记录并按 daily_checkin 规则发积分 */
+  async checkIn(memberId: string | number) {
+    if (!memberId) return { code: 400, msg: '未登录', data: null }
+    try {
+      await queryExecute(
+        `CREATE TABLE IF NOT EXISTS check_in_records (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          member_id INT NOT NULL,
+          check_in_date DATE NOT NULL,
+          points_earned INT NOT NULL DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_member_date (member_id, check_in_date),
+          INDEX idx_member_id (member_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+      )
+    } catch {
+      /* ignore */
+    }
+
+    const today = new Date()
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    const existed = await queryOne<RowDataPacket>(
+      'SELECT id FROM check_in_records WHERE member_id = ? AND check_in_date = ?',
+      [memberId, dateStr],
+    )
+    if (existed) {
+      return { code: 400, msg: '今日已签到', data: { checked_in: true, date: dateStr } }
+    }
+
+    const result = await this.evaluate(memberId, 'daily_checkin', {
+      referenceType: 'checkin',
+      referenceId: dateStr,
+      description: '每日签到奖励积分',
+    })
+    const grantedList: Array<{ points?: number }> = Array.isArray(result.granted) ? result.granted : []
+    const pointsEarned = grantedList.reduce(
+      (sum, item) => sum + Number(item?.points || 0),
+      0,
+    )
+
+    try {
+      await queryExecute(
+        'INSERT INTO check_in_records (member_id, check_in_date, points_earned) VALUES (?, ?, ?)',
+        [memberId, dateStr, pointsEarned],
+      )
+    } catch (error) {
+      // 兼容旧表 user_id
+      try {
+        await queryExecute(
+          'INSERT INTO check_in_records (user_id, check_in_date, points_earned) VALUES (?, ?, ?)',
+          [memberId, dateStr, pointsEarned],
+        )
+      } catch (err2) {
+        this.logger.warn(`check_in_records insert failed: ${(err2 as Error)?.message}`)
+      }
+    }
+
+    return {
+      code: 200,
+      msg: pointsEarned > 0 ? `签到成功，+${pointsEarned}积分` : '签到成功',
+      data: { checked_in: true, date: dateStr, points_earned: pointsEarned, result },
+    }
+  }
+
+  async getCheckInStatus(memberId: string | number) {
+    const today = new Date()
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    let existed = null as any
+    try {
+      existed = await queryOne(
+        'SELECT id, points_earned FROM check_in_records WHERE member_id = ? AND check_in_date = ?',
+        [memberId, dateStr],
+      )
+    } catch {
+      try {
+        existed = await queryOne(
+          'SELECT id, points_earned FROM check_in_records WHERE user_id = ? AND check_in_date = ?',
+          [memberId, dateStr],
+        )
+      } catch {
+        existed = null
+      }
+    }
+    return {
+      date: dateStr,
+      checked_in: !!existed,
+      points_earned: Number(existed?.points_earned || 0),
     }
   }
 

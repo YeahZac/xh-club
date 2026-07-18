@@ -3,6 +3,7 @@ import { queryRows, queryOne, queryExecute } from '@/storage/database/mysql-clie
 import { UploadService } from '@/upload/upload.service'
 import { assertCloudStorageImageUrl } from '@/utils/media-validators'
 import { PointsEngineService } from '@/points/points-engine.service'
+import { InvitationEngineService } from '@/invitation/invitation-engine.service'
 
 export const TALENT_STATUSES = ['pending', 'approved', 'rejected'] as const
 export type TalentStatus = (typeof TALENT_STATUSES)[number]
@@ -52,6 +53,7 @@ export class TalentService {
   constructor(
     private readonly uploadService: UploadService,
     private readonly pointsEngine: PointsEngineService,
+    private readonly invitationEngine: InvitationEngineService,
   ) {}
 
   async ensureDefaultIndustries() {
@@ -117,12 +119,64 @@ export class TalentService {
     return { success: true }
   }
 
+  private computeMembership(row: any) {
+    const years = Number(row?.membership_years || 0)
+    const start = row?.payment_start_at ? String(row.payment_start_at).slice(0, 10) : ''
+    let expire = row?.payment_expire_at ? String(row.payment_expire_at).slice(0, 10) : ''
+    let paymentStatus = String(row?.payment_status || 'unpaid')
+
+    if (paymentStatus === 'paid' && expire) {
+      const expireTime = new Date(`${expire}T23:59:59`).getTime()
+      if (!Number.isNaN(expireTime) && expireTime < Date.now()) {
+        paymentStatus = 'expired'
+      }
+    }
+
+    const membershipActive = paymentStatus === 'paid'
+    const yearsLabel =
+      years === 1 ? '一年缴会员' : years === 2 ? '二年缴会员' : years === 3 ? '三年缴会员' : ''
+
+    return {
+      payment_status: paymentStatus,
+      payment_status_label:
+        paymentStatus === 'paid' ? '已缴费' : paymentStatus === 'expired' ? '已到期' : '未缴费',
+      payment_start_at: start || null,
+      membership_years: years || 0,
+      membership_years_label: yearsLabel,
+      payment_expire_at: expire || null,
+      membership_active: membershipActive,
+      membership_badge: membershipActive ? yearsLabel || '缴费会员' : '',
+    }
+  }
+
+  private async syncExpiredPayment(row: any) {
+    if (!row?.id) return row
+    const meta = this.computeMembership(row)
+    if (String(row.payment_status) === 'paid' && meta.payment_status === 'expired') {
+      await queryExecute(
+        `UPDATE talent_applications
+         SET payment_status = 'expired', updated_at = NOW()
+         WHERE id = ? AND payment_status = 'paid'`,
+        [row.id],
+      )
+      return { ...row, payment_status: 'expired' }
+    }
+    return row
+  }
+
   private async signTalent(row: any) {
     if (!row) return null
-    const signed = await this.uploadService.signRowFields(row, ['photo_url', 'card_image_url', 'avatar_url', 'member_avatar'])
+    const synced = await this.syncExpiredPayment(row)
+    const signed = await this.uploadService.signRowFields(synced, [
+      'photo_url',
+      'card_image_url',
+      'avatar_url',
+      'member_avatar',
+    ])
     return {
       ...signed,
       industry_tags: parseIndustryTags(signed.industry_tags),
+      ...this.computeMembership(signed),
     }
   }
 
@@ -361,25 +415,79 @@ export class TalentService {
       }
       assign('reviewed_at', new Date())
       if (dto.reviewed_by !== undefined) assign('reviewed_by', dto.reviewed_by || null)
-    } else if (dto.reject_reason !== undefined) {
+    } else     if (dto.reject_reason !== undefined) {
       assign('reject_reason', String(dto.reject_reason || '').trim() || null)
+    }
+
+    // 缴费会员：开始时间 + 年限（1/2/3）→ 自动计算到期日
+    if (
+      dto.payment_status !== undefined
+      || dto.payment_start_at !== undefined
+      || dto.membership_years !== undefined
+    ) {
+      const paymentStatus = String(dto.payment_status ?? existing.payment_status ?? 'unpaid').trim()
+      if (!['unpaid', 'paid', 'expired'].includes(paymentStatus)) {
+        throw new HttpException('缴费状态无效', HttpStatus.BAD_REQUEST)
+      }
+      assign('payment_status', paymentStatus)
+
+      if (paymentStatus === 'unpaid') {
+        assign('payment_start_at', null)
+        assign('membership_years', 0)
+        assign('payment_expire_at', null)
+      } else {
+        const years = Number(dto.membership_years ?? existing.membership_years ?? 0)
+        if (![1, 2, 3].includes(years) && paymentStatus === 'paid') {
+          throw new HttpException('请选择一年/二年/三年缴会员', HttpStatus.BAD_REQUEST)
+        }
+        const startRaw = String(dto.payment_start_at ?? existing.payment_start_at ?? '').slice(0, 10)
+        if (paymentStatus === 'paid' && !/^\d{4}-\d{2}-\d{2}$/.test(startRaw)) {
+          throw new HttpException('请填写缴费开始时间', HttpStatus.BAD_REQUEST)
+        }
+        let expire: string | null = null
+        if (startRaw && years > 0) {
+          const startDate = new Date(`${startRaw}T00:00:00`)
+          startDate.setFullYear(startDate.getFullYear() + years)
+          expire = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`
+        }
+        assign('payment_start_at', startRaw || null)
+        assign('membership_years', years || 0)
+        assign('payment_expire_at', expire)
+      }
     }
 
     if (!updates.length) throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
     params.push(id)
     await queryExecute(`UPDATE talent_applications SET ${updates.join(', ')} WHERE id = ?`, params)
     const result = await this.adminGetById(id)
-    if (dto.status === 'approved') {
-      const memberId = (result as any)?.member_id
-      if (memberId) {
-        void this.pointsEngine
-          .evaluate(memberId, 'talent_settle', {
-            referenceType: 'talent',
-            referenceId: id,
-            description: '完成人才入驻奖励积分',
-          })
-          .catch((err) => console.warn('[TalentService] points evaluate failed', err))
-      }
+    const memberId = (result as any)?.member_id
+    if (dto.status === 'approved' && memberId) {
+      void this.pointsEngine
+        .evaluate(memberId, 'talent_settle', {
+          referenceType: 'talent',
+          referenceId: id,
+          description: '完成人才入驻奖励积分',
+        })
+        .catch((err) => console.warn('[TalentService] points evaluate failed', err))
+      void this.invitationEngine
+        .grantConditionRewards(memberId, 'invitee_talent', {
+          description: '推荐会员完成人才入驻',
+          referenceId: id,
+        })
+        .catch((err) => console.warn('[TalentService] invite reward failed', err))
+    }
+    if (
+      memberId
+      && (result as any)?.membership_active
+      && String(existing.payment_status) !== 'paid'
+      && String((result as any).payment_status) === 'paid'
+    ) {
+      void this.invitationEngine
+        .grantConditionRewards(memberId, 'invitee_paid_member', {
+          description: '推荐会员成为缴费会员',
+          referenceId: id,
+        })
+        .catch((err) => console.warn('[TalentService] paid member invite reward failed', err))
     }
     return result
   }

@@ -78,10 +78,60 @@ export class InvitationEngineService {
     return { bound: true, inviterId: String(inviter.id) }
   }
 
-  private ruleMatchesRegisterLogin(rule: RowDataPacket): boolean {
+  private ruleMatchesCondition(rule: RowDataPacket, conditionCode: string): boolean {
     const conditions = parseInviteConditions(rule.conditions)
-    if (!conditions.length) return true
-    return conditions.some((item) => item.code === 'invitee_register_login')
+    if (!conditions.length) {
+      return conditionCode === 'invitee_register_login'
+    }
+    return conditions.some((item) => item.code === conditionCode)
+  }
+
+  /**
+   * 被邀请人完成某类行为后，给邀请人发放对应「邀请奖励」条件的奖励。
+   * conditionCode: invitee_register_login / invitee_event / invitee_deal /
+   * invitee_talent / invitee_mall_order / invitee_paid_member
+   */
+  async grantConditionRewards(
+    inviteeId: string | number,
+    conditionCode: string,
+    options?: { description?: string; referenceId?: string | number },
+  ) {
+    try {
+      const invitee = await queryOne<RowDataPacket>(
+        'SELECT id, referrer_id FROM members WHERE id = ?',
+        [inviteeId],
+      )
+      if (!invitee?.referrer_id) return { granted: false, reason: 'no_referrer' }
+
+      const inviterId = String(invitee.referrer_id)
+      let record = await queryOne<RowDataPacket>(
+        'SELECT id, invitation_code FROM invitation_records WHERE invitee_id = ? LIMIT 1',
+        [inviteeId],
+      )
+      if (!record) {
+        const insert = await queryExecute(
+          `INSERT INTO invitation_records
+             (inviter_id, invitee_id, invitation_code, status, accepted_at, created_at)
+           VALUES (?, ?, '', 'accepted', NOW(), NOW())`,
+          [inviterId, inviteeId],
+        )
+        record = { id: (insert as any)?.insertId, invitation_code: '' } as RowDataPacket
+      }
+
+      const recordId = Number((record as RowDataPacket).id)
+      const inviteCode = String((record as RowDataPacket).invitation_code || '')
+      return await this.applyInviteRules(inviterId, String(inviteeId), recordId, conditionCode, {
+        inviteCode,
+        description: options?.description,
+        source: conditionCode,
+      })
+    } catch (error) {
+      this.logger.error(
+        `grantConditionRewards failed invitee=${inviteeId} condition=${conditionCode}`,
+        error,
+      )
+      return { granted: false, reason: 'error' }
+    }
   }
 
   private async grantRegisterLoginRewards(
@@ -89,6 +139,20 @@ export class InvitationEngineService {
     inviteeId: string,
     recordId: string | number,
     inviteCode: string,
+  ) {
+    await this.applyInviteRules(inviterId, inviteeId, recordId, 'invitee_register_login', {
+      inviteCode,
+      description: '推荐新会员登录奖励',
+      source: 'invite_register',
+    })
+  }
+
+  private async applyInviteRules(
+    inviterId: string,
+    inviteeId: string,
+    recordId: string | number,
+    conditionCode: string,
+    meta: { inviteCode?: string; description?: string; source?: string },
   ) {
     try {
       const rules = await queryRows<RowDataPacket>(
@@ -102,12 +166,22 @@ export class InvitationEngineService {
       let totalPoints = 0
       let totalContribution = 0
       let totalGrowth = 0
+      const descBase = meta.description || conditionCode
 
       for (const raw of rules) {
-        if (!this.ruleMatchesRegisterLogin(raw)) continue
+        if (!this.ruleMatchesCondition(raw, conditionCode)) continue
 
         const rewards = normalizeInviteRewards(raw)
         if (!hasAnyInviteReward(rewards)) continue
+
+        // 同一规则 + 同一被邀请人 + 同一条件只发一次
+        const dup = await queryOne<RowDataPacket>(
+          `SELECT id FROM invitation_rewards
+           WHERE rule_id = ? AND member_id = ? AND description LIKE ?
+           LIMIT 1`,
+          [raw.id, inviterId, `%${conditionCode}%${inviteeId}%`],
+        )
+        if (dup) continue
 
         if (Number(raw.max_rewards) > 0) {
           const granted = await queryOne<RowDataPacket>(
@@ -117,9 +191,17 @@ export class InvitationEngineService {
           if (Number(granted?.cnt || 0) >= Number(raw.max_rewards)) continue
         }
 
+        const detailDesc = `${descBase}(${conditionCode}/invitee:${inviteeId})`
         if (rewards.points_value > 0) {
           totalPoints += rewards.points_value
-          await this.insertInvitationReward(recordId, inviterId, raw.id, 'points', rewards.points_value, '推荐新会员登录奖励积分')
+          await this.insertInvitationReward(
+            recordId,
+            inviterId,
+            raw.id,
+            'points',
+            rewards.points_value,
+            detailDesc,
+          )
         }
         if (rewards.contribution_value > 0) {
           totalContribution += rewards.contribution_value
@@ -129,7 +211,7 @@ export class InvitationEngineService {
             raw.id,
             'contribution',
             rewards.contribution_value,
-            '推荐新会员登录奖励贡献值',
+            detailDesc,
           )
         }
         totalGrowth += rewards.growth_value
@@ -150,8 +232,15 @@ export class InvitationEngineService {
         try {
           await queryExecute(
             `INSERT INTO points_records (member_id, type, amount, balance, source, source_id, description)
-             VALUES (?, 'earn', ?, ?, 'invite_register', ?, ?)`,
-            [inviterId, totalPoints, after, inviteeId, `推荐码 ${inviteCode} 新会员登录奖励`],
+             VALUES (?, 'earn', ?, ?, ?, ?, ?)`,
+            [
+              inviterId,
+              totalPoints,
+              after,
+              meta.source || conditionCode,
+              inviteeId,
+              `${descBase}${meta.inviteCode ? ` 推荐码 ${meta.inviteCode}` : ''}`,
+            ],
           )
         } catch (error) {
           this.logger.warn(`points_records insert failed: ${(error as Error)?.message}`)
@@ -173,15 +262,26 @@ export class InvitationEngineService {
         await queryExecute(
           `UPDATE invitation_records
            SET status = 'rewarded',
-               reward_points = reward_points + ?,
-               reward_contribution = reward_contribution + ?,
+               reward_points = IFNULL(reward_points, 0) + ?,
+               reward_contribution = IFNULL(reward_contribution, 0) + ?,
                rewarded_at = NOW()
            WHERE id = ?`,
           [totalPoints, totalContribution, recordId],
         )
       }
+
+      return {
+        granted: totalPoints > 0 || totalContribution > 0 || totalGrowth > 0,
+        points: totalPoints,
+        contribution: totalContribution,
+        growth: totalGrowth,
+      }
     } catch (error) {
-      this.logger.error(`grantRegisterLoginRewards failed inviter=${inviterId} invitee=${inviteeId}`, error)
+      this.logger.error(
+        `applyInviteRules failed inviter=${inviterId} invitee=${inviteeId} condition=${conditionCode}`,
+        error,
+      )
+      return { granted: false, reason: 'error' }
     }
   }
 

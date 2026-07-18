@@ -9,9 +9,10 @@ import { TalentService } from './talent.service'
 import { UploadModule } from '@/upload/upload.module'
 import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard'
 import { PointsModule } from '@/points/points.module'
+import { InvitationModule } from '@/invitation/invitation.module'
 
 @Module({
-  imports: [UploadModule, PointsModule],
+  imports: [UploadModule, PointsModule, InvitationModule],
   controllers: [
     IndustryPublicController,
     TalentController,

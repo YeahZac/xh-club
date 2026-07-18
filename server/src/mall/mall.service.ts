@@ -5,6 +5,8 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { PoolConnection } from 'mysql2/promise';
 import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url';
 import { UploadService } from '@/upload/upload.service';
+import { PointsEngineService } from '@/points/points-engine.service';
+import { InvitationEngineService } from '@/invitation/invitation-engine.service';
 
 export interface ProductRow extends RowDataPacket {
   id: string;
@@ -36,7 +38,11 @@ export interface MemberRow extends RowDataPacket {
 export class MallService {
   private readonly logger = new Logger(MallService.name);
 
-  constructor(private readonly uploadService: UploadService) {}
+  constructor(
+    private readonly uploadService: UploadService,
+    private readonly pointsEngine: PointsEngineService,
+    private readonly invitationEngine: InvitationEngineService,
+  ) {}
 
   // ==================== 商品管理 ====================
 
@@ -299,7 +305,24 @@ export class MallService {
           [orderResult.insertId],
         );
         return { code: 200, msg: '支付成功，等待发货', data: this.formatOrder(orderRows[0] || null) };
-      });
+      }).then(async (result) => {
+        if (result?.code === 200) {
+          void this.pointsEngine
+            .evaluate(data.member_id, 'mall_exchange', {
+              referenceType: 'mall_order',
+              referenceId: result.data?.id,
+              description: '完成商城兑换奖励积分',
+            })
+            .catch((err) => this.logger.warn(`mall_exchange points failed: ${err?.message || err}`))
+          void this.invitationEngine
+            .grantConditionRewards(data.member_id, 'invitee_mall_order', {
+              description: '推荐会员完成商城兑换',
+              referenceId: result.data?.id,
+            })
+            .catch((err) => this.logger.warn(`invitee_mall_order reward failed: ${err?.message || err}`))
+        }
+        return result
+      })
     } catch (error) {
       this.logger.error('创建订单失败', error);
       return { code: 500, msg: '创建订单失败', data: null };
@@ -509,6 +532,23 @@ export class MallService {
             available_points: balance,
           },
         }
+      }).then(async (result) => {
+        if (result?.code === 200) {
+          void this.pointsEngine
+            .evaluate(data.member_id, 'mall_exchange', {
+              referenceType: 'mall_checkout',
+              referenceId: result.data?.orders?.[0]?.id,
+              description: '完成商城兑换奖励积分',
+            })
+            .catch((err) => this.logger.warn(`mall_exchange points failed: ${err?.message || err}`))
+          void this.invitationEngine
+            .grantConditionRewards(data.member_id, 'invitee_mall_order', {
+              description: '推荐会员完成商城兑换',
+              referenceId: result.data?.orders?.[0]?.id,
+            })
+            .catch((err) => this.logger.warn(`invitee_mall_order reward failed: ${err?.message || err}`))
+        }
+        return result
       })
     } catch (error) {
       this.logger.error('购物车结算失败', error)

@@ -11,7 +11,7 @@ export const POINTS_RULE_PRESETS = [
     code: 'deal_complete',
     label: '促成成交项目',
     unit: '个',
-    hint: '会员作为成交方或撮合人完成成交达到设定个数后发放积分',
+    hint: '会员完成项目成交（成交申请审核通过或传统成交确认）达到设定个数后发放积分',
   },
   {
     code: 'member_days',
@@ -29,19 +29,31 @@ export const POINTS_RULE_PRESETS = [
     code: 'daily_checkin',
     label: '每日签到',
     unit: '次',
-    hint: '每日签到发放积分',
+    hint: '每日在「我的」页签到发放积分',
   },
   {
     code: 'talent_settle',
     label: '完成人才入驻',
     unit: '次',
-    hint: '完成人才入驻后发放积分',
+    hint: '完成人才入驻审核通过后发放积分',
+  },
+  {
+    code: 'publish_post',
+    label: '发布动态',
+    unit: '次',
+    hint: '会员发布一条动态后发放积分',
+  },
+  {
+    code: 'mall_exchange',
+    label: '完成商城兑换',
+    unit: '次',
+    hint: '会员成功完成一次积分商城兑换订单后发放积分',
   },
   {
     code: 'custom',
     label: '自定义条件',
     unit: '次',
-    hint: '自定义业务条件，由运营配置名称与阈值，需对应业务埋点触发',
+    hint: '自定义业务条件；可在后台手动触发，或由业务埋点调用同名 action_type',
   },
 ] as const
 
