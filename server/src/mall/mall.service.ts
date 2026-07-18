@@ -1,4 +1,5 @@
-import { Injectable, Logger, ModuleRef } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { queryRows, queryOne, queryExecute, withTransaction } from '@/storage/database/mysql-client';
 import { ensureSchemaColumns } from '@/storage/database/ensure-schema-columns';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
