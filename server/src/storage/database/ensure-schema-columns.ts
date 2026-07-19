@@ -120,6 +120,28 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
 
 const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
   {
+    name: 'articles',
+    sql: `CREATE TABLE IF NOT EXISTS articles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      title VARCHAR(200) NOT NULL,
+      subtitle VARCHAR(255) NULL,
+      content MEDIUMTEXT NULL,
+      summary VARCHAR(500) NULL,
+      cover_image VARCHAR(500) NOT NULL,
+      video_url VARCHAR(500) NULL,
+      category VARCHAR(50) DEFAULT 'news',
+      tags JSON NULL,
+      author VARCHAR(100) NULL,
+      status VARCHAR(20) DEFAULT 'draft',
+      view_count INT DEFAULT 0,
+      like_count INT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_articles_status (status),
+      INDEX idx_articles_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
+  {
     name: 'business_opportunities',
     sql: `CREATE TABLE IF NOT EXISTS business_opportunities (
       id INT AUTO_INCREMENT PRIMARY KEY,
