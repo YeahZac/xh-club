@@ -119,6 +119,8 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['talent_applications', 'payment_start_at', 'DATE NULL'],
   ['talent_applications', 'membership_years', 'TINYINT NOT NULL DEFAULT 0'],
   ['talent_applications', 'payment_expire_at', 'DATE NULL'],
+  ['talent_applications', 'company_name', 'TEXT NULL'],
+  ['talent_applications', 'job_title', 'VARCHAR(100) NULL'],
   // 部门负责人姓名（组织架构展示用）
   ['departments', 'leader_name', 'VARCHAR(100) NULL'],
   ['departments', 'level', 'INT DEFAULT 1'],
@@ -904,6 +906,8 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       photo_url VARCHAR(500) NOT NULL,
       industry_tags JSON NOT NULL,
       experience TEXT NULL,
+      company_name TEXT NULL,
+      job_title VARCHAR(100) NULL,
       card_image_url VARCHAR(500) NULL,
       avatar_url VARCHAR(500) NULL,
       status VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'pending|approved|rejected',

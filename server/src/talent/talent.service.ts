@@ -311,6 +311,8 @@ export class TalentService {
   private validateApplicationPayload(dto: any, partial = false) {
     const realName = dto.real_name !== undefined ? String(dto.real_name || '').trim() : undefined
     const contact = dto.contact !== undefined ? String(dto.contact || '').trim() : undefined
+    const companyName = dto.company_name !== undefined ? String(dto.company_name || '').trim() : undefined
+    const jobTitle = dto.job_title !== undefined ? String(dto.job_title || '').trim() : undefined
     const tags = dto.industry_tags !== undefined ? parseIndustryTags(dto.industry_tags) : undefined
 
     if (!partial || dto.real_name !== undefined) {
@@ -318,6 +320,9 @@ export class TalentService {
     }
     if (!partial || dto.contact !== undefined) {
       if (!contact) throw new HttpException('联系方式不能为空', HttpStatus.BAD_REQUEST)
+    }
+    if (!partial || dto.company_name !== undefined) {
+      if (!companyName) throw new HttpException('公司名称不能为空', HttpStatus.BAD_REQUEST)
     }
     if (!partial || dto.photo_url !== undefined) {
       if (!dto.photo_url) throw new HttpException('职业照片不能为空', HttpStatus.BAD_REQUEST)
@@ -329,6 +334,8 @@ export class TalentService {
     return {
       real_name: realName,
       contact,
+      company_name: companyName,
+      job_title: jobTitle || null,
       industry_tags: tags,
       experience: dto.experience !== undefined ? String(dto.experience || '').trim() || null : undefined,
       photo_url: dto.photo_url !== undefined ? normalizeOptionalImage(dto.photo_url) : undefined,
@@ -347,12 +354,15 @@ export class TalentService {
     const avatarUrl = payload.avatar_url || payload.photo_url || null
     await queryExecute(
       `INSERT INTO talent_applications
-        (member_id, real_name, contact, photo_url, industry_tags, experience, card_image_url, avatar_url, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+        (member_id, real_name, contact, company_name, job_title, photo_url, industry_tags, experience,
+         card_image_url, avatar_url, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
       [
         memberId,
         payload.real_name,
         payload.contact,
+        payload.company_name,
+        payload.job_title,
         payload.photo_url,
         JSON.stringify(payload.industry_tags),
         payload.experience || null,
@@ -370,6 +380,8 @@ export class TalentService {
     const merged = {
       real_name: dto.real_name !== undefined ? dto.real_name : existing.real_name,
       contact: dto.contact !== undefined ? dto.contact : existing.contact,
+      company_name: dto.company_name !== undefined ? dto.company_name : existing.company_name,
+      job_title: dto.job_title !== undefined ? dto.job_title : existing.job_title,
       photo_url: dto.photo_url !== undefined ? dto.photo_url : existing.photo_url,
       industry_tags: dto.industry_tags !== undefined ? dto.industry_tags : existing.industry_tags,
       experience: dto.experience !== undefined ? dto.experience : existing.experience,
@@ -381,13 +393,15 @@ export class TalentService {
 
     await queryExecute(
       `UPDATE talent_applications SET
-        real_name = ?, contact = ?, photo_url = ?, industry_tags = ?, experience = ?,
+        real_name = ?, contact = ?, company_name = ?, job_title = ?, photo_url = ?, industry_tags = ?, experience = ?,
         card_image_url = ?, avatar_url = ?, status = 'pending', reject_reason = NULL,
         reviewed_at = NULL, reviewed_by = NULL
        WHERE member_id = ?`,
       [
         payload.real_name,
         payload.contact,
+        payload.company_name,
+        payload.job_title,
         payload.photo_url,
         JSON.stringify(payload.industry_tags),
         payload.experience || null,
@@ -450,6 +464,8 @@ export class TalentService {
 
     if (dto.real_name !== undefined) assign('real_name', String(dto.real_name || '').trim())
     if (dto.contact !== undefined) assign('contact', String(dto.contact || '').trim())
+    if (dto.company_name !== undefined) assign('company_name', String(dto.company_name || '').trim())
+    if (dto.job_title !== undefined) assign('job_title', String(dto.job_title || '').trim() || null)
     if (dto.experience !== undefined) assign('experience', String(dto.experience || '').trim() || null)
     if (dto.industry_tags !== undefined) {
       const tags = parseIndustryTags(dto.industry_tags)

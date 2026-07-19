@@ -4723,6 +4723,10 @@ async function showTalentModal(id) {
           <div><label class="block text-sm font-medium text-gray-700 mb-1">真实姓名</label><input id="talRealName" value="${escapeHtml(item.real_name || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">联系方式</label><input id="talContact" value="${escapeHtml(item.contact || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">公司名称</label><textarea id="talCompanyName" rows="3" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">${escapeHtml(item.company_name || '')}</textarea></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">职位名称</label><input id="talJobTitle" value="${escapeHtml(item.job_title || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
+        </div>
         <div><label class="block text-sm font-medium text-gray-700 mb-1">行业标签</label>
           <select id="talIndustryTags" multiple class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none h-28">${industryOptions}</select>
           <p class="text-xs text-gray-400 mt-1">按住 Ctrl/Command 多选</p>
@@ -4820,6 +4824,8 @@ async function saveTalent(id) {
   const body = {
     real_name: document.getElementById('talRealName').value,
     contact: document.getElementById('talContact').value,
+    company_name: document.getElementById('talCompanyName')?.value || '',
+    job_title: document.getElementById('talJobTitle')?.value || '',
     industry_tags: tags,
     experience: document.getElementById('talExperience').value,
     avatar_url: document.getElementById('talAvatar').value.trim() || null,
@@ -4831,8 +4837,8 @@ async function saveTalent(id) {
     payment_start_at: document.getElementById('talPayStart')?.value || null,
     membership_years: Number(document.getElementById('talPayYears')?.value || 0),
   }
-  if (!body.real_name || !body.contact || !body.photo_url || !tags.length) {
-    return toast('请完善姓名、联系方式、职业照片和行业标签', 'error')
+  if (!body.real_name || !body.contact || !String(body.company_name || '').trim() || !body.photo_url || !tags.length) {
+    return toast('请完善姓名、联系方式、公司名称、职业照片和行业标签', 'error')
   }
   if (body.status === 'rejected' && !String(body.reject_reason || '').trim()) {
     return toast('未通过时请填写原因', 'error')
