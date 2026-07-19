@@ -906,8 +906,24 @@ export class AdminService {
       return await queryOne('SELECT * FROM articles WHERE id = ?', [result.insertId])
     } catch (error) {
       if (error instanceof HttpException) throw error
-      throw new HttpException('创建文章失败', HttpStatus.INTERNAL_SERVER_ERROR)
+      console.error('[AdminService] createArticle error:', error)
+      throw new HttpException(this.describeArticleDbError(error, '创建文章失败'), HttpStatus.INTERNAL_SERVER_ERROR)
     }
+  }
+
+  /** 把常见 MySQL 错误翻译成管理台可读的提示 */
+  private describeArticleDbError(error: unknown, fallback: string): string {
+    const msg = String((error as any)?.message || '')
+    if (msg.includes('Unknown column')) {
+      return `${fallback}：数据库缺少字段（${msg.match(/Unknown column '([^']+)'/)?.[1] || '未知'}），请重启服务自动补齐表结构`
+    }
+    if (msg.includes('Data too long')) {
+      return `${fallback}：内容过长，超出数据库字段限制，请精简后重试`
+    }
+    if (msg.includes("doesn't exist") || (error as any)?.code === 'ER_NO_SUCH_TABLE') {
+      return `${fallback}：articles 表不存在，请先初始化数据库`
+    }
+    return fallback
   }
 
   async updateArticle(id: string, dto: any) {
@@ -933,7 +949,8 @@ export class AdminService {
       return { success: true }
     } catch (error) {
       if (error instanceof HttpException) throw error
-      throw new HttpException('更新文章失败', HttpStatus.INTERNAL_SERVER_ERROR)
+      console.error('[AdminService] updateArticle error:', error)
+      throw new HttpException(this.describeArticleDbError(error, '更新文章失败'), HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 

@@ -29,6 +29,9 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['articles', 'video_url', 'VARCHAR(500) NULL'],
   ['articles', 'category', `VARCHAR(50) DEFAULT 'news'`],
   ['articles', 'tags', 'JSON NULL'],
+  ['articles', 'summary', 'VARCHAR(500) NULL'],
+  ['articles', 'author', 'VARCHAR(100) NULL'],
+  ['articles', 'status', `VARCHAR(20) DEFAULT 'draft'`],
   ['mall_products', 'image_url', 'VARCHAR(500) NULL'],
   ['mall_products', 'video_url', 'VARCHAR(500) NULL'],
   ['mall_products', 'view_count', 'INT NOT NULL DEFAULT 0'],
@@ -413,6 +416,7 @@ export async function ensureSchemaColumns(): Promise<void> {
     ['mall_products', 'description'],
     ['events', 'description'],
     ['events', 'content'],
+    ['articles', 'content'],
   ] as const) {
     try {
       await pool.query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` MEDIUMTEXT NULL`)
