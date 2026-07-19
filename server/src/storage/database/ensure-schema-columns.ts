@@ -1,3 +1,4 @@
+import * as bcrypt from 'bcryptjs'
 import { getPool } from './mysql-client'
 
 /** 线上旧库缺列时自动补齐（幂等，重复执行安全） */
@@ -1105,5 +1106,89 @@ export async function ensureSchemaColumns(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`)
   } catch (error: any) {
     console.warn('[MySQL] 确保 notifications 表失败:', error?.message || error)
+  }
+
+  await ensureSeedData(pool)
+}
+
+/**
+ * 缺失种子数据自动补齐（幂等，绝不覆盖已有数据）
+ * 覆盖：默认角色、会员等级、首页栏目、初始管理员账号
+ * 行业(industries)与部门(departments)已有各自模块的运行时自愈，此处不重复
+ */
+async function ensureSeedData(pool: NonNullable<ReturnType<typeof getPool>>): Promise<void> {
+  // 1) 默认角色（roles.name 唯一键，INSERT IGNORE 幂等）
+  try {
+    await pool.query(
+      `INSERT IGNORE INTO roles (name, display_name, description, permissions, is_system) VALUES
+       ('super_admin', '超级管理员', '拥有所有权限', '["*"]', 1),
+       ('admin', '普通管理员', '基础管理权限', '["dashboard","homepage","members","articles","banners"]', 1)`,
+    )
+  } catch (error: any) {
+    console.warn('[MySQL] 补齐默认角色失败:', error?.message || error)
+  }
+
+  // 2) 默认会员等级（level_code 唯一键）
+  try {
+    await pool.query(
+      `INSERT IGNORE INTO member_levels
+         (level_code, level_name, min_contribution, discount_rate, points_multiplier, sort_order) VALUES
+       ('normal', '普通会员', 0, 1.00, 1.00, 1),
+       ('silver', '银卡会员', 100, 0.95, 1.20, 2),
+       ('gold', '金卡会员', 500, 0.90, 1.50, 3),
+       ('diamond', '钻石会员', 2000, 0.85, 2.00, 4)`,
+    )
+  } catch (error: any) {
+    console.warn('[MySQL] 补齐默认会员等级失败:', error?.message || error)
+  }
+
+  // 3) 默认首页栏目（section 主键；homepage 模块访问时也会自愈，这里兜底）
+  try {
+    await pool.query(
+      `INSERT IGNORE INTO homepage_sections (section, display_name, item_limit, sort_order) VALUES
+       ('projects', '精选项目', 6, 1),
+       ('resources', '资源大厅', 5, 2),
+       ('posts', '商会动态', 5, 3)`,
+    )
+  } catch (error: any) {
+    console.warn('[MySQL] 补齐默认首页栏目失败:', error?.message || error)
+  }
+
+  // 4) 初始管理员账号：仅当 admin 账号完全不存在时创建，绝不重置已有密码
+  try {
+    const [rows] = await pool.query(`SELECT id FROM users WHERE login_account = 'admin' LIMIT 1`)
+    const existing = Array.isArray(rows) ? (rows as any[]) : []
+    let userId: number | null = existing[0]?.id ?? null
+
+    if (!userId) {
+      const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || 'a123123'
+      const passwordHash = await bcrypt.hash(initialPassword, 10)
+      const [result] = await pool.query(
+        `INSERT INTO users (login_account, password_hash, name) VALUES ('admin', ?, '系统管理员')`,
+        [passwordHash],
+      )
+      userId = (result as any)?.insertId ?? null
+      if (!process.env.ADMIN_INITIAL_PASSWORD) {
+        console.warn('[MySQL] 已用默认密码创建初始管理员 admin，请尽快登录管理台修改密码')
+      } else {
+        console.log('[MySQL] 已按 ADMIN_INITIAL_PASSWORD 创建初始管理员 admin')
+      }
+    }
+
+    if (userId) {
+      // 关联超级管理员角色（admins.user_id 无唯一键，先查再插避免重复）
+      const [adminRows] = await pool.query('SELECT id FROM admins WHERE user_id = ? LIMIT 1', [userId])
+      if (!(Array.isArray(adminRows) && (adminRows as any[]).length > 0)) {
+        const [roleRows] = await pool.query(`SELECT id FROM roles WHERE name = 'super_admin' LIMIT 1`)
+        const roleId = (Array.isArray(roleRows) && (roleRows as any[])[0]?.id) || 1
+        await pool.query(
+          `INSERT INTO admins (user_id, role_id, status) VALUES (?, ?, 'enabled')`,
+          [userId, roleId],
+        )
+        console.log('[MySQL] 已补齐 admin 的超级管理员授权')
+      }
+    }
+  } catch (error: any) {
+    console.warn('[MySQL] 补齐初始管理员失败:', error?.message || error)
   }
 }
