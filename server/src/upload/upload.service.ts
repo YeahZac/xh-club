@@ -32,6 +32,7 @@ export class UploadService {
   private bucket: string = '';
   private region: string = 'ap-shanghai';
   private credentialsExpireAt: number = 0;
+  private usingPermanentKeys = false;
   private readonly signedUrlCache = new Map<string, { url: string; expireAt: number }>();
 
   constructor() {
@@ -132,8 +133,9 @@ export class UploadService {
    * 优先使用环境变量永久密钥；否则走微信云托管 getauth
    */
   private async ensureCOSInitialized(): Promise<void> {
-    // 如果凭证还没过期（提前5分钟刷新），直接返回
-    if (this.cos && this.credentialsExpireAt > Date.now() + 300000) {
+    // 提前 30 分钟刷新临时密钥：签名 URL 的实际有效期受密钥剩余寿命限制，
+    // 刷新过晚会导致刚签出的 URL 很快 403
+    if (this.cos && this.credentialsExpireAt > Date.now() + 30 * 60 * 1000) {
       return;
     }
 
@@ -145,6 +147,7 @@ export class UploadService {
         SecretKey: secretKey,
       });
       this.credentialsExpireAt = Date.now() + 24 * 60 * 60 * 1000;
+      this.usingPermanentKeys = true;
       this.logger.log(`COS SDK 使用环境变量密钥初始化，Bucket: ${this.bucket || '(未配置)'}, Region: ${this.region}`);
       return;
     }
@@ -271,10 +274,13 @@ export class UploadService {
 
     try {
       const url = await this.createSignedUrl(info.key, bucket, region, expires);
-      this.signedUrlCache.set(cacheKey, {
-        url,
-        expireAt: Date.now() + expires * 1000,
-      });
+      // 临时密钥签出的 URL 在密钥过期后即失效（即使 q-sign-time 仍在有效期内），
+      // 缓存有效期必须取「签名时长」与「密钥剩余寿命」的较小值
+      const credentialCap = this.usingPermanentKeys
+        ? Number.MAX_SAFE_INTEGER
+        : this.credentialsExpireAt - 60_000;
+      const expireAt = Math.min(Date.now() + expires * 1000, credentialCap);
+      this.signedUrlCache.set(cacheKey, { url, expireAt });
       return url;
     } catch (error) {
       this.logger.warn(`生成预签名 URL 失败，回退原始地址: ${error.message}`);
