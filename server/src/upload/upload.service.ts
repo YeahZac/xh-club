@@ -139,6 +139,9 @@ export class UploadService {
       return;
     }
 
+    // 密钥即将刷新：清空旧签名缓存，避免继续返回已失效的 STS URL
+    this.signedUrlCache.clear();
+
     const secretId = process.env.COS_SECRET_ID || '';
     const secretKey = process.env.COS_SECRET_KEY || '';
     if (secretId && secretKey) {
@@ -228,6 +231,14 @@ export class UploadService {
     if (!this.cos) {
       throw new Error('云存储未初始化');
     }
+    // STS 模式下签名时长不得超过密钥剩余寿命，否则微信侧会提前 403
+    let effectiveExpires = Math.max(60, Math.floor(expires));
+    if (!this.usingPermanentKeys && this.credentialsExpireAt > Date.now()) {
+      const remainingSec = Math.floor((this.credentialsExpireAt - Date.now()) / 1000) - 60;
+      if (remainingSec > 0) {
+        effectiveExpires = Math.min(effectiveExpires, remainingSec);
+      }
+    }
     return await new Promise<string>((resolve, reject) => {
       this.cos!.getObjectUrl(
         {
@@ -235,7 +246,7 @@ export class UploadService {
           Region: region,
           Key: key,
           Sign: true,
-          Expires: expires,
+          Expires: effectiveExpires,
         },
         (err, data) => {
           if (err) reject(err);

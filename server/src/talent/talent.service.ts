@@ -49,6 +49,23 @@ function normalizeOptionalImage(value: unknown): string | null {
   return assertCloudStorageImageUrl(value, true) as string
 }
 
+/** 公开接口脱敏联系方式/手机号 */
+function maskPublicContact(value: unknown): string {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const digits = raw.replace(/\D/g, '')
+  if (/^1\d{10}$/.test(digits)) {
+    return `${digits.slice(0, 3)}****${digits.slice(7)}`
+  }
+  if (digits.length >= 7) {
+    return `${digits.slice(0, 3)}****${digits.slice(-2)}`
+  }
+  if (raw.length >= 7) {
+    return `${raw.slice(0, 3)}****${raw.slice(-2)}`
+  }
+  return raw
+}
+
 @Injectable()
 export class TalentService {
   constructor(
@@ -165,7 +182,7 @@ export class TalentService {
     return row
   }
 
-  private async signTalent(row: any) {
+  private async signTalent(row: any, options?: { maskContact?: boolean }) {
     if (!row) return null
     const synced = await this.syncExpiredPayment(row)
     const signed = await this.uploadService.signRowFields(synced, [
@@ -176,13 +193,14 @@ export class TalentService {
     ])
     return {
       ...signed,
+      contact: options?.maskContact ? maskPublicContact(signed.contact) : signed.contact,
       industry_tags: parseIndustryTags(signed.industry_tags),
       ...this.computeMembership(signed),
     }
   }
 
-  private async signTalents(rows: any[]) {
-    const list = await Promise.all(rows.map((row) => this.signTalent(row)))
+  private async signTalents(rows: any[], options?: { maskContact?: boolean }) {
+    const list = await Promise.all(rows.map((row) => this.signTalent(row, options)))
     return list.filter(Boolean)
   }
 
@@ -218,7 +236,7 @@ export class TalentService {
       [...values, pageSize, offset],
     )
     return {
-      list: await this.signTalents(rows),
+      list: await this.signTalents(rows, { maskContact: true }),
       total: Number(countRow?.total || 0),
       page,
       pageSize,
@@ -235,7 +253,7 @@ export class TalentService {
       [id],
     )
     if (!row) throw new HttpException('人才不存在或未通过审核', HttpStatus.NOT_FOUND)
-    const signed = await this.signTalent(row)
+    const signed = await this.signTalent(row, { maskContact: true })
 
     let departments: Array<{ department_id: number; department_name: string; position: string }> = []
     try {

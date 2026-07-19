@@ -1,8 +1,11 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
+import { UploadService } from '@/upload/upload.service'
 
 @Injectable()
 export class MessagesService {
+  constructor(private readonly uploadService: UploadService) {}
+
   private client() { return getSupabaseClient() }
 
   /** 获取私信列表 */
@@ -21,7 +24,29 @@ export class MessagesService {
 
     if (error) throw new HttpException(`查询失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
 
-    return { list: data || [], total: count || 0, page, pageSize }
+    const list = await Promise.all(
+      (data || []).map(async (row: any) => {
+        const sender = row?.sender
+          ? {
+              ...row.sender,
+              avatar: row.sender.avatar
+                ? await this.uploadService.signMediaUrl(row.sender.avatar)
+                : row.sender.avatar,
+            }
+          : row?.sender
+        const receiver = row?.receiver
+          ? {
+              ...row.receiver,
+              avatar: row.receiver.avatar
+                ? await this.uploadService.signMediaUrl(row.receiver.avatar)
+                : row.receiver.avatar,
+            }
+          : row?.receiver
+        return { ...row, sender, receiver }
+      }),
+    )
+
+    return { list, total: count || 0, page, pageSize }
   }
 
   /** 发送私信 */

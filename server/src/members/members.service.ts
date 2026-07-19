@@ -2,9 +2,13 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
 import * as bcrypt from 'bcryptjs'
 import { signAuthToken } from '@/auth/jwt'
+import { UploadService } from '@/upload/upload.service'
+import { canonicalizeCloudStorageUrl } from '@/utils/media-url'
 
 @Injectable()
 export class MembersService {
+  constructor(private readonly uploadService: UploadService) {}
+
   private client() { return getSupabaseClient() }
 
   /** 会员注册 */
@@ -114,7 +118,14 @@ export class MembersService {
       .select('*, organizations(*)')
       .eq('member_id', id)
 
-    return { ...data, tags: tags || [], organizations: orgs || [] }
+    return {
+      ...data,
+      avatar: data.avatar
+        ? await this.uploadService.signMediaUrl(data.avatar)
+        : data.avatar,
+      tags: tags || [],
+      organizations: orgs || [],
+    }
   }
 
   /** 更新会员档案 */
@@ -155,6 +166,9 @@ export class MembersService {
         .filter(field => dto[field] !== undefined)
         .map(field => [field, dto[field]]),
     )
+    if (updates.avatar !== undefined && updates.avatar) {
+      updates.avatar = canonicalizeCloudStorageUrl(String(updates.avatar)) || updates.avatar
+    }
     if (Object.keys(updates).length === 0) {
       throw new HttpException('没有可更新的会员字段', HttpStatus.BAD_REQUEST)
     }
@@ -166,7 +180,12 @@ export class MembersService {
       .single()
 
     if (error) throw new HttpException(`更新失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
-    return data
+    return {
+      ...data,
+      avatar: data.avatar
+        ? await this.uploadService.signMediaUrl(data.avatar)
+        : data.avatar,
+    }
   }
 
   /** 获取会员列表（支持筛选） */
