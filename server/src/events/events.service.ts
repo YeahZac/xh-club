@@ -75,12 +75,19 @@ export class EventsService {
       Number(signed.current_participants || 0),
       registrationCount,
     )
+    const isRegistered = memberId
+      ? (registrations || []).some((item: any) => String(item.member_id) === String(memberId))
+      : false
     return {
       ...signed,
       form_fields: formFields.length ? formFields : signed.form_fields,
       form_defaults: formDefaults,
       current_participants: currentParticipants,
       registrations: registrations || [],
+      member_state: {
+        is_registered: isRegistered,
+        can_register: !isRegistered && signed.status === 'open',
+      },
     }
   }
 
