@@ -1,4 +1,9 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
+import {
+  assertRequiredFormAnswers,
+  normalizeRegisterFormFields,
+  resolveReuseFormDefaults,
+} from '@/common/form-defaults'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
 import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url'
@@ -41,7 +46,7 @@ export class EventsService {
   }
 
   /** 获取活动详情 */
-  async getEventById(id: string) {
+  async getEventById(id: string, memberId?: string | number) {
     const { data, error } = await this.client()
       .from('events')
       .select('*')
@@ -61,6 +66,10 @@ export class EventsService {
       ['cover_image', 'video_url'],
       ['description', 'content'],
     )
+    const formFields = normalizeRegisterFormFields(signed.form_fields)
+    const formDefaults = memberId
+      ? await resolveReuseFormDefaults(memberId, formFields, 'event')
+      : {}
     const registrationCount = Array.isArray(registrations) ? registrations.length : 0
     const currentParticipants = Math.max(
       Number(signed.current_participants || 0),
@@ -68,6 +77,8 @@ export class EventsService {
     )
     return {
       ...signed,
+      form_fields: formFields.length ? formFields : signed.form_fields,
+      form_defaults: formDefaults,
       current_participants: currentParticipants,
       registrations: registrations || [],
     }
@@ -90,7 +101,7 @@ export class EventsService {
     // 检查活动名额
     const { data: event } = await this.client()
       .from('events')
-      .select('max_participants, current_participants, status')
+      .select('max_participants, current_participants, status, form_fields')
       .eq('id', eventId)
       .single()
 
@@ -101,6 +112,16 @@ export class EventsService {
       formAnswers && typeof formAnswers === 'object' && !Array.isArray(formAnswers)
         ? formAnswers
         : null
+
+    const formFields = normalizeRegisterFormFields(event.form_fields)
+    try {
+      assertRequiredFormAnswers(formFields, answers || {})
+    } catch (err) {
+      throw new HttpException(
+        err instanceof Error ? err.message : '请完善报名字段',
+        HttpStatus.BAD_REQUEST,
+      )
+    }
 
     // 插入报名记录
     const { data, error } = await this.client()

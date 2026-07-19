@@ -1905,6 +1905,7 @@ function collectEventFormFields() {
     label: f.label.trim(),
     type: f.type,
     required: !!f.required,
+    reuse_last: !!f.reuse_last,
     ...(f.type === 'select' && f.options ? { options: String(f.options).split(',').map(o => o.trim()).filter(Boolean) } : {})
   }))
 }
@@ -1963,7 +1964,7 @@ function renderEventForm(mode, event = null) {
             <button onclick="addFormField()" class="px-3 py-1 text-xs bg-navy-100 text-navy-700 rounded-lg hover:bg-navy-200 transition">+ 添加字段</button>
           </div>
           <div id="formFieldsList" class="space-y-2"></div>
-          <p class="text-xs text-gray-400 mt-2">默认包含"姓名"和"手机号"，此处添加额外字段</p>
+          <p class="text-xs text-gray-400 mt-2">勾选「必填」后小程序报名必须填写；勾选「沿用上次」后，将按字段名称自动带入该会员历史报名中的最近一次填写值。</p>
         </div>
         <div class="flex justify-end gap-3 pt-4">
           <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
@@ -1990,6 +1991,7 @@ async function showEventDetail(id) {
       label: f.label || f.name || '',
       type: f.type || 'text',
       required: !!f.required,
+      reuse_last: !!f.reuse_last,
       options: Array.isArray(f.options) ? f.options.join(',') : (f.options || '')
     }))
     showModal(renderEventForm('edit', event), { wide: true })
@@ -2072,7 +2074,7 @@ async function showEventRegistrations(eventId) {
 
 let _formFields = []
 function addFormField() {
-  _formFields.push({ label: '', type: 'text', required: false, options: '' })
+  _formFields.push({ label: '', type: 'text', required: false, reuse_last: false, options: '' })
   renderFormFields()
 }
 function removeFormField(idx) {
@@ -2083,8 +2085,8 @@ function renderFormFields() {
   const container = document.getElementById('formFieldsList')
   if (!container) return
   container.innerHTML = _formFields.map((f, i) => `
-    <div class="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
-      <input value="${escapeHtml(f.label)}" onchange="_formFields[${i}].label=this.value" placeholder="字段名称" class="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none">
+    <div class="flex flex-wrap items-center gap-2 bg-gray-50 rounded-xl p-3">
+      <input value="${escapeHtml(f.label)}" onchange="_formFields[${i}].label=this.value" placeholder="字段名称" class="flex-1 min-w-[120px] px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none">
       <select onchange="_formFields[${i}].type=this.value;renderFormFields()" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none">
         <option value="text" ${f.type==='text'?'selected':''}>文本</option>
         <option value="textarea" ${f.type==='textarea'?'selected':''}>多行文本</option>
@@ -2094,6 +2096,7 @@ function renderFormFields() {
       </select>
       ${f.type === 'select' ? `<input value="${escapeHtml(f.options||'')}" onchange="_formFields[${i}].options=this.value" placeholder="选项用逗号分隔" class="w-32 px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none">` : ''}
       <label class="flex items-center gap-1 text-xs text-gray-500"><input type="checkbox" ${f.required?'checked':''} onchange="_formFields[${i}].required=this.checked">必填</label>
+      <label class="flex items-center gap-1 text-xs text-gray-500" title="下次报名自动带入该会员上次填写值"><input type="checkbox" ${f.reuse_last?'checked':''} onchange="_formFields[${i}].reuse_last=this.checked">沿用上次</label>
       <button onclick="removeFormField(${i})" class="text-red-400 hover:text-red-600 text-sm">✕</button>
     </div>
   `).join('')
@@ -2360,9 +2363,9 @@ function renderBizFormFields() {
   const container = document.getElementById('bizFormFieldsList')
   if (!container) return
   container.innerHTML = _bizFormFields.map((field, index) => `
-    <div class="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
-      <input value="${escapeHtml(field.label || '')}" onchange="_bizFormFields[${index}].label=this.value" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="字段名称">
-      <select onchange="_bizFormFields[${index}].type=this.value" class="px-3 py-2 border border-gray-200 rounded-lg text-sm">
+    <div class="flex flex-wrap items-center gap-2 bg-gray-50 rounded-xl p-3">
+      <input value="${escapeHtml(field.label || '')}" onchange="_bizFormFields[${index}].label=this.value" class="flex-1 min-w-[120px] px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="字段名称">
+      <select onchange="_bizFormFields[${index}].type=this.value;renderBizFormFields()" class="px-3 py-2 border border-gray-200 rounded-lg text-sm">
         <option value="text" ${field.type==='text'?'selected':''}>单行文本</option>
         <option value="textarea" ${field.type==='textarea'?'selected':''}>多行文本</option>
         <option value="number" ${field.type==='number'?'selected':''}>数字</option>
@@ -2371,6 +2374,9 @@ function renderBizFormFields() {
       <label class="flex items-center gap-1 text-xs text-gray-600 whitespace-nowrap">
         <input type="checkbox" ${field.required ? 'checked' : ''} onchange="_bizFormFields[${index}].required=this.checked"> 必填
       </label>
+      <label class="flex items-center gap-1 text-xs text-gray-600 whitespace-nowrap" title="下次报名自动带入该会员上次填写值">
+        <input type="checkbox" ${field.reuse_last ? 'checked' : ''} onchange="_bizFormFields[${index}].reuse_last=this.checked"> 沿用上次
+      </label>
       <button onclick="_bizFormFields.splice(${index},1);renderBizFormFields()" class="px-2 py-1 text-xs text-red-600">删除</button>
     </div>
     ${field.type === 'select' ? `<input value="${escapeHtml((field.options || []).join(','))}" onchange="_bizFormFields[${index}].options=this.value.split(',').map(s=>s.trim()).filter(Boolean)" class="w-full mt-2 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="选项，逗号分隔">` : ''}
@@ -2378,7 +2384,7 @@ function renderBizFormFields() {
 }
 
 function addBizFormField() {
-  _bizFormFields.push({ label: '', type: 'text', required: false })
+  _bizFormFields.push({ label: '', type: 'text', required: false, reuse_last: false })
   renderBizFormFields()
 }
 
@@ -2496,6 +2502,7 @@ function collectBizRoadshowPayload() {
       label: f.label.trim(),
       type: f.type || 'text',
       required: !!f.required,
+      reuse_last: !!f.reuse_last,
       ...(f.type === 'select' && f.options ? { options: f.options } : {}),
     }))
   return {
@@ -2690,6 +2697,7 @@ async function showBusinessModal(editId) {
     label: f.label || '',
     type: f.type || 'text',
     required: !!f.required,
+    reuse_last: !!f.reuse_last,
     options: f.options || [],
   }))
   _bizRoadshowProjects = (item?.roadshow_projects || []).map((p, index) => ({

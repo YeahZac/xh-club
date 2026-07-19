@@ -37,9 +37,10 @@ export class EventsController {
   }
 
   @Get(':id')
-  async getEvent(@Param('id') id: string) {
+  async getEvent(@Param('id') id: string, @Req() request: any) {
     console.log('[EventsController] GET /api/events/:id - id:', id)
-    const result = await this.eventsService.getEventById(id)
+    const memberId = tryReadMemberId(request)
+    const result = await this.eventsService.getEventById(id, memberId)
     return { code: 200, msg: 'success', data: result }
   }
 

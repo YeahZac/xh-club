@@ -1,13 +1,20 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
+import {
+  assertRequiredFormAnswers,
+  normalizeRegisterFormFields,
+  resolveReuseFormDefaults,
+  type FormFieldLike,
+} from '@/common/form-defaults'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
 import { ensureSchemaColumns } from '@/storage/database/ensure-schema-columns'
 import { UploadService } from '@/upload/upload.service'
 import { assertCloudStorageImageUrl } from '@/utils/media-validators'
 
-export interface RoadshowFormField {
+export interface RoadshowFormField extends FormFieldLike {
   label: string
   type: string
   required?: boolean
+  reuse_last?: boolean
   options?: string[]
 }
 
@@ -61,24 +68,8 @@ export class RoadshowService {
   }
 
   normalizeFormFields(value: unknown): RoadshowFormField[] | null {
-    const parsed = this.parseJsonValue(value)
-    if (!Array.isArray(parsed)) return null
-    return parsed
-      .map((item) => {
-        if (!item || typeof item !== 'object') return null
-        const row = item as Record<string, unknown>
-        const label = String(row.label || row.name || '').trim()
-        if (!label) return null
-        const type = String(row.type || 'text')
-        const field: RoadshowFormField = { label, type, required: Boolean(row.required) }
-        if (type === 'select' && Array.isArray(row.options)) {
-          field.options = row.options.map((opt) => String(opt))
-        } else if (type === 'select' && typeof row.options === 'string') {
-          field.options = row.options.split(',').map((opt) => opt.trim()).filter(Boolean)
-        }
-        return field
-      })
-      .filter(Boolean) as RoadshowFormField[]
+    const fields = normalizeRegisterFormFields(value)
+    return fields.length ? (fields as RoadshowFormField[]) : null
   }
 
   private normalizeFormAnswers(value: unknown): Record<string, unknown> {
@@ -191,9 +182,14 @@ export class RoadshowService {
       }
     }
 
+    const formDefaults = memberId
+      ? await resolveReuseFormDefaults(memberId, formFields, 'roadshow')
+      : {}
+
     return {
       ...row,
       form_fields: formFields,
+      form_defaults: formDefaults,
       roadshow_projects: projects,
       score_dimensions: dimensions,
       registration_count: Number(
@@ -323,12 +319,13 @@ export class RoadshowService {
 
     const fields = this.normalizeFormFields(business.form_fields) || []
     const answers = formAnswers || {}
-    for (const field of fields) {
-      if (!field.required) continue
-      const value = answers[field.label]
-      if (value == null || String(value).trim() === '') {
-        throw new HttpException(`请填写${field.label}`, HttpStatus.BAD_REQUEST)
-      }
+    try {
+      assertRequiredFormAnswers(fields, answers)
+    } catch (error) {
+      throw new HttpException(
+        error instanceof Error ? error.message : '请完善报名字段',
+        HttpStatus.BAD_REQUEST,
+      )
     }
 
     const result = await queryExecute(
