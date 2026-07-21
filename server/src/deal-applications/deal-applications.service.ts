@@ -40,11 +40,13 @@ export class DealApplicationsService {
   private async formatRow(row: any) {
     if (!row) return row
     const imageUrls = await this.uploadService.signMediaUrls(parseImages(row.image_urls))
+    const paymentProofUrls = await this.uploadService.signMediaUrls(parseImages(row.payment_proof_urls))
     const confirm = String(row.audit_status || 'pending')
     const isDeal = Number(row.is_deal) === 1 || row.deal_status === 'completed'
     return {
       ...row,
       image_urls: imageUrls,
+      payment_proof_urls: paymentProofUrls,
       confirm_status: confirm,
       confirm_status_label:
         confirm === 'approved' ? '负责人已同意' : confirm === 'rejected' ? '负责人已拒绝' : '待负责人确认',
@@ -307,11 +309,26 @@ export class DealApplicationsService {
       if (!(PAYMENT_STATUSES as readonly string[]).includes(payment)) {
         throw new HttpException('打款状态无效', HttpStatus.BAD_REQUEST)
       }
-      if (payment === 'paid' && !nextIsDeal) {
-        throw new HttpException('项目成交后才能标记为已打款', HttpStatus.BAD_REQUEST)
-      }
       updates.push('payment_status = ?', 'paid_at = ?')
       params.push(payment, payment === 'paid' ? new Date() : null)
+    }
+    if (dto.payment_proof_urls !== undefined) {
+      if (!isOwner) {
+        throw new HttpException('仅项目负责人可上传打款凭证', HttpStatus.FORBIDDEN)
+      }
+      const rawList = Array.isArray(dto.payment_proof_urls) ? dto.payment_proof_urls : []
+      if (rawList.length > 5) {
+        throw new HttpException('打款凭证最多 5 张', HttpStatus.BAD_REQUEST)
+      }
+      const proofUrls: string[] = []
+      for (const item of rawList) {
+        const url = String(item || '').trim()
+        if (!url) continue
+        assertCloudStorageImageUrl(url)
+        proofUrls.push(url)
+      }
+      updates.push('payment_proof_urls = ?')
+      params.push(JSON.stringify(proofUrls))
     }
     if (!updates.length) throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
     params.push(id)
@@ -322,11 +339,14 @@ export class DealApplicationsService {
 
     const notifyTarget = isOwner ? row.member_id : row.owner_member_id
     if (notifyTarget) {
+      const paymentChanged = dto.payment_status !== undefined || dto.payment_proof_urls !== undefined
       await createNotification({
         memberId: notifyTarget,
         type: 'deal',
-        title: '项目对接状态已更新',
-        content: `「${row.project_name}」成交/打款状态已更新`,
+        title: paymentChanged ? '打款信息已更新' : '项目对接状态已更新',
+        content: paymentChanged
+          ? `「${row.project_name}」打款状态或凭证已更新，请查看详情`
+          : `「${row.project_name}」成交/打款状态已更新`,
         link: `/pages/deal-applications/detail/index?id=${id}`,
         bizType: 'deal_application',
         bizId: id,

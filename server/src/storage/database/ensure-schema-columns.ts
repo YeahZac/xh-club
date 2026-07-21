@@ -20,6 +20,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   // 项目成交对接：负责人确认
   ['project_deal_applications', 'owner_member_id', 'INT NULL'],
   ['project_deal_applications', 'is_deal', `TINYINT(1) NOT NULL DEFAULT 0`],
+  ['project_deal_applications', 'payment_proof_urls', 'JSON NULL'],
   // 系统通知扩展
   ['notifications', 'link', 'VARCHAR(500) NULL'],
   ['notifications', 'biz_type', 'VARCHAR(32) NULL'],

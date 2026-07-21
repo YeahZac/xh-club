@@ -460,6 +460,43 @@ export class EventsService {
     return { success: true }
   }
 
+  /** 分享项目给全部已入驻人才（每人一条通知） */
+  async shareProjectToAllTalents(projectId: string, fromMemberId: string | number) {
+    const project = await queryOne('SELECT id, title FROM projects WHERE id = ?', [projectId])
+    if (!project) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
+    const sender = await queryOne('SELECT name FROM members WHERE id = ?', [fromMemberId])
+
+    const talents = await queryRows(
+      `SELECT DISTINCT t.member_id, t.real_name
+       FROM talent_applications t
+       INNER JOIN members m ON m.id = t.member_id AND m.status = 'active'
+       WHERE t.status = 'approved' AND t.member_id IS NOT NULL`,
+      [],
+    )
+
+    let sent = 0
+    for (const talent of talents || []) {
+      const receiverId = talent.member_id
+      if (!receiverId || String(receiverId) === String(fromMemberId)) continue
+      await createNotification({
+        memberId: receiverId,
+        type: 'share',
+        title: '收到项目分享',
+        content: `${sender?.name || '会员'}向您分享了项目「${project.title}」`,
+        link: `/pages/content-detail/index?type=project&id=${projectId}`,
+        bizType: 'project_share',
+        bizId: projectId,
+        result: 'shared',
+      })
+      sent += 1
+    }
+
+    if (sent === 0) {
+      throw new HttpException('暂无可通知的入驻人才', HttpStatus.BAD_REQUEST)
+    }
+    return { success: true, count: sent }
+  }
+
   /** 会员发布项目（待后台审核） */
   async submitMemberProject(memberId: string | number, dto: any) {
     if (!dto?.title?.trim()) throw new HttpException('请填写项目名称', HttpStatus.BAD_REQUEST)

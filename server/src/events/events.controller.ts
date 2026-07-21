@@ -118,6 +118,13 @@ export class ProjectsController {
     return { code: 200, msg: '已分享给好友', data: result }
   }
 
+  @Post(':id/share-talents')
+  @UseGuards(MemberAuthGuard)
+  async shareToTalents(@Param('id') id: string, @Req() request: any) {
+    const result = await this.eventsService.shareProjectToAllTalents(id, request.user.sub)
+    return { code: 200, msg: `已分享给 ${result.count} 位入驻人才`, data: result }
+  }
+
   @Post()
   @UseGuards(AdminAuthGuard)
   async createProject(@Body() dto: any) {
