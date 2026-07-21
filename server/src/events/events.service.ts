@@ -109,7 +109,7 @@ export class EventsService {
     // 检查活动名额
     const { data: event } = await this.client()
       .from('events')
-      .select('max_participants, current_participants, status, form_fields')
+      .select('title, max_participants, current_participants, status, form_fields')
       .eq('id', eventId)
       .single()
 
@@ -165,6 +165,17 @@ export class EventsService {
         referenceId: eventId,
       })
       .catch((err) => console.warn('[EventsService] invite reward failed', err))
+
+    await createNotification({
+      memberId,
+      type: 'activity',
+      title: '活动报名成功',
+      content: `您已成功报名「${event.title || '活动'}」`,
+      link: `/pages/content-detail/index?type=event&id=${eventId}`,
+      bizType: 'event_register',
+      bizId: eventId,
+      result: 'approved',
+    })
 
     return data
   }

@@ -5,6 +5,7 @@ import {
   resolveRegisterFormDefaults,
   type FormFieldLike,
 } from '@/common/form-defaults'
+import { createNotification } from '@/common/notify'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
 import { ensureSchemaColumns } from '@/storage/database/ensure-schema-columns'
 import { UploadService } from '@/upload/upload.service'
@@ -334,6 +335,18 @@ export class RoadshowService {
        VALUES (?, ?, ?)`,
       [businessId, memberId, JSON.stringify(answers)],
     )
+
+    await createNotification({
+      memberId,
+      type: 'activity',
+      title: '路演报名成功',
+      content: `您已成功报名「${business.title || '路演'}」`,
+      link: `/pages/content-detail/index?type=business&id=${businessId}`,
+      bizType: 'roadshow_register',
+      bizId: businessId,
+      result: 'approved',
+    })
+
     return { id: result.insertId, success: true }
   }
 

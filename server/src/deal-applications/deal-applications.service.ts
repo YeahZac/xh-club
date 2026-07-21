@@ -166,12 +166,24 @@ export class DealApplicationsService {
     )
     const id = String(result.insertId)
     const applicant = await queryOne('SELECT name FROM members WHERE id = ?', [memberId])
+    // 通知项目负责人确认
     await createNotification({
       memberId: payload.ownerMemberId!,
       type: 'deal',
       title: '收到项目对接申请',
       content: `${applicant?.name || '会员'}申请对接「${project.title}」，请确认同意或拒绝`,
       link: `/pages/deal-applications/detail/index?id=${id}&role=owner`,
+      bizType: 'deal_application',
+      bizId: id,
+      result: 'pending',
+    })
+    // 通知申请人提交成功
+    await createNotification({
+      memberId,
+      type: 'deal',
+      title: '对接申请已提交',
+      content: `您已向「${owner.name || '项目负责人'}」申请对接项目「${project.title}」，请等待对方确认`,
+      link: `/pages/deal-applications/detail/index?id=${id}`,
       bizType: 'deal_application',
       bizId: id,
       result: 'pending',

@@ -12,15 +12,21 @@ export type NotifyPayload = {
   processedAt?: Date | string | null
 }
 
-/** 统一写入系统通知（审核结果 / 对接确认 / 站内分享等） */
-export async function createNotification(payload: NotifyPayload) {
+/** 统一写入系统通知（审核结果 / 对接确认 / 报名成功等） */
+export async function createNotification(payload: NotifyPayload): Promise<boolean> {
+  const memberId = payload.memberId
+  if (memberId == null || memberId === '') {
+    console.warn('[notify] 跳过：缺少 memberId', payload.title)
+    return false
+  }
+
   try {
-    await queryExecute(
+    const result = await queryExecute(
       `INSERT INTO notifications
          (member_id, type, title, content, is_read, link, biz_type, biz_id, result, processed_at)
        VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
       [
-        payload.memberId,
+        memberId,
         payload.type || 'system',
         payload.title,
         payload.content,
@@ -31,25 +37,45 @@ export async function createNotification(payload: NotifyPayload) {
         payload.processedAt || new Date(),
       ],
     )
+    console.log('[notify] 写入成功', {
+      id: result?.insertId,
+      memberId,
+      type: payload.type || 'system',
+      title: payload.title,
+      bizType: payload.bizType,
+    })
+    return true
   } catch (error) {
     // 兼容尚未补齐 biz_* 列的旧表
     try {
-      await queryExecute(
+      const result = await queryExecute(
         `INSERT INTO notifications (member_id, type, title, content, is_read, link)
          VALUES (?, ?, ?, ?, 0, ?)`,
         [
-          payload.memberId,
+          memberId,
           payload.type || 'system',
           payload.title,
           payload.content,
           payload.link || null,
         ],
       )
+      console.log('[notify] 写入成功(兼容列)', {
+        id: result?.insertId,
+        memberId,
+        title: payload.title,
+      })
+      return true
     } catch (fallbackError) {
-      console.warn(
+      console.error(
         '[notify] 写入通知失败:',
-        (fallbackError as Error)?.message || fallbackError || (error as Error)?.message,
+        {
+          memberId,
+          title: payload.title,
+          primary: (error as Error)?.message || error,
+          fallback: (fallbackError as Error)?.message || fallbackError,
+        },
       )
+      return false
     }
   }
 }
