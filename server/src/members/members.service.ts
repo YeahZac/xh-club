@@ -1,5 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
+import { queryRows } from '@/storage/database/mysql-client'
 import * as bcrypt from 'bcryptjs'
 import { signAuthToken } from '@/auth/jwt'
 import { UploadService } from '@/upload/upload.service'
@@ -287,11 +288,20 @@ export class MembersService {
   /** 会员推荐页数据：推荐码 + 推荐人数 + 推荐人员列表 */
   async getInviteDashboard(memberId: string) {
     const inviteCode = await this.ensureInviteCode(memberId)
-    const { data: referred } = await this.client()
-      .from('members')
-      .select('id, name, phone, avatar, company_name, membership_level, status, created_at')
-      .eq('referrer_id', memberId)
-      .order('created_at', { ascending: false })
+    // 统计口径与展示名单必须一致：兼容旧数据仅写入 invitation_records、
+    // 新数据写入 members.referrer_id 的两种推荐关系，并按会员 ID 去重。
+    const referred = await queryRows(
+      `SELECT DISTINCT m.id, m.name, m.phone, m.avatar, m.company_name,
+              m.membership_level, m.status, m.created_at
+       FROM members m
+       LEFT JOIN invitation_records ir
+         ON ir.invitee_id = m.id
+        AND ir.inviter_id = ?
+        AND ir.status = 'accepted'
+       WHERE m.referrer_id = ? OR ir.id IS NOT NULL
+       ORDER BY m.created_at DESC`,
+      [memberId, memberId],
+    )
 
     const invitees = (referred || []).map((item: any) => ({
       id: item.id,

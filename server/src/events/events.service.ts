@@ -460,24 +460,63 @@ export class EventsService {
     return { success: true }
   }
 
-  /** 分享项目给全部已入驻人才（每人一条通知） */
-  async shareProjectToAllTalents(projectId: string, fromMemberId: string | number) {
+  /** 获取可接收项目分享的已入驻人才 */
+  async getShareableTalents(projectId: string, fromMemberId: string | number) {
     const project = await queryOne('SELECT id, title FROM projects WHERE id = ?', [projectId])
     if (!project) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
-    const sender = await queryOne('SELECT name FROM members WHERE id = ?', [fromMemberId])
 
     const talents = await queryRows(
-      `SELECT DISTINCT t.member_id, t.real_name
+      `SELECT DISTINCT t.member_id, t.real_name, t.company_name, t.job_title
        FROM talent_applications t
        INNER JOIN members m ON m.id = t.member_id AND m.status = 'active'
-       WHERE t.status = 'approved' AND t.member_id IS NOT NULL`,
-      [],
+       WHERE t.status = 'approved'
+         AND t.member_id IS NOT NULL
+         AND t.member_id != ?
+       ORDER BY t.real_name ASC, t.id DESC`,
+      [fromMemberId],
     )
 
+    return (talents || []).map((talent: any) => ({
+      member_id: String(talent.member_id),
+      name: talent.real_name || '未命名人才',
+      company_name: talent.company_name || '',
+      job_title: talent.job_title || '',
+    }))
+  }
+
+  /** 分享项目给指定已入驻人才（每人一条可直达详情的通知） */
+  async shareProjectToTalents(
+    projectId: string,
+    fromMemberId: string | number,
+    receiverIds: Array<string | number>,
+  ) {
+    const project = await queryOne('SELECT id, title FROM projects WHERE id = ?', [projectId])
+    if (!project) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
+    const selectedIds = [...new Set(
+      (Array.isArray(receiverIds) ? receiverIds : [])
+        .map((id) => String(id || '').trim())
+        .filter((id) => id && id !== String(fromMemberId)),
+    )]
+    if (!selectedIds.length) {
+      throw new HttpException('请至少选择一位入驻人才', HttpStatus.BAD_REQUEST)
+    }
+
+    const placeholders = selectedIds.map(() => '?').join(', ')
+    const talents = await queryRows(
+      `SELECT DISTINCT t.member_id
+       FROM talent_applications t
+       INNER JOIN members m ON m.id = t.member_id AND m.status = 'active'
+       WHERE t.status = 'approved' AND t.member_id IN (${placeholders})`,
+      selectedIds,
+    )
+    if (!talents.length) {
+      throw new HttpException('所选人才不可接收分享', HttpStatus.BAD_REQUEST)
+    }
+
+    const sender = await queryOne('SELECT name FROM members WHERE id = ?', [fromMemberId])
     let sent = 0
     for (const talent of talents || []) {
       const receiverId = talent.member_id
-      if (!receiverId || String(receiverId) === String(fromMemberId)) continue
       await createNotification({
         memberId: receiverId,
         type: 'share',
@@ -491,9 +530,6 @@ export class EventsService {
       sent += 1
     }
 
-    if (sent === 0) {
-      throw new HttpException('暂无可通知的入驻人才', HttpStatus.BAD_REQUEST)
-    }
     return { success: true, count: sent }
   }
 
