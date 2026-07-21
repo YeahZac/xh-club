@@ -23,7 +23,10 @@ export class EventsService {
   private client() { return getSupabaseClient() }
 
   /** 获取活动列表 */
-  async getEvents(params: { event_type?: string; status?: string; page?: number; pageSize?: number; limit?: number }) {
+  async getEvents(
+    params: { event_type?: string; status?: string; page?: number; pageSize?: number; limit?: number },
+    memberId?: string | number,
+  ) {
     const page = Math.max(1, Number(params.page) || 1)
     const pageSize = Math.max(1, Math.min(200, Number(params.pageSize || params.limit) || 10))
     const from = (page - 1) * pageSize
@@ -41,7 +44,30 @@ export class EventsService {
     const { data, error, count } = await query
     if (error) throw new HttpException(`查询失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
 
-    const list = await this.uploadService.signRowsFields(data || [], ['cover_image', 'video_url'])
+    let list = await this.uploadService.signRowsFields(data || [], ['cover_image', 'video_url'])
+    if (memberId && list.length) {
+      const ids = list.map((item: any) => item.id).filter(Boolean)
+      let registeredIds = new Set<string>()
+      if (ids.length) {
+        try {
+          const placeholders = ids.map(() => '?').join(', ')
+          const rows = await queryRows(
+            `SELECT event_id FROM event_registrations
+             WHERE member_id = ? AND event_id IN (${placeholders})`,
+            [memberId, ...ids],
+          )
+          registeredIds = new Set((rows || []).map((row: any) => String(row.event_id)))
+        } catch (err) {
+          console.warn('[EventsService] load list registration flags failed', err)
+        }
+      }
+      list = list.map((item: any) => ({
+        ...item,
+        is_registered: registeredIds.has(String(item.id)),
+      }))
+    } else {
+      list = list.map((item: any) => ({ ...item, is_registered: false }))
+    }
     return { list, total: count || 0, page, pageSize }
   }
 

@@ -114,18 +114,21 @@ export async function resolveReuseFormDefaults(
 
 const isNameFieldLabel = (label: string) => /姓名|真实姓名|名字|联系人/.test(label)
 const isPhoneFieldLabel = (label: string) => /手机|电话|联系方式|联系电话/.test(label)
+const isCompanyFieldLabel = (label: string) => /公司|单位|企业/.test(label)
 
-/** 已通过人才入驻时，按字段名自动带入姓名 / 联系电话 */
+/** 人才入驻资料：按字段名自动带入姓名 / 电话 / 公司 */
 export async function resolveTalentFormDefaults(
   memberId: string | number,
   fields: FormFieldLike[] | null | undefined,
 ): Promise<Record<string, string>> {
   if (!memberId || !fields?.length) return {}
-  let row: { real_name?: string; contact?: string } | null = null
+  let row: { real_name?: string; contact?: string; company_name?: string } | null = null
   try {
+    // 优先已通过，否则取最近一次填写记录
     row = await queryOne(
-      `SELECT real_name, contact FROM talent_applications
-       WHERE member_id = ? AND status = 'approved'
+      `SELECT real_name, contact, company_name FROM talent_applications
+       WHERE member_id = ?
+       ORDER BY CASE WHEN status = 'approved' THEN 0 ELSE 1 END, id DESC
        LIMIT 1`,
       [memberId],
     )
@@ -137,7 +140,8 @@ export async function resolveTalentFormDefaults(
 
   const realName = String(row.real_name || '').trim()
   const contact = String(row.contact || '').trim()
-  if (!realName && !contact) return {}
+  const companyName = String(row.company_name || '').trim()
+  if (!realName && !contact && !companyName) return {}
 
   const defaults: Record<string, string> = {}
   for (const field of fields) {
@@ -145,6 +149,7 @@ export async function resolveTalentFormDefaults(
     if (!label) continue
     if (realName && isNameFieldLabel(label)) defaults[label] = realName
     if (contact && isPhoneFieldLabel(label)) defaults[label] = contact
+    if (companyName && isCompanyFieldLabel(label)) defaults[label] = companyName
   }
   return defaults
 }

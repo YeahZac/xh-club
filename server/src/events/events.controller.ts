@@ -22,9 +22,10 @@ export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
   @Get()
-  async getEvents(@Query() query: any) {
+  async getEvents(@Query() query: any, @Req() request: any) {
     console.log('[EventsController] GET /api/events')
-    const result = await this.eventsService.getEvents(query)
+    const memberId = tryReadMemberId(request)
+    const result = await this.eventsService.getEvents(query, memberId)
     return { code: 200, msg: 'success', data: result }
   }
 

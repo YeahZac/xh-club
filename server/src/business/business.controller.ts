@@ -25,8 +25,9 @@ export class BusinessController {
   ) {}
 
   @Get()
-  async list(@Query() query: any) {
-    const result = await this.businessService.list(query)
+  async list(@Query() query: any, @Req() request: any) {
+    const memberId = readMemberId(request)
+    const result = await this.businessService.list(query, memberId)
     return { code: 200, msg: 'success', data: result }
   }
 

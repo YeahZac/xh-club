@@ -89,7 +89,10 @@ export class BusinessService {
     })
   }
 
-  async list(params: { category?: string; status?: string; page?: number; pageSize?: number }) {
+  async list(
+    params: { category?: string; status?: string; page?: number; pageSize?: number },
+    memberId?: string | number,
+  ) {
     const page = Math.max(1, Number(params.page) || 1)
     const pageSize = Math.max(1, Math.min(100, Number(params.pageSize) || 20))
     const offset = (page - 1) * pageSize
@@ -125,9 +128,40 @@ export class BusinessService {
        LIMIT ? OFFSET ?`,
       [...values, pageSize, offset],
     )
-    const list = await this.uploadService.signRowsFields(rows, ['cover_image'])
+    let list = (await this.uploadService.signRowsFields(rows, ['cover_image']) || []).map((r) =>
+      this.formatBusinessRow(r),
+    )
+
+    if (memberId && list.length) {
+      const roadshowIds = list
+        .filter((item: any) => item.category === 'roadshow')
+        .map((item: any) => item.id)
+        .filter(Boolean)
+      let registeredIds = new Set<string>()
+      if (roadshowIds.length) {
+        try {
+          const placeholders = roadshowIds.map(() => '?').join(', ')
+          const regs = await queryRows(
+            `SELECT business_id FROM roadshow_registrations
+             WHERE member_id = ? AND business_id IN (${placeholders})`,
+            [memberId, ...roadshowIds],
+          )
+          registeredIds = new Set((regs || []).map((row: any) => String(row.business_id)))
+        } catch (err) {
+          console.warn('[BusinessService] load roadshow registration flags failed', err)
+        }
+      }
+      list = list.map((item: any) => ({
+        ...item,
+        is_registered:
+          item.category === 'roadshow' ? registeredIds.has(String(item.id)) : false,
+      }))
+    } else {
+      list = list.map((item: any) => ({ ...item, is_registered: false }))
+    }
+
     return {
-      list: (list || []).map((r) => this.formatBusinessRow(r)),
+      list,
       total: Number(countRow?.total || 0),
       page,
       pageSize,
