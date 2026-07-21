@@ -367,7 +367,7 @@ export class TalentService {
     }
 
     return queryRows(
-      `SELECT DISTINCT t.member_id, t.real_name, t.company_name, t.job_title
+      `SELECT t.member_id, t.real_name, t.company_name, t.job_title
        FROM talent_applications t
        WHERE ${where.join(' AND ')}
        ORDER BY t.real_name ASC, t.id DESC`,
