@@ -247,6 +247,17 @@ const ContentDetailPage = () => {
   const memberState = detail?.member_state || {}
   const roadshowProjects = Array.isArray(detail?.roadshow_projects) ? detail.roadshow_projects : []
   const scoreDimensions = Array.isArray(detail?.score_dimensions) ? detail.score_dimensions : []
+  const roadshowScoreSummary = detail?.score_summary
+  const roadshowRegistered = isRoadshow && !!memberState.is_registered
+  const canViewRoadshowResults = isRoadshow && !!memberState.can_view_results
+  const roadshowScoringPhase = String(memberState.scoring_phase || '')
+  const showRoadshowScoring = isRoadshow && !!memberState.can_score
+  const showRoadshowBar = isRoadshow && (
+    memberState.can_register
+    || roadshowRegistered
+    || memberState.can_score
+    || canViewRoadshowResults
+  )
 
   const openRoadshowRegister = async () => {
     if (!detail?.id) return
@@ -259,6 +270,10 @@ const ContentDetailPage = () => {
 
   const submitRoadshowScores = async () => {
     if (!detail?.id || !(await ensureLogin())) return
+    if (!detail?.member_state?.can_score) {
+      Taro.showToast({ title: '当前不在评分时间或未报名', icon: 'none' })
+      return
+    }
     const scores = Object.entries(scoreDraft)
       .filter(([, stars]) => stars > 0)
       .map(([key, stars]) => {
@@ -405,8 +420,6 @@ const ContentDetailPage = () => {
 
   const talentAvatar = detail.photo_url || detail.avatar_url || detail.member_avatar
   const eventRegistered = contentType === 'event' && !!memberState.is_registered
-  const roadshowRegistered = isRoadshow && !!memberState.is_registered
-  const showRoadshowBar = isRoadshow && (memberState.can_register || memberState.can_score || roadshowRegistered)
   const showProjectBar = contentType === 'project'
   const projectDimensions = Array.isArray(detail?.score_dimensions) ? detail.score_dimensions : []
   const bottomPadding =
@@ -618,12 +631,29 @@ const ContentDetailPage = () => {
               </View>
             )}
             {isRoadshow && (
-              <View className="flex flex-row items-center gap-2">
-                <Users size={12} color="#6B7280" />
-                <Text className="block text-xs text-gray-500">
-                  已报名 {detail.registration_count || 0} 人
-                  {memberState.is_registered ? ' · 您已报名' : ''}
-                </Text>
+              <View className="flex flex-col gap-2">
+                <View className="flex flex-row items-center gap-2">
+                  <Users size={12} color="#6B7280" />
+                  <Text className="block text-xs text-gray-500">
+                    已报名 {detail.registration_count || 0} 人
+                    {memberState.is_registered ? ' · 您已报名' : ''}
+                  </Text>
+                </View>
+                {(detail.start_time || detail.end_time) ? (
+                  <Text className="block text-xs text-gray-500">
+                    路演时间：{formatDetailTime(detail.start_time) || '待定'}
+                    {detail.end_time ? ` 至 ${formatDetailTime(detail.end_time)}` : ''}
+                  </Text>
+                ) : null}
+                {roadshowRegistered && roadshowScoringPhase === 'before' ? (
+                  <Text className="block text-xs text-amber-600">评分尚未开始，请在路演开始后进行评分</Text>
+                ) : null}
+                {roadshowRegistered && roadshowScoringPhase === 'active' && !memberState.can_score ? (
+                  <Text className="block text-xs text-gray-500">当前暂不可评分</Text>
+                ) : null}
+                {canViewRoadshowResults ? (
+                  <Text className="block text-xs text-[#2457A7]">路演已结束，以下为评分结果</Text>
+                ) : null}
               </View>
             )}
             {contentType === 'business' && (detail.category === 'financing' || detail.category === 'resource') && (
@@ -654,7 +684,7 @@ const ContentDetailPage = () => {
                   )}
                   <View className="p-3">
                     <Text className="block text-sm font-semibold text-[#1A1D2E]">{project.title}</Text>
-                    {memberState.can_score && scoreDimensions.map((dimension: any) => (
+                    {showRoadshowScoring && scoreDimensions.map((dimension: any) => (
                       <View key={dimension.id} className="mt-2">
                         <Text className="block text-xs text-gray-500 mb-1">{dimension.name}</Text>
                         <StarPicker
@@ -668,12 +698,44 @@ const ContentDetailPage = () => {
                         />
                       </View>
                     ))}
+                    {canViewRoadshowResults && Array.isArray(roadshowScoreSummary?.projects) ? (
+                      (() => {
+                        const summary = roadshowScoreSummary.projects.find(
+                          (item: any) => String(item.project_id) === String(project.project_id),
+                        )
+                        if (!summary) return null
+                        return (
+                          <View className="mt-2 rounded-lg bg-[#F8FAFC] px-3 py-2">
+                            <Text className="block text-xs text-[#64748B]">
+                              综合得分 {summary.overall_avg || 0} · 排名 #{summary.rank || '-'}
+                            </Text>
+                            {(summary.dimension_scores || []).map((dim: any) => (
+                              <Text key={dim.dimension_id} className="mt-1 block text-xs text-gray-500">
+                                {dim.name}：{dim.avg_stars || 0} 分（{dim.vote_count || 0} 人评）
+                              </Text>
+                            ))}
+                          </View>
+                        )
+                      })()
+                    ) : null}
                   </View>
                 </View>
               ))}
             </View>
           </SoftCard>
         )}
+
+        {canViewRoadshowResults && roadshowScoreSummary?.summary_text ? (
+          <SoftCard className="mx-4 mt-3 px-4 py-4">
+            <Text className="mb-2 block text-sm font-semibold text-[#172033]">评分结果</Text>
+            <Text className="block text-sm leading-relaxed text-gray-600">{roadshowScoreSummary.summary_text}</Text>
+            {roadshowScoreSummary.overall_judgement ? (
+              <Text className="mt-2 block text-xs leading-relaxed text-[#64748B]">
+                {roadshowScoreSummary.overall_judgement}
+              </Text>
+            ) : null}
+          </SoftCard>
+        ) : null}
 
         <SoftCard className={`mx-4 mt-3 px-4 py-4 ${bottomPadding}`}>
           <Text className="mb-3 block text-sm font-semibold text-[#172033]">
@@ -759,10 +821,17 @@ const ContentDetailPage = () => {
           {memberState.can_score && (
             <View style={{ flex: 1 }}>
               <Button className="w-full rounded-2xl bg-[#C8A96A] text-white" onClick={submitRoadshowScores}>
-                <Text>{submitting ? '提交中...' : '提交评分'}</Text>
+                <Text className="block">{submitting ? '提交中...' : '提交评分'}</Text>
               </Button>
             </View>
           )}
+          {canViewRoadshowResults && !memberState.can_score ? (
+            <View style={{ flex: 1 }}>
+              <Button className="w-full rounded-2xl bg-[#E8EDF5] text-[#64748B]" disabled>
+                <Text className="block">评分已结束</Text>
+              </Button>
+            </View>
+          ) : null}
         </View>
       )}
 

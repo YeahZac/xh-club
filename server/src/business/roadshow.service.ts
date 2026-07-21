@@ -107,13 +107,21 @@ export class RoadshowService {
     return !Number.isNaN(end.getTime()) && Date.now() <= end.getTime()
   }
 
-  private isWithinScoringWindow(startTime?: string | Date | null, endTime?: string | Date | null) {
+  private getScoringPhase(startTime?: string | Date | null, endTime?: string | Date | null): 'before' | 'active' | 'ended' {
     const now = Date.now()
-    const start = startTime ? new Date(startTime).getTime() : 0
-    const end = endTime ? new Date(endTime).getTime() : Number.MAX_SAFE_INTEGER
-    if (startTime && Number.isNaN(start)) return false
-    if (endTime && Number.isNaN(end)) return false
-    return now >= (startTime ? start : 0) && now <= (endTime ? end : Number.MAX_SAFE_INTEGER)
+    if (startTime) {
+      const start = new Date(startTime).getTime()
+      if (!Number.isNaN(start) && now < start) return 'before'
+    }
+    if (endTime) {
+      const end = new Date(endTime).getTime()
+      if (!Number.isNaN(end) && now > end) return 'ended'
+    }
+    return 'active'
+  }
+
+  private isWithinScoringWindow(startTime?: string | Date | null, endTime?: string | Date | null) {
+    return this.getScoringPhase(startTime, endTime) === 'active'
   }
 
   async getProjects(businessId: string) {
@@ -157,8 +165,13 @@ export class RoadshowService {
       is_registered: false,
       can_register: this.isBeforeEnd(row.end_time),
       can_score: false,
+      can_view_results: false,
+      scoring_phase: this.getScoringPhase(row.start_time, row.end_time),
+      has_scored: false,
       my_scores: [] as any[],
     }
+
+    let scoreSummary: Awaited<ReturnType<RoadshowService['getScoreSummary']>> | undefined
 
     if (memberId) {
       const registration = await queryOne(
@@ -166,7 +179,7 @@ export class RoadshowService {
         [row.id, memberId],
       )
       const isRegistered = Boolean(registration)
-      const canScore = isRegistered && this.isWithinScoringWindow(row.start_time, row.end_time)
+      const scoringPhase = this.getScoringPhase(row.start_time, row.end_time)
       const myScores = isRegistered
         ? await queryRows(
             `SELECT project_id, dimension_id, stars
@@ -175,11 +188,19 @@ export class RoadshowService {
             [row.id, memberId],
           )
         : []
+      const canScore = isRegistered && scoringPhase === 'active' && dimensions.length > 0
+      const canViewResults = isRegistered && scoringPhase === 'ended'
       memberState = {
         is_registered: isRegistered,
         can_register: !isRegistered && this.isBeforeEnd(row.end_time),
         can_score: canScore,
+        can_view_results: canViewResults,
+        scoring_phase: scoringPhase,
+        has_scored: (myScores || []).length > 0,
         my_scores: myScores,
+      }
+      if (canViewResults) {
+        scoreSummary = await this.getScoreSummary(String(row.id))
       }
     }
 
@@ -194,6 +215,7 @@ export class RoadshowService {
       talent_defaults: formDefaultsBundle.talentDefaults,
       roadshow_projects: projects,
       score_dimensions: dimensions,
+      score_summary: scoreSummary,
       registration_count: Number(
         (
           await queryOne(
