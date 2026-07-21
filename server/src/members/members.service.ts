@@ -12,6 +12,21 @@ export class MembersService {
 
   private client() { return getSupabaseClient() }
 
+  /** 推荐会员统一口径：兼容 referrer_id 与历史已接受邀请记录，并按会员去重。 */
+  private async getInvitedMembers(memberId: string, fields = 'm.id') {
+    return queryRows(
+      `SELECT DISTINCT ${fields}
+       FROM members m
+       LEFT JOIN invitation_records ir
+         ON ir.invitee_id = m.id
+        AND ir.inviter_id = ?
+        AND ir.status = 'accepted'
+       WHERE m.referrer_id = ? OR ir.id IS NOT NULL
+       ORDER BY m.created_at DESC`,
+      [memberId, memberId],
+    )
+  }
+
   /** 剔除敏感字段，避免返回给客户端 */
   private sanitizeMember<T extends Record<string, unknown>>(row: T | null) {
     if (!row) return row
@@ -129,6 +144,8 @@ export class MembersService {
       .select('*, organizations(*)')
       .eq('member_id', id)
 
+    const referred = await this.getInvitedMembers(id)
+
     return {
       ...this.sanitizeMember(data),
       avatar: data.avatar
@@ -136,6 +153,7 @@ export class MembersService {
         : data.avatar,
       tags: tags || [],
       organizations: orgs || [],
+      referrer_count: referred.length,
     }
   }
 
@@ -288,19 +306,10 @@ export class MembersService {
   /** 会员推荐页数据：推荐码 + 推荐人数 + 推荐人员列表 */
   async getInviteDashboard(memberId: string) {
     const inviteCode = await this.ensureInviteCode(memberId)
-    // 统计口径与展示名单必须一致：兼容旧数据仅写入 invitation_records、
-    // 新数据写入 members.referrer_id 的两种推荐关系，并按会员 ID 去重。
-    const referred = await queryRows(
-      `SELECT DISTINCT m.id, m.name, m.phone, m.avatar, m.company_name,
-              m.membership_level, m.status, m.created_at
-       FROM members m
-       LEFT JOIN invitation_records ir
-         ON ir.invitee_id = m.id
-        AND ir.inviter_id = ?
-        AND ir.status = 'accepted'
-       WHERE m.referrer_id = ? OR ir.id IS NOT NULL
-       ORDER BY m.created_at DESC`,
-      [memberId, memberId],
+    const referred = await this.getInvitedMembers(
+      memberId,
+      `m.id, m.name, m.phone, m.avatar, m.company_name,
+       m.membership_level, m.status, m.created_at`,
     )
 
     const invitees = (referred || []).map((item: any) => ({
