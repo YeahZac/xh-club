@@ -110,7 +110,8 @@ export class EventsService {
       form_defaults: formDefaultsBundle.defaults,
       talent_defaults: formDefaultsBundle.talentDefaults,
       current_participants: currentParticipants,
-      registrations: registrations || [],
+      registration_count: registrationCount,
+      registrations: [],
       member_state: {
         is_registered: isRegistered,
         can_register: !isRegistered && signed.status === 'open',
@@ -340,6 +341,12 @@ export class EventsService {
   async getProjectById(id: string, memberId?: string | number) {
     const data = await queryOne('SELECT * FROM projects WHERE id = ?', [id])
     if (!data) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
+
+    const auditStatus = String((data as any).audit_status || 'approved')
+    const isOwner = memberId && String((data as any).submitter_id) === String(memberId)
+    if (auditStatus !== 'approved' && !isOwner) {
+      throw new HttpException('项目不存在或未通过审核', HttpStatus.NOT_FOUND)
+    }
 
     const dimensions = await queryRows(
       `SELECT id, project_id, name, sort_order

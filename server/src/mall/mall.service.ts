@@ -146,10 +146,25 @@ export class MallService {
 
   async updateProduct(id: string, data: any) {
     try {
+      const ALLOWED_PRODUCT_FIELDS = new Set([
+        'name',
+        'description',
+        'image_url',
+        'video_url',
+        'points_price',
+        'cash_price',
+        'stock',
+        'sales_count',
+        'category',
+        'status',
+        'enable_distribution',
+        'distribution_rate',
+        'sort_order',
+      ])
       const setClauses: string[] = [];
       const values: any[] = [];
       for (const [key, value] of Object.entries(data)) {
-        if (value !== undefined) {
+        if (value !== undefined && ALLOWED_PRODUCT_FIELDS.has(key)) {
           setClauses.push(`${key} = ?`);
           values.push(value);
         }

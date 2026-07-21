@@ -11,6 +11,16 @@ export class MembersService {
 
   private client() { return getSupabaseClient() }
 
+  /** 剔除敏感字段，避免返回给客户端 */
+  private sanitizeMember<T extends Record<string, unknown>>(row: T | null) {
+    if (!row) return row
+    const { password_hash, wx_openid, ...safe } = row as T & {
+      password_hash?: string
+      wx_openid?: string
+    }
+    return safe as Omit<T, 'password_hash' | 'wx_openid'>
+  }
+
   /** 会员注册 */
   async register(dto: any) {
     console.log('[MembersService] register - phone:', dto.phone)
@@ -93,7 +103,7 @@ export class MembersService {
 
     const token = signAuthToken({ sub: String(data.id), type: 'member' })
 
-    return { token, member: data }
+    return { token, member: this.sanitizeMember(data) }
   }
 
   /** 获取会员档案 */
@@ -119,7 +129,7 @@ export class MembersService {
       .eq('member_id', id)
 
     return {
-      ...data,
+      ...this.sanitizeMember(data),
       avatar: data.avatar
         ? await this.uploadService.signMediaUrl(data.avatar)
         : data.avatar,

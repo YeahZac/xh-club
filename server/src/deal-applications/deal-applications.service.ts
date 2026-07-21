@@ -122,7 +122,7 @@ export class DealApplicationsService {
       const like = `%${keyword}%`
       values.push(like, like, like)
     }
-    return queryRows(
+    const rows = await queryRows(
       `SELECT id, name, avatar, phone, company_name, company_position
        FROM members
        WHERE ${where}
@@ -130,6 +130,14 @@ export class DealApplicationsService {
        LIMIT 100`,
       values,
     )
+    return (rows || []).map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      avatar: row.avatar,
+      phone: row.phone ? String(row.phone).replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : null,
+      company_name: row.company_name,
+      company_position: row.company_position,
+    }))
   }
 
   async create(memberId: string | number, dto: any) {
@@ -292,6 +300,9 @@ export class DealApplicationsService {
       }
     }
     if (dto.payment_status !== undefined) {
+      if (!isOwner) {
+        throw new HttpException('仅项目负责人可更新打款状态', HttpStatus.FORBIDDEN)
+      }
       const payment = String(dto.payment_status)
       if (!(PAYMENT_STATUSES as readonly string[]).includes(payment)) {
         throw new HttpException('打款状态无效', HttpStatus.BAD_REQUEST)

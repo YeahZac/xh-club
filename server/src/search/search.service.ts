@@ -33,7 +33,8 @@ export class SearchService {
       queryRows(
         `SELECT id, title, cover_image, industry, created_at
          FROM projects
-         WHERE (title LIKE ? OR IFNULL(description, '') LIKE ? OR IFNULL(industry, '') LIKE ?)
+         WHERE (audit_status = 'approved' OR audit_status IS NULL OR audit_status = '')
+           AND (title LIKE ? OR IFNULL(description, '') LIKE ? OR IFNULL(industry, '') LIKE ?)
          ORDER BY created_at DESC
          LIMIT ?`,
         [like, like, like, limit],
