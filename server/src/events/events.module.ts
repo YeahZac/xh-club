@@ -5,9 +5,10 @@ import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard'
 import { UploadModule } from '@/upload/upload.module'
 import { PointsModule } from '@/points/points.module'
 import { InvitationModule } from '@/invitation/invitation.module'
+import { TalentModule } from '@/talent/talent.module'
 
 @Module({
-  imports: [UploadModule, PointsModule, InvitationModule],
+  imports: [UploadModule, PointsModule, InvitationModule, TalentModule],
   controllers: [EventsController, ProjectsController, ResourcesController],
   providers: [EventsService, AdminAuthGuard, MemberAuthGuard],
 })

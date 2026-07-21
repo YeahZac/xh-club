@@ -344,6 +344,37 @@ export class TalentService {
     }
   }
 
+  /**
+   * 项目分享收件人：直接使用后台「人才管理」中的审核通过记录。
+   * 资料修改待审期间主记录仍为 approved，因此继续显示旧审核资料。
+   */
+  async listApprovedShareRecipients(options?: {
+    excludeMemberId?: string | number
+    memberIds?: Array<string | number>
+  }) {
+    const where = [`t.status = 'approved'`, 't.member_id IS NOT NULL']
+    const values: Array<string | number> = []
+    if (options?.excludeMemberId) {
+      where.push('t.member_id != ?')
+      values.push(options.excludeMemberId)
+    }
+    const memberIds = [...new Set(
+      (options?.memberIds || []).map((id) => String(id || '').trim()).filter(Boolean),
+    )]
+    if (memberIds.length) {
+      where.push(`t.member_id IN (${memberIds.map(() => '?').join(', ')})`)
+      values.push(...memberIds)
+    }
+
+    return queryRows(
+      `SELECT DISTINCT t.member_id, t.real_name, t.company_name, t.job_title
+       FROM talent_applications t
+       WHERE ${where.join(' AND ')}
+       ORDER BY t.real_name ASC, t.id DESC`,
+      values,
+    )
+  }
+
   async getMine(memberId: string) {
     const row = await queryOne(
       `SELECT t.*, m.avatar AS member_avatar, m.name AS member_name

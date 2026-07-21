@@ -11,6 +11,7 @@ import { UploadService } from '@/upload/upload.service'
 import { PointsEngineService } from '@/points/points-engine.service'
 import { InvitationEngineService } from '@/invitation/invitation-engine.service'
 import { createNotification } from '@/common/notify'
+import { TalentService } from '@/talent/talent.service'
 
 @Injectable()
 export class EventsService {
@@ -18,6 +19,7 @@ export class EventsService {
     private readonly uploadService: UploadService,
     private readonly pointsEngine: PointsEngineService,
     private readonly invitationEngine: InvitationEngineService,
+    private readonly talentService: TalentService,
   ) {}
 
   private client() { return getSupabaseClient() }
@@ -465,16 +467,9 @@ export class EventsService {
     const project = await queryOne('SELECT id, title FROM projects WHERE id = ?', [projectId])
     if (!project) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
 
-    const talents = await queryRows(
-      `SELECT DISTINCT t.member_id, t.real_name, t.company_name, t.job_title
-       FROM talent_applications t
-       INNER JOIN members m ON m.id = t.member_id AND m.status = 'active'
-       WHERE t.status = 'approved'
-         AND t.member_id IS NOT NULL
-         AND t.member_id != ?
-       ORDER BY t.real_name ASC, t.id DESC`,
-      [fromMemberId],
-    )
+    const talents = await this.talentService.listApprovedShareRecipients({
+      excludeMemberId: fromMemberId,
+    })
 
     return (talents || []).map((talent: any) => ({
       member_id: String(talent.member_id),
@@ -501,14 +496,10 @@ export class EventsService {
       throw new HttpException('请至少选择一位入驻人才', HttpStatus.BAD_REQUEST)
     }
 
-    const placeholders = selectedIds.map(() => '?').join(', ')
-    const talents = await queryRows(
-      `SELECT DISTINCT t.member_id
-       FROM talent_applications t
-       INNER JOIN members m ON m.id = t.member_id AND m.status = 'active'
-       WHERE t.status = 'approved' AND t.member_id IN (${placeholders})`,
-      selectedIds,
-    )
+    const talents = await this.talentService.listApprovedShareRecipients({
+      excludeMemberId: fromMemberId,
+      memberIds: selectedIds,
+    })
     if (!talents.length) {
       throw new HttpException('所选人才不可接收分享', HttpStatus.BAD_REQUEST)
     }
