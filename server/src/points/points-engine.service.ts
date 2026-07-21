@@ -65,6 +65,13 @@ export class PointsEngineService {
         )
         return Number(row?.cnt || 0)
       }
+      case 'attend_roadshow': {
+        const row = await queryOne<RowDataPacket>(
+          'SELECT COUNT(*) AS cnt FROM roadshow_registrations WHERE member_id = ?',
+          [memberId],
+        )
+        return Number(row?.cnt || 0)
+      }
       case 'deal_complete': {
         const legacy = await queryOne<RowDataPacket>(
           `SELECT COUNT(*) AS cnt FROM transactions

@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common'
 import {
   assertRequiredFormAnswers,
   normalizeRegisterFormFields,
@@ -9,6 +9,7 @@ import { createNotification } from '@/common/notify'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
 import { ensureSchemaColumns } from '@/storage/database/ensure-schema-columns'
 import { UploadService } from '@/upload/upload.service'
+import { PointsEngineService } from '@/points/points-engine.service'
 import { assertCloudStorageImageUrl } from '@/utils/media-validators'
 
 export interface RoadshowFormField extends FormFieldLike {
@@ -51,7 +52,12 @@ function toMysqlDateTime(value: unknown): string | null {
 
 @Injectable()
 export class RoadshowService {
-  constructor(private readonly uploadService: UploadService) {}
+  private readonly logger = new Logger(RoadshowService.name)
+
+  constructor(
+    private readonly uploadService: UploadService,
+    private readonly pointsEngine: PointsEngineService,
+  ) {}
 
   async ensureSchema() {
     await ensureSchemaColumns()
@@ -368,6 +374,14 @@ export class RoadshowService {
       bizId: businessId,
       result: 'approved',
     })
+
+    void this.pointsEngine
+      .evaluate(memberId, 'attend_roadshow', {
+        referenceType: 'roadshow',
+        referenceId: businessId,
+        description: '参加项目路演奖励积分',
+      })
+      .catch((err) => this.logger.warn(`[RoadshowService] points evaluate failed: ${err}`))
 
     return { id: result.insertId, success: true }
   }

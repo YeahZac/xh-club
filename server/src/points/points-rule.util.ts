@@ -8,6 +8,12 @@ export const POINTS_RULE_PRESETS = [
     hint: '会员成功报名/参加活动达到设定次数后发放积分',
   },
   {
+    code: 'attend_roadshow',
+    label: '参加项目路演',
+    unit: '次',
+    hint: '会员成功报名项目路演达到设定次数后发放积分',
+  },
+  {
     code: 'deal_complete',
     label: '促成成交项目',
     unit: '个',
