@@ -618,8 +618,16 @@ export class UploadService {
     mimeType: string;
     reused?: boolean;
   }> {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.mimetype)) {
+    const allowedTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'application/octet-stream',
+      '',
+    ];
+    if (file.mimetype && !allowedTypes.includes(file.mimetype) && !file.mimetype.startsWith('image/')) {
       throw new Error('只支持 JPG、PNG、GIF、WebP 格式的图片');
     }
 
