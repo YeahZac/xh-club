@@ -1,4 +1,4 @@
-import { queryRows } from '@/storage/database/mysql-client'
+import { queryOne, queryRows } from '@/storage/database/mysql-client'
 
 export interface FormFieldLike {
   label: string
@@ -110,6 +110,59 @@ export async function resolveReuseFormDefaults(
     }
   }
   return defaults
+}
+
+const isNameFieldLabel = (label: string) => /姓名|真实姓名|名字|联系人/.test(label)
+const isPhoneFieldLabel = (label: string) => /手机|电话|联系方式|联系电话/.test(label)
+
+/** 已通过人才入驻时，按字段名自动带入姓名 / 联系电话 */
+export async function resolveTalentFormDefaults(
+  memberId: string | number,
+  fields: FormFieldLike[] | null | undefined,
+): Promise<Record<string, string>> {
+  if (!memberId || !fields?.length) return {}
+  let row: { real_name?: string; contact?: string } | null = null
+  try {
+    row = await queryOne(
+      `SELECT real_name, contact FROM talent_applications
+       WHERE member_id = ? AND status = 'approved'
+       LIMIT 1`,
+      [memberId],
+    )
+  } catch (error) {
+    console.warn('[form-defaults] load talent failed', error)
+    return {}
+  }
+  if (!row) return {}
+
+  const realName = String(row.real_name || '').trim()
+  const contact = String(row.contact || '').trim()
+  if (!realName && !contact) return {}
+
+  const defaults: Record<string, string> = {}
+  for (const field of fields) {
+    const label = String(field.label || '').trim()
+    if (!label) continue
+    if (realName && isNameFieldLabel(label)) defaults[label] = realName
+    if (contact && isPhoneFieldLabel(label)) defaults[label] = contact
+  }
+  return defaults
+}
+
+/** 历史沿用 + 人才入驻预填（人才字段优先） */
+export async function resolveRegisterFormDefaults(
+  memberId: string | number,
+  fields: FormFieldLike[] | null | undefined,
+  source: 'event' | 'roadshow',
+): Promise<{ defaults: Record<string, string>; talentDefaults: Record<string, string> }> {
+  const [reuse, talent] = await Promise.all([
+    resolveReuseFormDefaults(memberId, fields, source),
+    resolveTalentFormDefaults(memberId, fields),
+  ])
+  return {
+    defaults: { ...reuse, ...talent },
+    talentDefaults: talent,
+  }
 }
 
 export function assertRequiredFormAnswers(

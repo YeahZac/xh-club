@@ -2,7 +2,7 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
 import {
   assertRequiredFormAnswers,
   normalizeRegisterFormFields,
-  resolveReuseFormDefaults,
+  resolveRegisterFormDefaults,
   type FormFieldLike,
 } from '@/common/form-defaults'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
@@ -182,14 +182,15 @@ export class RoadshowService {
       }
     }
 
-    const formDefaults = memberId
-      ? await resolveReuseFormDefaults(memberId, formFields, 'roadshow')
-      : {}
+    const formDefaultsBundle = memberId
+      ? await resolveRegisterFormDefaults(memberId, formFields, 'roadshow')
+      : { defaults: {}, talentDefaults: {} }
 
     return {
       ...row,
       form_fields: formFields,
-      form_defaults: formDefaults,
+      form_defaults: formDefaultsBundle.defaults,
+      talent_defaults: formDefaultsBundle.talentDefaults,
       roadshow_projects: projects,
       score_dimensions: dimensions,
       registration_count: Number(

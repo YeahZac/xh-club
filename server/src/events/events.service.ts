@@ -2,7 +2,7 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import {
   assertRequiredFormAnswers,
   normalizeRegisterFormFields,
-  resolveReuseFormDefaults,
+  resolveRegisterFormDefaults,
 } from '@/common/form-defaults'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
@@ -67,9 +67,9 @@ export class EventsService {
       ['description', 'content'],
     )
     const formFields = normalizeRegisterFormFields(signed.form_fields)
-    const formDefaults = memberId
-      ? await resolveReuseFormDefaults(memberId, formFields, 'event')
-      : {}
+    const formDefaultsBundle = memberId
+      ? await resolveRegisterFormDefaults(memberId, formFields, 'event')
+      : { defaults: {}, talentDefaults: {} }
     const registrationCount = Array.isArray(registrations) ? registrations.length : 0
     const currentParticipants = Math.max(
       Number(signed.current_participants || 0),
@@ -81,7 +81,8 @@ export class EventsService {
     return {
       ...signed,
       form_fields: formFields.length ? formFields : signed.form_fields,
-      form_defaults: formDefaults,
+      form_defaults: formDefaultsBundle.defaults,
+      talent_defaults: formDefaultsBundle.talentDefaults,
       current_participants: currentParticipants,
       registrations: registrations || [],
       member_state: {
