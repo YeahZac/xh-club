@@ -204,6 +204,35 @@ export class TalentService {
     return list.filter(Boolean)
   }
 
+  private parsePendingData(value: unknown): Record<string, any> | null {
+    if (!value) return null
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, any>
+    }
+    if (typeof value !== 'string') return null
+    try {
+      const parsed = JSON.parse(value)
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+    } catch {
+      return null
+    }
+  }
+
+  /** 本人及后台审核页查看待审新资料；公开查询始终直接读取已审核字段。 */
+  private applyPendingView(row: any) {
+    if (!row) return row
+    const pending = this.parsePendingData(row.pending_data)
+    if (!pending || !row.update_status) return row
+    return {
+      ...row,
+      ...pending,
+      status: row.update_status,
+      reject_reason: row.update_reject_reason || null,
+      approved_status: row.status,
+      is_profile_update: true,
+    }
+  }
+
   async listApproved(params: { industry?: string; keyword?: string; page?: number; pageSize?: number } = {}) {
     const page = Math.max(1, Number(params.page) || 1)
     const pageSize = Math.max(1, Math.min(100, Number(params.pageSize) || 20))
@@ -323,7 +352,7 @@ export class TalentService {
        WHERE t.member_id = ?`,
       [memberId],
     )
-    return this.signTalent(row)
+    return this.signTalent(this.applyPendingView(row))
   }
 
   private validateApplicationPayload(dto: any, partial = false) {
@@ -408,6 +437,28 @@ export class TalentService {
     }
     const payload = this.validateApplicationPayload(merged, false)
     const avatarUrl = payload.avatar_url || payload.photo_url || null
+    const nextData = {
+      real_name: payload.real_name,
+      contact: payload.contact,
+      company_name: payload.company_name,
+      job_title: payload.job_title,
+      photo_url: payload.photo_url,
+      industry_tags: payload.industry_tags,
+      experience: payload.experience || null,
+      card_image_url: payload.card_image_url || null,
+      avatar_url: avatarUrl,
+    }
+
+    if (String(existing.status) === 'approved') {
+      await queryExecute(
+        `UPDATE talent_applications SET
+           pending_data = ?, update_status = 'pending',
+           update_reject_reason = NULL, reviewed_at = NULL, reviewed_by = NULL
+         WHERE member_id = ?`,
+        [JSON.stringify(nextData), memberId],
+      )
+      return this.getMine(memberId)
+    }
 
     await queryExecute(
       `UPDATE talent_applications SET
@@ -435,13 +486,21 @@ export class TalentService {
     const where: string[] = []
     const values: any[] = []
     if (query.status && TALENT_STATUSES.includes(query.status)) {
-      where.push('t.status = ?')
-      values.push(query.status)
+      if (query.status === 'approved') {
+        where.push(`t.status = 'approved' AND (t.update_status IS NULL OR t.update_status = '')`)
+      } else {
+        where.push('(t.status = ? OR t.update_status = ?)')
+        values.push(query.status, query.status)
+      }
     }
     if (query.keyword) {
-      where.push('(t.real_name LIKE ? OR t.contact LIKE ? OR CAST(t.member_id AS CHAR) LIKE ?)')
+      where.push(`(
+        t.real_name LIKE ? OR t.contact LIKE ? OR CAST(t.member_id AS CHAR) LIKE ?
+        OR JSON_UNQUOTE(JSON_EXTRACT(t.pending_data, '$.real_name')) LIKE ?
+        OR JSON_UNQUOTE(JSON_EXTRACT(t.pending_data, '$.contact')) LIKE ?
+      )`)
       const kw = `%${query.keyword}%`
-      values.push(kw, kw, kw)
+      values.push(kw, kw, kw, kw, kw)
     }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
     const rows = await queryRows(
@@ -450,11 +509,12 @@ export class TalentService {
        LEFT JOIN members m ON m.id = t.member_id
        ${whereSql}
        ORDER BY
-         CASE t.status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END,
+         CASE COALESCE(NULLIF(t.update_status, ''), t.status)
+           WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END,
          t.updated_at DESC`,
       values,
     )
-    return this.signTalents(rows)
+    return this.signTalents((rows || []).map((row: any) => this.applyPendingView(row)))
   }
 
   async adminGetById(id: string) {
@@ -466,12 +526,75 @@ export class TalentService {
       [id],
     )
     if (!row) throw new HttpException('人才申请不存在', HttpStatus.NOT_FOUND)
-    return this.signTalent(row)
+    return this.signTalent(this.applyPendingView(row))
   }
 
   async adminUpdate(id: string, dto: any) {
     const existing = await queryOne('SELECT * FROM talent_applications WHERE id = ?', [id])
     if (!existing) throw new HttpException('人才申请不存在', HttpStatus.NOT_FOUND)
+
+    const pendingData = this.parsePendingData((existing as any).pending_data)
+    const isPendingProfileUpdate =
+      String((existing as any).status) === 'approved'
+      && String((existing as any).update_status) === 'pending'
+      && !!pendingData
+
+    if (isPendingProfileUpdate && (dto.status === 'approved' || dto.status === 'rejected')) {
+      const memberId = (existing as any).member_id
+      if (dto.status === 'approved') {
+        await queryExecute(
+          `UPDATE talent_applications SET
+             real_name = ?, contact = ?, company_name = ?, job_title = ?,
+             photo_url = ?, industry_tags = ?, experience = ?,
+             card_image_url = ?, avatar_url = ?,
+             pending_data = NULL, update_status = NULL, update_reject_reason = NULL,
+             status = 'approved', reject_reason = NULL,
+             reviewed_at = NOW(), reviewed_by = ?
+           WHERE id = ?`,
+          [
+            pendingData.real_name,
+            pendingData.contact,
+            pendingData.company_name,
+            pendingData.job_title || null,
+            pendingData.photo_url || null,
+            JSON.stringify(parseIndustryTags(pendingData.industry_tags)),
+            pendingData.experience || null,
+            pendingData.card_image_url || null,
+            pendingData.avatar_url || pendingData.photo_url || null,
+            dto.reviewed_by || null,
+            id,
+          ],
+        )
+      } else {
+        await queryExecute(
+          `UPDATE talent_applications SET
+             update_status = 'rejected', update_reject_reason = ?,
+             reviewed_at = NOW(), reviewed_by = ?
+           WHERE id = ?`,
+          [
+            String(dto.reject_reason || '').trim() || '资料修改未通过审核',
+            dto.reviewed_by || null,
+            id,
+          ],
+        )
+      }
+
+      const result = await this.adminGetById(id)
+      await createNotification({
+        memberId,
+        type: 'approval',
+        title: dto.status === 'approved' ? '人才资料修改审核通过' : '人才资料修改审核未通过',
+        content:
+          dto.status === 'approved'
+            ? '您修改的人才资料已通过审核并更新展示'
+            : `您修改的人才资料未通过审核：${String(dto.reject_reason || '').trim() || '请修改后重新提交'}`,
+        link: '/pages/talent-settle/index',
+        bizType: 'talent_profile_audit',
+        bizId: id,
+        result: dto.status,
+      })
+      return result
+    }
 
     const updates: string[] = []
     const params: any[] = []

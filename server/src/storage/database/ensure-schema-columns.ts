@@ -125,6 +125,10 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['talent_applications', 'payment_expire_at', 'DATE NULL'],
   ['talent_applications', 'company_name', 'TEXT NULL'],
   ['talent_applications', 'job_title', 'VARCHAR(100) NULL'],
+  // 已审核人才修改资料：新资料单独待审，公开端继续读取原审核通过资料
+  ['talent_applications', 'pending_data', 'JSON NULL'],
+  ['talent_applications', 'update_status', 'VARCHAR(20) NULL'],
+  ['talent_applications', 'update_reject_reason', 'VARCHAR(500) NULL'],
   // 部门负责人姓名（组织架构展示用）
   ['departments', 'leader_name', 'VARCHAR(100) NULL'],
   ['departments', 'level', 'INT DEFAULT 1'],
