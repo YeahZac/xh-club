@@ -88,8 +88,8 @@ export class AuthService {
 
         params.push(memberId)
         await queryExecute(`UPDATE members SET ${updates.join(', ')} WHERE id = ?`, params)
-        await this.tryBindInviteCode(memberId, input.inviteCode)
-        return this.buildLoginResult(memberId, openid)
+        // 老用户再次登录：不允许再填/绑定推荐码
+        return this.buildLoginResult(memberId, openid, { isNewMember: false, canBindInvite: false })
       }
 
       // 若手机号已被旧账号占用，优先绑定到当前 openid
@@ -101,8 +101,8 @@ export class AuthService {
            avatar = COALESCE(avatar, ?), updated_at = NOW() WHERE id = ?`,
           [openid, safeName, safeAvatar || null, memberId],
         )
-        await this.tryBindInviteCode(memberId, input.inviteCode)
-        return this.buildLoginResult(memberId, openid)
+        // 已有会员账号合并：非首次注册，不绑定推荐码
+        return this.buildLoginResult(memberId, openid, { isNewMember: false, canBindInvite: false })
       }
 
       await queryExecute(
@@ -120,11 +120,36 @@ export class AuthService {
       if (memberId) {
         await this.tryBindInviteCode(memberId, input.inviteCode)
       }
-      return this.buildLoginResult(memberId, (newMember as any)?.wx_openid)
+      return this.buildLoginResult(memberId, (newMember as any)?.wx_openid, {
+        isNewMember: true,
+        canBindInvite: true,
+      })
     } catch (error) {
       console.error('[AuthService] wxLogin error:', JSON.stringify(error))
       console.error('[AuthService] wxLogin error details:', error?.message, error?.cause)
       throw error
+    }
+  }
+
+  /** 登录页预检：同一微信号是否已注册（仅首次可填推荐码） */
+  async wxPrecheck(input: { code?: string; openidFromHeader?: string }) {
+    const openid =
+      (input.openidFromHeader || '').trim()
+      || (input.code ? await this.exchangeCodeForOpenid(input.code) : '')
+
+    if (!openid) {
+      return { registered: false, can_fill_invite: true, openid: '' }
+    }
+
+    const existing = await queryOne(
+      'SELECT id, referrer_id FROM members WHERE wx_openid = ? LIMIT 1',
+      [openid],
+    )
+    const registered = !!existing
+    return {
+      registered,
+      can_fill_invite: !registered,
+      openid,
     }
   }
 
@@ -139,7 +164,11 @@ export class AuthService {
     }
   }
 
-  private async buildLoginResult(memberId: string, openid: string) {
+  private async buildLoginResult(
+    memberId: string,
+    openid: string,
+    flags?: { isNewMember?: boolean; canBindInvite?: boolean },
+  ) {
     if (memberId) {
       void this.pointsEngine
         .onMemberActive(memberId)
@@ -158,6 +187,8 @@ export class AuthService {
       openid,
       token: signAuthToken({ sub: String(memberId), type: 'member' }),
       profile: profile || null,
+      is_new_member: !!flags?.isNewMember,
+      can_bind_invite: !!flags?.canBindInvite,
     }
   }
 
