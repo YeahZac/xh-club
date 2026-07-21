@@ -13,16 +13,27 @@ export class MembersService {
   private client() { return getSupabaseClient() }
 
   /** 推荐会员统一口径：兼容 referrer_id 与历史已接受邀请记录，并按会员去重。 */
-  private async getInvitedMembers(memberId: string, fields = 'm.id') {
+  private invitedMembersBaseSql() {
+    return `
+      FROM members m
+      LEFT JOIN invitation_records ir
+        ON ir.invitee_id = m.id
+       AND ir.inviter_id = ?
+       AND ir.status = 'accepted'
+      WHERE m.referrer_id = ? OR ir.id IS NOT NULL`
+  }
+
+  private async countInvitedMembers(memberId: string): Promise<number> {
+    const rows = await queryRows(
+      `SELECT COUNT(DISTINCT m.id) AS total ${this.invitedMembersBaseSql()}`,
+      [memberId, memberId],
+    )
+    return Number((rows[0] as { total?: number })?.total || 0)
+  }
+
+  private async getInvitedMembers(memberId: string, fields = 'm.id, m.created_at') {
     return queryRows(
-      `SELECT DISTINCT ${fields}
-       FROM members m
-       LEFT JOIN invitation_records ir
-         ON ir.invitee_id = m.id
-        AND ir.inviter_id = ?
-        AND ir.status = 'accepted'
-       WHERE m.referrer_id = ? OR ir.id IS NOT NULL
-       ORDER BY m.created_at DESC`,
+      `SELECT DISTINCT ${fields} ${this.invitedMembersBaseSql()} ORDER BY m.created_at DESC`,
       [memberId, memberId],
     )
   }
@@ -144,7 +155,7 @@ export class MembersService {
       .select('*, organizations(*)')
       .eq('member_id', id)
 
-    const referred = await this.getInvitedMembers(id)
+    const referred = await this.countInvitedMembers(id)
 
     return {
       ...this.sanitizeMember(data),
@@ -153,7 +164,7 @@ export class MembersService {
         : data.avatar,
       tags: tags || [],
       organizations: orgs || [],
-      referrer_count: referred.length,
+      referrer_count: referred,
     }
   }
 
