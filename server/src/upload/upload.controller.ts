@@ -13,6 +13,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadService } from './upload.service';
 import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard';
+import { Public } from '@/auth/public.decorator';
 
 @Controller('upload')
 @UseGuards(AdminAuthGuard)
@@ -189,6 +190,27 @@ export class UploadController {
         bucket: envInfo.bucket,
         region: envInfo.region,
       },
+    };
+  }
+}
+
+/** 会员推荐落地页：未登录也可上传职业照 */
+@Controller('upload/invite')
+export class InviteUploadController {
+  constructor(private readonly uploadService: UploadService) {}
+
+  @Public()
+  @Post('image')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  async uploadImage(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+    const result = await this.uploadService.uploadImage(file, 'invite');
+    return {
+      code: 200,
+      msg: 'Upload successful',
+      data: result,
     };
   }
 }

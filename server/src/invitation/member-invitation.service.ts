@@ -35,6 +35,20 @@ export class MemberInvitationService {
     const inviteePhone = normalizePhone(dto.phone)
     const companyName = String(dto.company_name || '').trim() || null
     const position = String(dto.position || '').trim() || null
+    const photoUrl = String(dto.photo_url || '').trim() || null
+    let industryTags: string[] | null = null
+    if (Array.isArray(dto.industry_tags)) {
+      industryTags = dto.industry_tags.map((item: unknown) => String(item || '').trim()).filter(Boolean)
+    } else if (typeof dto.industry_tags === 'string' && dto.industry_tags.trim()) {
+      try {
+        const parsed = JSON.parse(dto.industry_tags)
+        if (Array.isArray(parsed)) {
+          industryTags = parsed.map((item: unknown) => String(item || '').trim()).filter(Boolean)
+        }
+      } catch {
+        industryTags = dto.industry_tags.split(',').map((item: string) => item.trim()).filter(Boolean)
+      }
+    }
 
     if (!inviteCode) throw new HttpException('缺少推荐码', HttpStatus.BAD_REQUEST)
     if (!inviteeName) throw new HttpException('请填写姓名', HttpStatus.BAD_REQUEST)
@@ -53,8 +67,8 @@ export class MemberInvitationService {
     const result = await queryExecute(
       `INSERT INTO member_invitations
         (inviter_id, invite_code, invitee_name, invitee_phone, company_name, position,
-         is_registered, registered_member_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         photo_url, industry_tags, is_registered, registered_member_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         inviter.id,
         String(inviter.invite_code || inviteCode),
@@ -62,6 +76,8 @@ export class MemberInvitationService {
         inviteePhone,
         companyName,
         position,
+        photoUrl,
+        industryTags ? JSON.stringify(industryTags) : null,
         registered ? 1 : 0,
         registered?.id || null,
       ],
@@ -75,6 +91,8 @@ export class MemberInvitationService {
       invitee_phone: inviteePhone,
       company_name: companyName,
       position,
+      photo_url: photoUrl,
+      industry_tags: industryTags || [],
       is_registered: !!registered,
       registered_member_id: registered?.id || null,
       registered_member_name: registered?.name || null,

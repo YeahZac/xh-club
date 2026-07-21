@@ -26,6 +26,9 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['notifications', 'biz_id', 'VARCHAR(64) NULL'],
   ['notifications', 'result', 'VARCHAR(64) NULL'],
   ['notifications', 'processed_at', 'TIMESTAMP NULL'],
+  // 会员推荐线索：职业照与行业标签（登录后自动入驻人才）
+  ['member_invitations', 'photo_url', 'VARCHAR(500) NULL'],
+  ['member_invitations', 'industry_tags', 'JSON NULL'],
   ['articles', 'subtitle', 'VARCHAR(255) NULL'],
   ['articles', 'video_url', 'VARCHAR(500) NULL'],
   ['articles', 'category', `VARCHAR(50) DEFAULT 'news'`],
@@ -1015,6 +1018,8 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       invitee_phone VARCHAR(20) NOT NULL,
       company_name VARCHAR(255) NULL,
       position VARCHAR(100) NULL,
+      photo_url VARCHAR(500) NULL,
+      industry_tags JSON NULL,
       is_registered TINYINT(1) NOT NULL DEFAULT 0,
       registered_member_id INT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
