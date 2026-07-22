@@ -4,6 +4,7 @@ import { ensureSchemaColumns } from '@/storage/database/ensure-schema-columns'
 import * as bcrypt from 'bcryptjs'
 import { RowDataPacket, ResultSetHeader } from 'mysql2'
 import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url'
+import { parseJsonUrlList, serializeJsonUrlList } from '@/utils/media-json'
 import { signAuthToken } from '@/auth/jwt'
 import { UploadService } from '@/upload/upload.service'
 import {
@@ -738,7 +739,13 @@ export class AdminService {
         [id],
       )
       const signed = await this.uploadService.signRowFields(row, ['cover_image', 'video_url'])
-      return { ...signed, score_dimensions: dimensions || [] }
+      const galleryImages = await this.uploadService.signMediaUrls(
+        parseJsonUrlList((row as any).gallery_images),
+      )
+      const fileUrls = await this.uploadService.signMediaUrls(
+        parseJsonUrlList((row as any).file_urls),
+      )
+      return { ...signed, gallery_images: galleryImages, file_urls: fileUrls, score_dimensions: dimensions || [] }
     } catch (error) {
       console.error('[AdminService] getProjectById error:', error)
       if (error instanceof HttpException) throw error
@@ -750,16 +757,24 @@ export class AdminService {
     try {
       const coverImage = assertCloudStorageImageUrl(dto.cover_image)
       const videoUrl = normalizeOptionalVideoUrl(dto.video_url)
+      const galleryImages = parseJsonUrlList(dto.gallery_images)
+        .map((url) => canonicalizeCloudStorageUrl(url))
+        .filter((url) => isCloudStorageUrl(url))
+      const fileUrls = parseJsonUrlList(dto.file_urls)
+        .map((url) => canonicalizeCloudStorageUrl(url))
+        .filter((url) => isCloudStorageUrl(url))
       const result = await queryExecute(
         `INSERT INTO projects
-           (title, description, cover_image, video_url, industry, stage, amount_max, status,
+           (title, description, cover_image, video_url, gallery_images, file_urls, industry, stage, amount_max, status,
             audit_status, avg_score, score_count)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved', 0, 0)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 0, 0)`,
         [
           dto.title,
           dto.description || null,
           coverImage,
           videoUrl,
+          serializeJsonUrlList(galleryImages),
+          serializeJsonUrlList(fileUrls),
           dto.industry || null,
           dto.stage || 'seed',
           dto.amount_max || null,
@@ -794,6 +809,18 @@ export class AdminService {
       if (dto.description !== undefined) assign('description', dto.description || null)
       if (dto.cover_image !== undefined) assign('cover_image', assertCloudStorageImageUrl(dto.cover_image))
       if (dto.video_url !== undefined) assign('video_url', normalizeOptionalVideoUrl(dto.video_url))
+      if (dto.gallery_images !== undefined) {
+        const galleryImages = parseJsonUrlList(dto.gallery_images)
+          .map((url) => canonicalizeCloudStorageUrl(url))
+          .filter((url) => isCloudStorageUrl(url))
+        assign('gallery_images', serializeJsonUrlList(galleryImages))
+      }
+      if (dto.file_urls !== undefined) {
+        const fileUrls = parseJsonUrlList(dto.file_urls)
+          .map((url) => canonicalizeCloudStorageUrl(url))
+          .filter((url) => isCloudStorageUrl(url))
+        assign('file_urls', serializeJsonUrlList(fileUrls))
+      }
       if (dto.industry !== undefined) assign('industry', dto.industry || null)
       if (dto.stage !== undefined) assign('stage', dto.stage || 'seed')
       if (dto.amount_max !== undefined) assign('amount_max', dto.amount_max || null)

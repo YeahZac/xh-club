@@ -7,11 +7,18 @@ import {
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
 import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url'
+import { parseJsonUrlList, serializeJsonUrlList } from '@/utils/media-json'
 import { UploadService } from '@/upload/upload.service'
 import { PointsEngineService } from '@/points/points-engine.service'
 import { InvitationEngineService } from '@/invitation/invitation-engine.service'
 import { createNotification } from '@/common/notify'
 import { TalentService } from '@/talent/talent.service'
+
+function normalizeProjectUrlList(value: unknown): string[] {
+  return parseJsonUrlList(value)
+    .map((url) => canonicalizeCloudStorageUrl(url))
+    .filter((url) => isCloudStorageUrl(url))
+}
 
 @Injectable()
 export class EventsService {
@@ -374,8 +381,16 @@ export class EventsService {
       ['cover_image', 'video_url'],
       ['description', 'content'],
     )
+    const galleryImages = await this.uploadService.signMediaUrls(
+      normalizeProjectUrlList((data as any).gallery_images),
+    )
+    const fileUrls = await this.uploadService.signMediaUrls(
+      normalizeProjectUrlList((data as any).file_urls),
+    )
     return {
       ...signed,
+      gallery_images: galleryImages,
+      file_urls: fileUrls,
       avg_score: Number(data.avg_score || 0),
       score_count: Number(data.score_count || 0),
       score_dimensions: dimensions || [],
@@ -533,16 +548,20 @@ export class EventsService {
     if (dto.video_url && !isCloudStorageUrl(dto.video_url)) {
       throw new HttpException('项目视频必须使用微信云托管对象存储 URL', HttpStatus.BAD_REQUEST)
     }
+    const galleryImages = normalizeProjectUrlList(dto.gallery_images)
+    const fileUrls = normalizeProjectUrlList(dto.file_urls)
     const result = await queryExecute(
       `INSERT INTO projects
-         (title, description, cover_image, video_url, industry, stage, amount_max, status,
+         (title, description, cover_image, video_url, gallery_images, file_urls, industry, stage, amount_max, status,
           audit_status, submitter_id, view_count, avg_score, score_count)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', 'pending', ?, 0, 0, 0)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 'pending', ?, 0, 0, 0)`,
       [
         String(dto.title).trim(),
         dto.description || null,
         canonicalizeCloudStorageUrl(dto.cover_image),
         dto.video_url ? canonicalizeCloudStorageUrl(dto.video_url) : null,
+        serializeJsonUrlList(galleryImages),
+        serializeJsonUrlList(fileUrls),
         dto.industry || null,
         dto.stage || 'seed',
         dto.amount_max || null,

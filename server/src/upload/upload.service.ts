@@ -10,7 +10,8 @@ import {
 
 const DEFAULT_SIGNED_URL_EXPIRES = 7200;
 export const IMAGE_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
-export const IMAGE_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
+export const DOCUMENT_UPLOAD_MAX_BYTES = 30 * 1024 * 1024;
+export const DOCUMENT_ADMIN_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 
 type MediaLibraryType = 'image' | 'video' | 'document' | 'all';
 
@@ -739,7 +740,11 @@ export class UploadService {
   /**
    * 上传文档
    */
-  async uploadDocument(file: Express.Multer.File, folder: string = 'documents'): Promise<{
+  async uploadDocument(
+    file: Express.Multer.File,
+    folder: string = 'documents',
+    maxSize = DOCUMENT_ADMIN_UPLOAD_MAX_BYTES,
+  ): Promise<{
     fileId: string;
     url: string;
     canonicalUrl: string;
@@ -748,9 +753,9 @@ export class UploadService {
     mimeType: string;
     reused?: boolean;
   }> {
-    const maxSize = 50 * 1024 * 1024;
     if (file.size > maxSize) {
-      throw new Error('文档大小不能超过 50MB');
+      const maxMb = Math.round(maxSize / 1024 / 1024);
+      throw new Error(`文档大小不能超过 ${maxMb}MB`);
     }
 
     return this.uploadFile(file, folder);

@@ -11,7 +11,7 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { UploadService, IMAGE_UPLOAD_MAX_BYTES } from './upload.service';
+import { UploadService, IMAGE_UPLOAD_MAX_BYTES, DOCUMENT_UPLOAD_MAX_BYTES } from './upload.service';
 import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard';
 import { Public } from '@/auth/public.decorator';
 
@@ -242,6 +242,20 @@ export class MemberUploadController {
       throw new Error('No file uploaded');
     }
     const result = await this.uploadService.uploadVideo(file, 'member');
+    return {
+      code: 200,
+      msg: 'Upload successful',
+      data: result,
+    };
+  }
+
+  @Post('document')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: DOCUMENT_UPLOAD_MAX_BYTES } }))
+  async uploadDocument(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+    const result = await this.uploadService.uploadDocument(file, 'member', DOCUMENT_UPLOAD_MAX_BYTES);
     return {
       code: 200,
       msg: 'Upload successful',

@@ -17,6 +17,8 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['projects', 'submitter_id', 'INT NULL'],
   ['projects', 'avg_score', 'DECIMAL(4,2) NOT NULL DEFAULT 0'],
   ['projects', 'score_count', 'INT NOT NULL DEFAULT 0'],
+  ['projects', 'gallery_images', 'JSON NULL'],
+  ['projects', 'file_urls', 'JSON NULL'],
   // 项目成交对接：负责人确认
   ['project_deal_applications', 'owner_member_id', 'INT NULL'],
   ['project_deal_applications', 'is_deal', `TINYINT(1) NOT NULL DEFAULT 0`],
@@ -1136,7 +1138,7 @@ async function ensureSeedData(pool: NonNullable<ReturnType<typeof getPool>>): Pr
     await pool.query(
       `INSERT IGNORE INTO roles (name, display_name, description, permissions, is_system) VALUES
        ('super_admin', '超级管理员', '拥有所有权限', '["*"]', 1),
-       ('admin', '普通管理员', '基础管理权限', '["dashboard","homepage","members","articles","banners"]', 1)`,
+       ('admin', '普通管理员', '基础管理权限', '{"dashboard":{"view":true},"homepage":{"view":true},"members":{"view":true},"articles":{"view":true},"banners":{"view":true}}', 1)`,
     )
   } catch (error: any) {
     console.warn('[MySQL] 补齐默认角色失败:', error?.message || error)

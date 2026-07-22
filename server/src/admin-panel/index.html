@@ -465,7 +465,7 @@
           <p id="pjEditCoverHint" class="text-xs text-gray-400 mb-2"></p>
           <div class="flex items-center gap-3">
             <input id="pjEditCover" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="请上传项目封面">
-            <button type="button" class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition" onclick="openMediaLibrary({ targetId: 'pjEditCover', type: 'image', expectedWidth: 690, expectedHeight: 388 })">选择/上传图片</button>
+            <button type="button" class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition" onclick="openMediaLibrary({ targetId: 'pjEditCover', type: 'image' })">选择/上传图片</button>
           </div>
         </div>
         <div>
@@ -1899,7 +1899,7 @@ function renderEventForm(mode, event = null) {
           <p class="text-xs text-gray-400 mb-2">${mediaHint('event')}</p>
           <div class="flex items-center gap-3">
             <input id="evCover" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传封面图片" value="${escapeHtml(event?.cover_image || '')}">
-            ${mediaSelectBtn('evCover', { type: 'image', w: 690, h: 290 })}
+            ${mediaSelectBtn('evCover', { type: 'image' })}
           </div>
           ${mediaPreviewBox('event')}
         </div>
@@ -2763,7 +2763,7 @@ async function showBusinessModal(editId) {
           <p class="text-xs text-gray-400 mb-2">${mediaHint('business')}</p>
           <div class="flex items-center gap-3">
             <input id="bizCover" required value="${escapeHtml(item?.cover_image || '')}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="请上传商机封面">
-            ${mediaSelectBtn('bizCover', { type: 'image', w: 690, h: 690 })}
+            ${mediaSelectBtn('bizCover', { type: 'image' })}
           </div>
           ${mediaPreviewBox('business')}
         </div>
@@ -2961,7 +2961,7 @@ async function showBannerModal(editId) {
           <p class="text-xs text-gray-400 mb-2">${mediaHint('banner')}</p>
           <div class="flex items-center gap-3">
             <input id="bnImage" required value="${escapeHtml(banner?.image_url || '')}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传 Banner 图片">
-            ${mediaSelectBtn('bnImage', { type: 'image', w: 690, h: 280 })}
+            ${mediaSelectBtn('bnImage', { type: 'image' })}
           </div>
           ${mediaPreviewBox('banner')}
         </div>
@@ -3220,7 +3220,7 @@ async function showMallModal(id) {
           <p class="text-xs text-gray-400 mb-2">${mediaHint('product')}</p>
           <div class="flex items-center gap-3">
             <input id="mlCover" required class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传商品图片" value="${escapeHtml(product?.image_url || '')}">
-            ${mediaSelectBtn('mlCover', { type: 'image', w: 690, h: 690 })}
+            ${mediaSelectBtn('mlCover', { type: 'image' })}
           </div>
           ${mediaPreviewBox('product')}
         </div>
@@ -3487,39 +3487,28 @@ function getActiveImageMaxBytes() {
   return mediaLibraryState.imageMaxBytes || MEDIA_IMAGE_MAX_BYTES
 }
 const MEDIA_SPECS = {
-  banner:  { w: 690, h: 280, label: 'Banner', tip: '手机首页轮播约 343×140，上传 690×280（约 2.46:1）' },
-  event:   { w: 690, h: 290, label: '活动封面', tip: '手机发现页列表左侧缩略图约 2.38:1，上传 690×290' },
-  project: { w: 690, h: 388, label: '项目封面', tip: '手机项目封面约 343×193，上传 690×388（16:9）' },
-  article: { w: 690, h: 388, label: '文章封面', tip: '手机文章封面约 343×193，上传 690×388（16:9）' },
-  product: { w: 690, h: 690, label: '商品图', tip: '手机商品主图正方形，上传 690×690（1:1）' },
-  business: { w: 690, h: 690, label: '商机封面', tip: '手机商机列表左侧缩略图为正方形，上传 690×690（1:1）' },
+  banner:  { label: 'Banner', tip: '小程序首页轮播展示比例约 69:34（宽约满屏）' },
+  event:   { label: '活动封面', tip: '发现页列表为 1:1 方图裁切，详情页顶部横幅约 16:9' },
+  project: { label: '项目封面', tip: '发现页列表为 1:1 方图，首页瀑布流与详情页顶部约 16:9' },
+  article: { label: '文章封面', tip: '首页瀑布流与详情页顶部横幅约 16:9' },
+  product: { label: '商品图', tip: '商城列表与详情主图约为 1:1 正方形' },
+  business: { label: '商机封面', tip: '商机列表左侧缩略图为 1:1 正方形' },
 }
 
 function mediaHint(specKey) {
   const spec = MEDIA_SPECS[specKey]
   if (!spec) return ''
-  return `${spec.tip}；单张 ≤3MB，JPG/PNG/WebP；可从媒体库复用已有资源`
+  return `${spec.tip}；单张 ≤3MB，JPG/PNG/WebP/GIF；不限制上传尺寸，可从媒体库复用`
 }
 
-function mediaPreviewBox(specKey) {
-  const spec = MEDIA_SPECS[specKey]
-  if (!spec) return ''
-  const maxW = 280
-  const scale = Math.min(maxW / spec.w, 96 / spec.h)
-  const w = Math.round(spec.w * scale)
-  const h = Math.round(spec.h * scale)
-  return `<div class="mt-2 inline-flex flex-col items-start gap-1">
-    <div class="border border-dashed border-brand-300 bg-brand-50/40 rounded-lg overflow-hidden flex items-center justify-center text-[10px] text-brand-600" style="width:${w}px;height:${h}px">预览框 ${spec.w}×${spec.h}</div>
-    <span class="text-[10px] text-gray-400">上传后请保证主体落在此比例内</span>
-  </div>`
+function mediaPreviewBox() {
+  return ''
 }
 
 function mediaSelectBtn(targetId, options = {}) {
   const type = options.type || 'image'
-  const w = options.w != null ? options.w : 'null'
-  const h = options.h != null ? options.h : 'null'
   const label = options.label || (type === 'video' ? '选择/上传视频' : type === 'document' ? '选择/上传文件' : '选择/上传图片')
-  return `<button type="button" class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition" onclick="openMediaLibrary({ targetId: '${targetId}', type: '${type}', expectedWidth: ${w}, expectedHeight: ${h} })">${label}</button>`
+  return `<button type="button" class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition" onclick="openMediaLibrary({ targetId: '${targetId}', type: '${type}' })">${label}</button>`
 }
 
 // ===== 媒体库（COS 资源复用）=====
@@ -3692,24 +3681,6 @@ async function uploadToMediaLibrary(input) {
     return toast(`图片大小不能超过 ${formatMaxImageSize(getActiveImageMaxBytes())}`, 'error')
   }
   if (isVideo && file.size > MEDIA_VIDEO_MAX_BYTES) return toast('视频大小不能超过 200MB', 'error')
-  if (isImage && mediaLibraryState.expectedWidth && mediaLibraryState.expectedHeight) {
-    const objectUrl = URL.createObjectURL(file)
-    try {
-      const dimensions = await new Promise((resolve, reject) => {
-        const image = new Image()
-        image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight })
-        image.onerror = reject
-        image.src = objectUrl
-      })
-      const expectedRatio = mediaLibraryState.expectedWidth / mediaLibraryState.expectedHeight
-      const actualRatio = dimensions.width / dimensions.height
-      if (Math.abs(actualRatio - expectedRatio) / expectedRatio > 0.03) {
-        return toast(`图片比例不符，请上传 ${mediaLibraryState.expectedWidth}×${mediaLibraryState.expectedHeight} 或相同比例图片`, 'error')
-      }
-    } finally {
-      URL.revokeObjectURL(objectUrl)
-    }
-  }
 
   toast('上传中...', 'info')
   try {
@@ -3876,26 +3847,6 @@ async function uploadFile(input, targetId, expectedWidth, expectedHeight) {
     input.value = ''
     return
   }
-  if (isImage && expectedWidth && expectedHeight) {
-    const objectUrl = URL.createObjectURL(file)
-    try {
-      const dimensions = await new Promise((resolve, reject) => {
-        const image = new Image()
-        image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight })
-        image.onerror = reject
-        image.src = objectUrl
-      })
-      const expectedRatio = expectedWidth / expectedHeight
-      const actualRatio = dimensions.width / dimensions.height
-      if (Math.abs(actualRatio - expectedRatio) / expectedRatio > 0.03) {
-        toast(`图片比例不符，请上传 ${expectedWidth}×${expectedHeight} 或相同比例图片`, 'error')
-        input.value = ''
-        return
-      }
-    } finally {
-      URL.revokeObjectURL(objectUrl)
-    }
-  }
 
   // 若已有进行中的任务，先取消
   if (uploadTasks[targetId]?.xhr && uploadTasks[targetId].status === 'uploading') {
@@ -4050,7 +4001,7 @@ async function showArticleModal(editId) {
           <p class="text-xs text-gray-400 mb-2">${mediaHint('article')}</p>
           <div class="flex items-center gap-3">
             <input id="artCover" required value="${article?.cover_image || ''}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" placeholder="请上传文章封面">
-            ${mediaSelectBtn('artCover', { type: 'image', w: 690, h: 388 })}
+            ${mediaSelectBtn('artCover', { type: 'image' })}
           </div>
           ${mediaPreviewBox('article')}
         </div>
