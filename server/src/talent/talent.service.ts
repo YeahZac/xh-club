@@ -282,6 +282,16 @@ export class TalentService {
       [id],
     )
     if (!row) throw new HttpException('人才不存在或未通过审核', HttpStatus.NOT_FOUND)
+
+    try {
+      await queryExecute(
+        'UPDATE talent_applications SET view_count = IFNULL(view_count, 0) + 1 WHERE id = ?',
+        [id],
+      )
+    } catch (error) {
+      console.warn('[TalentService] increment talent view_count failed:', error)
+    }
+
     const signed = await this.signTalent(row, { maskContact: true })
 
     let departments: Array<{ department_id: number; department_name: string; position: string }> = []
@@ -332,6 +342,7 @@ export class TalentService {
 
     return {
       ...signed,
+      view_count: Number(row.view_count || 0) + 1,
       departments,
       department_text: departments
         .map((d) => [d.department_name, d.position].filter(Boolean).join(' · '))

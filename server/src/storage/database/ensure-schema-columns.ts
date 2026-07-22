@@ -131,6 +131,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['talent_applications', 'pending_data', 'JSON NULL'],
   ['talent_applications', 'update_status', 'VARCHAR(20) NULL'],
   ['talent_applications', 'update_reject_reason', 'VARCHAR(500) NULL'],
+  ['talent_applications', 'view_count', 'INT NOT NULL DEFAULT 0'],
   // 部门负责人姓名（组织架构展示用）
   ['departments', 'leader_name', 'VARCHAR(100) NULL'],
   ['departments', 'level', 'INT DEFAULT 1'],
@@ -922,6 +923,7 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       avatar_url VARCHAR(500) NULL,
       status VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'pending|approved|rejected',
       reject_reason VARCHAR(500) NULL,
+      view_count INT NOT NULL DEFAULT 0,
       reviewed_at TIMESTAMP NULL,
       reviewed_by VARCHAR(64) NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

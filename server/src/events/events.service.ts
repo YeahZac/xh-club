@@ -90,6 +90,15 @@ export class EventsService {
 
     if (error || !data) throw new HttpException('活动不存在', HttpStatus.NOT_FOUND)
 
+    try {
+      await queryExecute(
+        'UPDATE events SET view_count = IFNULL(view_count, 0) + 1 WHERE id = ?',
+        [id],
+      )
+    } catch (error) {
+      console.warn('[EventsService] increment event view_count failed:', error)
+    }
+
     // 获取已报名会员
     const { data: registrations } = await this.client()
       .from('event_registrations')
@@ -115,6 +124,7 @@ export class EventsService {
       : false
     return {
       ...signed,
+      view_count: Number(signed.view_count || 0) + 1,
       form_fields: formFields.length ? formFields : signed.form_fields,
       form_defaults: formDefaultsBundle.defaults,
       talent_defaults: formDefaultsBundle.talentDefaults,
@@ -357,6 +367,17 @@ export class EventsService {
       throw new HttpException('项目不存在或未通过审核', HttpStatus.NOT_FOUND)
     }
 
+    if (auditStatus === 'approved') {
+      try {
+        await queryExecute(
+          'UPDATE projects SET view_count = IFNULL(view_count, 0) + 1 WHERE id = ?',
+          [id],
+        )
+      } catch (error) {
+        console.warn('[EventsService] increment project view_count failed:', error)
+      }
+    }
+
     const dimensions = await queryRows(
       `SELECT id, project_id, name, sort_order
        FROM project_score_dimensions
@@ -391,6 +412,10 @@ export class EventsService {
       ...signed,
       gallery_images: galleryImages,
       file_urls: fileUrls,
+      view_count:
+        auditStatus === 'approved'
+          ? Number((data as any).view_count || 0) + 1
+          : Number((data as any).view_count || 0),
       avg_score: Number(data.avg_score || 0),
       score_count: Number(data.score_count || 0),
       score_dimensions: dimensions || [],

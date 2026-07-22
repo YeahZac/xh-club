@@ -192,6 +192,7 @@ export class BusinessService {
         'UPDATE business_opportunities SET view_count = IFNULL(view_count, 0) + 1 WHERE id = ?',
         [id],
       )
+      row.view_count = Number(row.view_count || 0) + 1
     }
 
     const signed = await this.uploadService.signDetailMediaFields(

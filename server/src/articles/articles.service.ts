@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { getSupabaseClient } from '../storage/database/supabase-compat';
+import { queryExecute } from '@/storage/database/mysql-client';
 import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-url';
 import { UploadService } from '@/upload/upload.service';
 
@@ -27,7 +28,23 @@ export class ArticlesService {
       .single();
 
     if (error) throw error;
-    return this.uploadService.signDetailMediaFields(data, ['cover_image', 'video_url'], ['content']);
+    try {
+      await queryExecute(
+        'UPDATE articles SET view_count = IFNULL(view_count, 0) + 1 WHERE id = ?',
+        [id],
+      );
+    } catch (err) {
+      console.warn('[ArticlesService] increment article view_count failed:', err);
+    }
+    const signed = await this.uploadService.signDetailMediaFields(
+      data,
+      ['cover_image', 'video_url'],
+      ['content'],
+    );
+    return {
+      ...signed,
+      view_count: Number((data as any)?.view_count || 0) + 1,
+    };
   }
 
   async create(data: any) {
