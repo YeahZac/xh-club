@@ -1756,8 +1756,8 @@ async function loadMembers() {
       <td class="px-6 py-4">
         <div class="flex items-center gap-3">
           ${m.avatar
-            ? `<img src="${escapeHtml(m.avatar)}" class="w-10 h-10 rounded-full object-cover" alt="">`
-            : `<div class="w-10 h-10 rounded-full bg-gradient-to-br from-navy-600 to-navy-800 flex items-center justify-center text-white font-bold text-sm">${(m.name || '?')[0]}</div>`}
+            ? `<img src="${escapeHtml(m.avatar)}" class="w-10 h-10 rounded-full object-cover" alt="" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='flex')"><div class="w-10 h-10 rounded-full bg-gradient-to-br from-navy-600 to-navy-800 items-center justify-center text-white font-bold text-sm" style="display:none">${escapeHtml((m.name || '?')[0])}</div>`
+            : `<div class="w-10 h-10 rounded-full bg-gradient-to-br from-navy-600 to-navy-800 flex items-center justify-center text-white font-bold text-sm">${escapeHtml((m.name || '?')[0])}</div>`}
           <div>
             <p class="font-medium text-navy-800">${escapeHtml(m.name || '未命名')}</p>
             <p class="text-xs text-gray-400">${escapeHtml(m.phone || '')}${m.join_source === 'wechat' ? ' · 微信' : ''}</p>
@@ -1804,10 +1804,12 @@ async function viewMember(id) {
         <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
       </div>
       <div class="flex items-center gap-4 mb-6">
-        <div class="w-16 h-16 rounded-full bg-gradient-to-br from-navy-600 to-navy-800 flex items-center justify-center text-white font-bold text-xl">${(m.name || '?')[0]}</div>
+        ${m.avatar
+          ? `<img src="${escapeHtml(m.avatar)}" class="w-16 h-16 rounded-full object-cover" alt="" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='flex')"><div class="w-16 h-16 rounded-full bg-gradient-to-br from-navy-600 to-navy-800 items-center justify-center text-white font-bold text-xl" style="display:none">${escapeHtml((m.name || '?')[0])}</div>`
+          : `<div class="w-16 h-16 rounded-full bg-gradient-to-br from-navy-600 to-navy-800 flex items-center justify-center text-white font-bold text-xl">${escapeHtml((m.name || '?')[0])}</div>`}
         <div>
-          <p class="text-xl font-bold text-navy-800">${m.name}</p>
-          <p class="text-gray-500">${m.company_position || ''} @ ${m.company_name || ''}</p>
+          <p class="text-xl font-bold text-navy-800">${escapeHtml(m.name || '')}</p>
+          <p class="text-gray-500">${escapeHtml(m.company_position || '')} @ ${escapeHtml(m.company_name || '')}</p>
         </div>
       </div>
       <div class="grid grid-cols-3 gap-4 mb-6">

@@ -339,7 +339,8 @@ export class AdminService {
   /** ====== 会员管理 ====== */
   async getAllMembers(query: any) {
     try {
-      return await queryRows('SELECT * FROM members ORDER BY created_at DESC')
+      const rows = await queryRows('SELECT * FROM members ORDER BY created_at DESC')
+      return this.uploadService.signRowsFields(rows || [], ['avatar'])
     } catch (error) {
       console.error('[AdminService] getAllMembers error:', error)
       throw new HttpException('获取会员列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
@@ -348,7 +349,8 @@ export class AdminService {
 
   async getPendingMembers(query: any) {
     try {
-      return await queryRows('SELECT * FROM members ORDER BY created_at DESC LIMIT 10')
+      const rows = await queryRows('SELECT * FROM members ORDER BY created_at DESC LIMIT 10')
+      return this.uploadService.signRowsFields(rows || [], ['avatar'])
     } catch (error) {
       console.error('[AdminService] getPendingMembers error:', error)
       throw new HttpException('获取待审批会员失败', HttpStatus.INTERNAL_SERVER_ERROR)
@@ -599,23 +601,26 @@ export class AdminService {
       )
 
       const formFields = this.normalizeFormFields(event.form_fields) || []
-      const list = rows.map((row) => {
-        const answers = this.normalizeFormAnswers(row.form_answers)
-        return {
-          id: row.id,
-          event_id: row.event_id,
-          member_id: row.member_id,
-          member_nickname: row.member_name || '-',
-          member_name: row.member_name || '-',
-          member_avatar: row.member_avatar || null,
-          member_phone: row.member_phone || null,
-          member_company: row.member_company || null,
-          status: row.status,
-          form_answers: answers,
-          filled_at: this.formatDateTimeToMinute(row.created_at),
-          created_at: row.created_at,
-        }
-      })
+      const list = await this.uploadService.signRowsFields(
+        rows.map((row) => {
+          const answers = this.normalizeFormAnswers(row.form_answers)
+          return {
+            id: row.id,
+            event_id: row.event_id,
+            member_id: row.member_id,
+            member_nickname: row.member_name || '-',
+            member_name: row.member_name || '-',
+            member_avatar: row.member_avatar || null,
+            member_phone: row.member_phone || null,
+            member_company: row.member_company || null,
+            status: row.status,
+            form_answers: answers,
+            filled_at: this.formatDateTimeToMinute(row.created_at),
+            created_at: row.created_at,
+          }
+        }),
+        ['member_avatar'],
+      )
 
       return {
         event: {

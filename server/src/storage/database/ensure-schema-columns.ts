@@ -173,7 +173,7 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       phone VARCHAR(20) UNIQUE,
       password_hash VARCHAR(255) NOT NULL,
       name VARCHAR(50) NOT NULL,
-      avatar VARCHAR(255),
+      avatar VARCHAR(500),
       industry VARCHAR(50),
       bio TEXT,
       status VARCHAR(20) DEFAULT 'approved',
@@ -368,7 +368,7 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       wx_openid VARCHAR(128) UNIQUE,
       password_hash VARCHAR(255) NOT NULL,
       name VARCHAR(50),
-      avatar VARCHAR(255),
+      avatar VARCHAR(500),
       gender VARCHAR(10),
       birthday VARCHAR(20),
       company_name VARCHAR(100),
@@ -1099,6 +1099,20 @@ export async function ensureSchemaColumns(): Promise<void> {
     const msg = String(error?.message || '')
     if (!msg.includes("doesn't exist") && error?.code !== 'ER_NO_SUCH_TABLE') {
       console.warn('[MySQL] 归一会员 status 失败:', error?.message || error)
+    }
+  }
+
+  // 会员头像常为云存储完整 URL，原 VARCHAR(255) 易截断导致图片失败
+  try {
+    await pool.query('ALTER TABLE `members` MODIFY COLUMN `avatar` VARCHAR(500) NULL')
+  } catch (error: any) {
+    const msg = String(error?.message || '')
+    if (
+      !msg.includes('Unknown column') &&
+      !msg.includes("doesn't exist") &&
+      error?.code !== 'ER_NO_SUCH_TABLE'
+    ) {
+      console.warn('[MySQL] 调整 members.avatar 长度失败:', error?.message || error)
     }
   }
 
