@@ -609,7 +609,11 @@ export class UploadService {
   /**
    * 上传图片
    */
-  async uploadImage(file: Express.Multer.File, folder: string = 'images'): Promise<{
+  async uploadImage(
+    file: Express.Multer.File,
+    folder: string = 'images',
+    maxSize = 2 * 1024 * 1024,
+  ): Promise<{
     fileId: string;
     url: string;
     canonicalUrl: string;
@@ -631,9 +635,9 @@ export class UploadService {
       throw new Error('只支持 JPG、PNG、GIF、WebP 格式的图片');
     }
 
-    const maxSize = 2 * 1024 * 1024;
     if (file.size > maxSize) {
-      throw new Error('图片大小不能超过 2MB');
+      const maxMb = Math.round(maxSize / 1024 / 1024);
+      throw new Error(`图片大小不能超过 ${maxMb}MB`);
     }
 
     return this.uploadFile(file, folder);

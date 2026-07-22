@@ -36,13 +36,17 @@ export class UploadController {
   }
 
   @Post('image')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
-  async uploadImage(@UploadedFile() file: Express.Multer.File) {
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 3 * 1024 * 1024 } }))
+  async uploadImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Query('purpose') purpose?: string,
+  ) {
     if (!file) {
       throw new Error('No file uploaded');
     }
 
-    const result = await this.uploadService.uploadImage(file);
+    const maxSize = purpose === 'content' ? 3 * 1024 * 1024 : 2 * 1024 * 1024;
+    const result = await this.uploadService.uploadImage(file, 'images', maxSize);
     return {
       code: 200,
       msg: 'Upload successful',

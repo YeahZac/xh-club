@@ -494,6 +494,7 @@
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">项目描述</label>
+          <p class="text-xs text-gray-400 mb-2">富文本内插入图片单张 ≤3MB，支持 JPG/PNG/GIF/WebP</p>
           <div id="pjEditDescEditor"></div>
         </div>
         <div class="pt-2">
@@ -1136,6 +1137,7 @@ const INDUSTRY_MAP = { tech: '科技互联网', finance: '金融资本', manufac
 
 // ===== 富文本编辑器（Quill）=====
 const richEditors = {}
+const richEditorOptions = {}
 const EMOJI_LIST = ['😀','😁','😂','🤣','😊','😍','😘','😎','🤔','👍','👏','🙏','🔥','✨','🎉','❤️','💯','✅','📌','📎','📄','🖼️','💼','🚀','⭐','💡']
 
 function destroyRichEditor(editorId) {
@@ -1155,6 +1157,7 @@ function destroyRichEditor(editorId) {
   host.removeAttribute('style')
   host.innerHTML = ''
   delete richEditors[editorId]
+  delete richEditorOptions[editorId]
 }
 
 function destroyRichEditors() {
@@ -1194,9 +1197,10 @@ function uploadEditorAsset(file, kind) {
   })
 }
 
-function initRichEditor(editorId, html) {
+function initRichEditor(editorId, html, options = {}) {
   const host = document.getElementById(editorId)
   if (!host || typeof Quill === 'undefined') return null
+  richEditorOptions[editorId] = options
   destroyRichEditor(editorId)
   const quill = new Quill(host, {
     theme: 'snow',
@@ -1214,8 +1218,11 @@ function initRichEditor(editorId, html) {
         ],
         handlers: {
           image() {
+            const imageMaxBytes = richEditorOptions[editorId]?.imageMaxBytes || MEDIA_IMAGE_MAX_BYTES
             openMediaLibrary({
               type: 'image',
+              imageMaxBytes,
+              uploadPurpose: imageMaxBytes > MEDIA_IMAGE_MAX_BYTES ? 'content' : '',
               onSelect: (item) => {
                 const range = quill.getSelection(true)
                 quill.insertEmbed(range.index, 'image', item.previewUrl || item.url, 'user')
@@ -2231,7 +2238,7 @@ async function openProjectEditPage(id) {
     renderProjectScoreDimensions()
     description = p.description || ''
   }
-  initRichEditor('pjEditDescEditor', description)
+  initRichEditor('pjEditDescEditor', description, { imageMaxBytes: MEDIA_RICHTEXT_IMAGE_MAX_BYTES })
 }
 
 async function saveProjectEdit() {
@@ -3268,7 +3275,7 @@ async function showMallModal(id) {
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">商品详情</label>
-          <p class="text-xs text-gray-400 mb-2">与文章/活动相同的富文本编辑器，小程序商品详情页将按图文展示</p>
+          <p class="text-xs text-gray-400 mb-2">与文章/活动相同的富文本编辑器，小程序商品详情页将按图文展示；富文本内插入图片单张 ≤3MB</p>
           <div id="mlDescEditor"></div>
         </div>
         <div class="grid grid-cols-2 gap-4">
@@ -3282,7 +3289,7 @@ async function showMallModal(id) {
       </div>
     </div>
   `, { wide: true })
-  initRichEditor('mlDescEditor', product?.description || '')
+  initRichEditor('mlDescEditor', product?.description || '', { imageMaxBytes: MEDIA_RICHTEXT_IMAGE_MAX_BYTES })
 }
 
 async function saveMallProduct(id) {
@@ -3510,7 +3517,17 @@ setInterval(() => {
 
 // ===== 媒体规范（按手机 375 逻辑宽 × 2x 视网膜出图）=====
 const MEDIA_IMAGE_MAX_BYTES = 2 * 1024 * 1024
+const MEDIA_RICHTEXT_IMAGE_MAX_BYTES = 3 * 1024 * 1024
 const MEDIA_VIDEO_MAX_BYTES = 200 * 1024 * 1024
+
+function formatMaxImageSize(bytes) {
+  const mb = bytes / (1024 * 1024)
+  return Number.isInteger(mb) ? `${mb}MB` : `${(mb).toFixed(1)}MB`
+}
+
+function getActiveImageMaxBytes() {
+  return mediaLibraryState.imageMaxBytes || MEDIA_IMAGE_MAX_BYTES
+}
 const MEDIA_SPECS = {
   banner:  { w: 690, h: 280, label: 'Banner', tip: '手机首页轮播约 343×140，上传 690×280（约 2.46:1）' },
   event:   { w: 690, h: 290, label: '活动封面', tip: '手机发现页列表左侧缩略图约 2.38:1，上传 690×290' },
@@ -3560,6 +3577,8 @@ const mediaLibraryState = {
   targetId: '',
   expectedWidth: null,
   expectedHeight: null,
+  imageMaxBytes: null,
+  uploadPurpose: '',
   onSelect: null,
 }
 
@@ -3586,6 +3605,8 @@ function openMediaLibrary(options = {}) {
   mediaLibraryState.targetId = options.targetId || ''
   mediaLibraryState.expectedWidth = options.expectedWidth || null
   mediaLibraryState.expectedHeight = options.expectedHeight || null
+  mediaLibraryState.imageMaxBytes = options.imageMaxBytes || null
+  mediaLibraryState.uploadPurpose = options.uploadPurpose || ''
   mediaLibraryState.onSelect = typeof options.onSelect === 'function' ? options.onSelect : null
   mediaLibraryState.page = 1
   mediaLibraryState.selectedKey = ''
@@ -3713,7 +3734,9 @@ async function uploadToMediaLibrary(input) {
   if (!file) return
   const isImage = file.type.startsWith('image/')
   const isVideo = file.type.startsWith('video/')
-  if (isImage && file.size > MEDIA_IMAGE_MAX_BYTES) return toast('图片大小不能超过 2MB', 'error')
+  if (isImage && file.size > getActiveImageMaxBytes()) {
+    return toast(`图片大小不能超过 ${formatMaxImageSize(getActiveImageMaxBytes())}`, 'error')
+  }
   if (isVideo && file.size > MEDIA_VIDEO_MAX_BYTES) return toast('视频大小不能超过 200MB', 'error')
   if (isImage && mediaLibraryState.expectedWidth && mediaLibraryState.expectedHeight) {
     const objectUrl = URL.createObjectURL(file)
@@ -3736,7 +3759,10 @@ async function uploadToMediaLibrary(input) {
 
   toast('上传中...', 'info')
   try {
-    const endpoint = isImage ? '/upload/image' : isVideo ? '/upload/video' : '/upload/document'
+    const imageEndpoint = mediaLibraryState.uploadPurpose
+      ? `/upload/image?purpose=${encodeURIComponent(mediaLibraryState.uploadPurpose)}`
+      : '/upload/image'
+    const endpoint = isImage ? imageEndpoint : isVideo ? '/upload/video' : '/upload/document'
     const formData = new FormData()
     formData.append('file', file)
     const xhrRes = await new Promise((resolve, reject) => {
@@ -3890,7 +3916,7 @@ async function uploadFile(input, targetId, expectedWidth, expectedHeight) {
   const isImage = file.type.startsWith('image/')
   const isVideo = file.type.startsWith('video/')
   if (isImage && file.size > MEDIA_IMAGE_MAX_BYTES) {
-    toast('图片大小不能超过 2MB', 'error')
+    toast(`图片大小不能超过 ${formatMaxImageSize(MEDIA_IMAGE_MAX_BYTES)}`, 'error')
     input.value = ''
     return
   }
