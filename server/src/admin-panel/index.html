@@ -1111,8 +1111,8 @@ document.getElementById('modalOverlay').addEventListener('click', e => {
 
 const uploadTasks = {}
 const LEVEL_MAP = { normal: '普通', silver: '银卡', gold: '金卡', diamond: '钻石' }
-const STATUS_MAP = { active: '已激活', pending: '待审批', frozen: '已冻结', exited: '已退出' }
-const STATUS_COLORS = { active: 'bg-green-100 text-green-700', pending: 'bg-yellow-100 text-yellow-700', frozen: 'bg-red-100 text-red-700', exited: 'bg-gray-100 text-gray-500' }
+const STATUS_MAP = { active: '已激活', approved: '已激活', pending: '待审批', frozen: '已冻结', exited: '已退出', rejected: '已拒绝' }
+const STATUS_COLORS = { active: 'bg-green-100 text-green-700', approved: 'bg-green-100 text-green-700', pending: 'bg-yellow-100 text-yellow-700', frozen: 'bg-red-100 text-red-700', exited: 'bg-gray-100 text-gray-500', rejected: 'bg-red-100 text-red-700' }
 const EVENT_TYPE_MAP = { other: '其他活动', roadshow: '项目路演', salon: '专题沙龙', annual: '年度大会', training: '培训', meeting: '定期例会' }
 const BUSINESS_CATEGORY_MAP = { roadshow: '项目路演', financing: '融资招募', resource: '资源对接' }
 const CATEGORY_MAP = { rights: '会员权益', service: '商务服务', gift: '商务礼品', activity: '活动权益', learning: '学习成长' }

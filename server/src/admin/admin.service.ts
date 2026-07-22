@@ -357,7 +357,8 @@ export class AdminService {
 
   async approveMember(id: string, approvedBy: string) {
     try {
-      await queryExecute('UPDATE members SET status = "approved" WHERE id = ?', [id])
+      // 与 STATUS_MAP / 业务查询统一为 active；历史数据可能仍是 approved
+      await queryExecute('UPDATE members SET status = "active" WHERE id = ?', [id])
       await createNotification({
         memberId: id,
         type: 'approval',

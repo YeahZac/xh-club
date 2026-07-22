@@ -1084,6 +1084,22 @@ export async function ensureSchemaColumns(): Promise<void> {
     }
   }
 
+  // 会员审核通过曾误写为 approved，与业务查询的 active 不一致，统一回写
+  try {
+    const [result] = await pool.query(
+      `UPDATE members SET status = 'active' WHERE status = 'approved'`,
+    )
+    const affected = Number((result as any)?.affectedRows || 0)
+    if (affected > 0) {
+      console.log(`[MySQL] 已将 ${affected} 条会员 status=approved 归一为 active`)
+    }
+  } catch (error: any) {
+    const msg = String(error?.message || '')
+    if (!msg.includes("doesn't exist") && error?.code !== 'ER_NO_SUCH_TABLE') {
+      console.warn('[MySQL] 归一会员 status 失败:', error?.message || error)
+    }
+  }
+
   // 富文本字段升级为 MEDIUMTEXT，避免图文内容被截断
   for (const [table, column] of [
     ['mall_products', 'description'],

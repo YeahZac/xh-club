@@ -116,9 +116,12 @@ export class DealApplicationsService {
     )
   }
 
+  /** 可选为对接负责人的会员：注册默认 active；后台审核通过曾写成 approved */
+  private readonly ownerMemberStatusSql = `status IN ('active', 'approved')`
+
   async memberOptions(keyword?: string) {
     const values: any[] = []
-    let where = `status = 'active'`
+    let where = this.ownerMemberStatusSql
     if (keyword) {
       where += ' AND (name LIKE ? OR phone LIKE ? OR company_name LIKE ?)'
       const like = `%${keyword}%`
@@ -149,9 +152,10 @@ export class DealApplicationsService {
     }
     const project = await queryOne(`SELECT id, title FROM projects WHERE id = ?`, [payload.businessId])
     if (!project) throw new HttpException('所选项目不存在', HttpStatus.BAD_REQUEST)
-    const owner = await queryOne(`SELECT id, name FROM members WHERE id = ? AND status = 'active'`, [
-      payload.ownerMemberId,
-    ])
+    const owner = await queryOne(
+      `SELECT id, name FROM members WHERE id = ? AND ${this.ownerMemberStatusSql}`,
+      [payload.ownerMemberId],
+    )
     if (!owner) throw new HttpException('项目负责人不存在', HttpStatus.BAD_REQUEST)
 
     const result = await queryExecute(
@@ -222,9 +226,10 @@ export class DealApplicationsService {
     if (!project) throw new HttpException('所选项目不存在', HttpStatus.BAD_REQUEST)
 
     if (ownerChanged) {
-      const owner = await queryOne(`SELECT id FROM members WHERE id = ? AND status = 'active'`, [
-        payload.ownerMemberId,
-      ])
+      const owner = await queryOne(
+        `SELECT id FROM members WHERE id = ? AND ${this.ownerMemberStatusSql}`,
+        [payload.ownerMemberId],
+      )
       if (!owner) throw new HttpException('项目负责人不存在', HttpStatus.BAD_REQUEST)
     }
     const nextConfirm = canResubmit ? 'pending' : existing.audit_status
