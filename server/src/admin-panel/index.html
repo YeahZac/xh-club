@@ -1138,10 +1138,27 @@ const INDUSTRY_MAP = { tech: '科技互联网', finance: '金融资本', manufac
 const richEditors = {}
 const EMOJI_LIST = ['😀','😁','😂','🤣','😊','😍','😘','😎','🤔','👍','👏','🙏','🔥','✨','🎉','❤️','💯','✅','📌','📎','📄','🖼️','💼','🚀','⭐','💡']
 
+function destroyRichEditor(editorId) {
+  const host = document.getElementById(editorId)
+  if (!host) {
+    delete richEditors[editorId]
+    return
+  }
+  // Quill 会在 host 前插入 .ql-toolbar，仅清空 innerHTML 会残留多条工具栏
+  let prev = host.previousElementSibling
+  while (prev && prev.classList.contains('ql-toolbar')) {
+    const remove = prev
+    prev = prev.previousElementSibling
+    remove.remove()
+  }
+  host.className = ''
+  host.removeAttribute('style')
+  host.innerHTML = ''
+  delete richEditors[editorId]
+}
+
 function destroyRichEditors() {
-  Object.keys(richEditors).forEach((key) => {
-    try { delete richEditors[key] } catch (e) {}
-  })
+  Object.keys(richEditors).forEach((key) => destroyRichEditor(key))
 }
 
 function getRichEditorHtml(editorId) {
@@ -1180,11 +1197,7 @@ function uploadEditorAsset(file, kind) {
 function initRichEditor(editorId, html) {
   const host = document.getElementById(editorId)
   if (!host || typeof Quill === 'undefined') return null
-  if (richEditors[editorId]) {
-    try { host.innerHTML = '' } catch (e) {}
-    delete richEditors[editorId]
-  }
-  host.innerHTML = ''
+  destroyRichEditor(editorId)
   const quill = new Quill(host, {
     theme: 'snow',
     placeholder: '请输入内容，支持排版、图片、表情、附件...',
@@ -1271,7 +1284,7 @@ function initRichEditor(editorId, html) {
     const htmlCopyBtn = host.parentElement?.querySelector('.ql-htmlcopy')
     if (emojiBtn && !emojiBtn.dataset.ready) { emojiBtn.dataset.ready = '1'; emojiBtn.innerHTML = '😊'; emojiBtn.title = '表情' }
     if (attachBtn && !attachBtn.dataset.ready) { attachBtn.dataset.ready = '1'; attachBtn.innerHTML = '📎'; attachBtn.title = '插入文件' }
-    if (htmlCopyBtn && !htmlCopyBtn.dataset.ready) { htmlCopyBtn.dataset.ready = '1'; htmlCopyBtn.innerHTML = '&lt;/&gt;'; htmlCopyBtn.title = '复制 HTML 代码' }
+    if (htmlCopyBtn && !htmlCopyBtn.dataset.ready) { htmlCopyBtn.dataset.ready = '1'; htmlCopyBtn.textContent = '</>'; htmlCopyBtn.title = '复制 HTML 代码' }
   }, 0)
 
   if (html) {
@@ -1456,6 +1469,10 @@ function switchPage(page) {
   if (page !== 'role-edit' && page !== 'project-edit' && !hasPagePermission(page)) {
     toast('您没有访问此页面的权限', 'error');
     return;
+  }
+  const currentPage = document.querySelector('[data-page].active')?.dataset.page
+  if (currentPage === 'project-edit' && page !== 'project-edit') {
+    destroyRichEditor('pjEditDescEditor')
   }
   document.querySelectorAll('[data-page]').forEach(el => el.classList.remove('active'))
   document.querySelector(`[data-page="${page}"]`).classList.add('active')
@@ -2187,32 +2204,34 @@ async function openProjectEditPage(id) {
   document.getElementById('pjAuditBox').classList.add('hidden')
   renderProjectScoreDimensions()
   switchPage('project-edit')
-  initRichEditor('pjEditDescEditor', '')
-  if (!id) return
-  const res = await api(`/admin/projects/${id}`)
-  if (res.code !== 200) {
-    toast(res.msg || '加载项目失败', 'error')
-    switchPage('projects')
-    return
+  let description = ''
+  if (id) {
+    const res = await api(`/admin/projects/${id}`)
+    if (res.code !== 200) {
+      toast(res.msg || '加载项目失败', 'error')
+      switchPage('projects')
+      return
+    }
+    const p = res.data
+    document.getElementById('pjEditTitle').value = p.title || ''
+    document.getElementById('pjEditStatus').value = p.status || 'active'
+    document.getElementById('pjEditStage').value = p.stage || 'seed'
+    document.getElementById('pjEditCover').value = p.cover_image || ''
+    document.getElementById('pjEditVideo').value = p.video_url || ''
+    document.getElementById('pjEditIndustry').value = p.industry || Object.keys(INDUSTRY_MAP)[0] || ''
+    document.getElementById('pjEditAmount').value = p.amount_max ? Math.round(p.amount_max / 10000) : ''
+    document.getElementById('pjEditAuditStatus').value = p.audit_status || 'approved'
+    document.getElementById('pjEditRejectReason').value = p.reject_reason || ''
+    if (p.submitter_id || p.audit_status === 'pending' || p.audit_status === 'rejected') {
+      document.getElementById('pjAuditBox').classList.remove('hidden')
+    }
+    _pjScoreDimensions = Array.isArray(p.score_dimensions)
+      ? p.score_dimensions.map((d, i) => ({ id: d.id, name: d.name || '', sort_order: d.sort_order ?? i }))
+      : []
+    renderProjectScoreDimensions()
+    description = p.description || ''
   }
-  const p = res.data
-  document.getElementById('pjEditTitle').value = p.title || ''
-  document.getElementById('pjEditStatus').value = p.status || 'active'
-  document.getElementById('pjEditStage').value = p.stage || 'seed'
-  document.getElementById('pjEditCover').value = p.cover_image || ''
-  document.getElementById('pjEditVideo').value = p.video_url || ''
-  document.getElementById('pjEditIndustry').value = p.industry || Object.keys(INDUSTRY_MAP)[0] || ''
-  document.getElementById('pjEditAmount').value = p.amount_max ? Math.round(p.amount_max / 10000) : ''
-  document.getElementById('pjEditAuditStatus').value = p.audit_status || 'approved'
-  document.getElementById('pjEditRejectReason').value = p.reject_reason || ''
-  if (p.submitter_id || p.audit_status === 'pending' || p.audit_status === 'rejected') {
-    document.getElementById('pjAuditBox').classList.remove('hidden')
-  }
-  _pjScoreDimensions = Array.isArray(p.score_dimensions)
-    ? p.score_dimensions.map((d, i) => ({ id: d.id, name: d.name || '', sort_order: d.sort_order ?? i }))
-    : []
-  renderProjectScoreDimensions()
-  initRichEditor('pjEditDescEditor', p.description || '')
+  initRichEditor('pjEditDescEditor', description)
 }
 
 async function saveProjectEdit() {
