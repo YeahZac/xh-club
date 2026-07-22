@@ -784,21 +784,6 @@
           <h3 class="font-bold text-navy-800 text-xl">编辑角色权限</h3>
         </div>
         
-        <!-- 测试复选框 -->
-        <div class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p class="text-sm text-yellow-800 mb-2"> 测试复选框是否可见：</p>
-          <div class="flex gap-4 items-center">
-            <label class="flex items-center gap-2">
-              <input type="checkbox" checked> 原生复选框 1
-            </label>
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="perm-checkbox" checked> perm-checkbox 类
-            </label>
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="page-checkbox" checked> page-checkbox 类
-            </label>
-          </div>
-        </div>
         <div class="mb-6 p-4 bg-gray-50 rounded-xl">
           <div class="grid grid-cols-2 gap-4">
             <div>
@@ -1372,6 +1357,9 @@ async function restoreSession() {
     await api('/admin/db-status')
     document.getElementById('loginPage').classList.add('hidden')
     document.getElementById('mainApp').classList.remove('hidden')
+    const isSuperAdmin = localStorage.getItem('admin_is_super') === '1'
+    const perms = JSON.parse(localStorage.getItem('admin_permissions') || '{}')
+    applyMenuPermissions(isSuperAdmin, perms)
     loadDashboard()
   } catch {
     doLogout()
@@ -4326,20 +4314,41 @@ async function resetAdminPassword(id) {
 // 存储角色列表数据，用于编辑权限时引用
 let rolesDataCache = []
 
+function parseRolePermissions(raw) {
+  let perms = raw
+  if (typeof perms === 'string') {
+    try { perms = JSON.parse(perms) } catch (e) { perms = {} }
+  }
+  if (Array.isArray(perms)) {
+    if (perms.includes('*')) {
+      return { isAllPerms: true, perms: {} }
+    }
+    const mapped = {}
+    perms.forEach((key) => {
+      if (typeof key === 'string' && key) mapped[key] = { view: true }
+    })
+    return { isAllPerms: false, perms: mapped }
+  }
+  if (perms && typeof perms === 'object') {
+    return { isAllPerms: false, perms }
+  }
+  return { isAllPerms: false, perms: {} }
+}
+
+function countRolePermissions(raw) {
+  const { isAllPerms, perms } = parseRolePermissions(raw)
+  if (isAllPerms) return '所有权限'
+  const count = Object.keys(perms).filter((key) => perms[key]?.view).length
+  return count ? `${count} 个页面` : '未配置'
+}
+
 async function loadRoles() {
   const res = await api('/admin/roles')
   const list = document.getElementById('rolesList')
   if (res.code === 200 && res.data?.length) {
     rolesDataCache = res.data
     list.innerHTML = res.data.map((r, idx) => {
-      // 解析 permissions（可能是字符串、对象或数组）
-      let perms = r.permissions || {}
-      if (typeof perms === 'string') {
-        try { perms = JSON.parse(perms) } catch(e) { perms = {} }
-      }
-      // 检查是否是超级管理员权限
-      const isAllPerms = Array.isArray(perms) && perms.includes('*')
-      const permCount = isAllPerms ? '所有权限' : (perms && typeof perms === 'object' && !Array.isArray(perms) ? Object.keys(perms).filter(k => perms[k]?.view).length + ' 个页面' : '未配置')
+      const permCount = countRolePermissions(r.permissions)
       return `
       <div class="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
         <div>
@@ -4362,9 +4371,6 @@ async function loadRoles() {
 function editRoleFromList(idx) {
   const role = rolesDataCache[idx]
   if (!role) return toast('角色数据不存在', 'error')
-  // 先切换到编辑页面
-  switchPage('role-edit')
-  // 然后填充数据
   editRolePermissions(role)
 }
 
@@ -4419,20 +4425,13 @@ const BUTTON_LABELS = { create: '新增', edit: '编辑', delete: '删除', view
 // 编辑角色权限 - 跳转到二级页面
 function editRolePermissions(role) {
   console.log('[RoleEdit] 开始编辑角色:', role)
-  
-  // 先切换到编辑页面
+
   switchPage('role-edit')
-  
+
   currentEditRoleId = role.id
-  
-  // 解析 permissions
-  let perms = role.permissions || {}
-  if (typeof perms === 'string') {
-    try { perms = JSON.parse(perms) } catch(e) { perms = {} }
-  }
-  const isAllPerms = Array.isArray(perms) && perms.includes('*')
-  if (Array.isArray(perms)) perms = {}
-  
+
+  const { isAllPerms, perms } = parseRolePermissions(role.permissions)
+
   console.log('[RoleEdit] 解析后的权限:', perms, 'isAllPerms:', isAllPerms)
   
   // 填充角色基本信息
@@ -4549,7 +4548,7 @@ async function saveRolePermissions() {
     name: document.getElementById('editRoleName').value,
     display_name: document.getElementById('editRoleDisplayName').value,
     description: document.getElementById('editRoleDesc').value,
-    permissions: JSON.stringify(permissions)  // 确保序列化为JSON字符串
+    permissions,
   }
   
   if (!body.name || !body.display_name) return toast('请填写角色名称和显示名称', 'error')

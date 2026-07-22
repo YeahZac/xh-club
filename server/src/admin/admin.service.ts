@@ -19,6 +19,56 @@ import {
 } from '@/points/points-rule.util'
 import { createNotification } from '@/common/notify'
 
+type RolePermissionMap = Record<string, Record<string, boolean>>
+
+function parsePermissionsRaw(raw: unknown): unknown {
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw)
+    } catch {
+      return {}
+    }
+  }
+  return raw ?? {}
+}
+
+/** 统一角色权限：兼容历史 ["*"] / ["dashboard", ...] 与新版 { page: { view: true } } */
+export function normalizeRolePermissions(raw: unknown): {
+  isAll: boolean
+  pages: RolePermissionMap
+} {
+  const perms = parsePermissionsRaw(raw)
+
+  if (Array.isArray(perms)) {
+    if (perms.includes('*')) {
+      return { isAll: true, pages: {} }
+    }
+    const pages: RolePermissionMap = {}
+    perms.forEach((key) => {
+      if (typeof key === 'string' && key) {
+        pages[key] = { view: true }
+      }
+    })
+    return { isAll: false, pages }
+  }
+
+  if (perms && typeof perms === 'object') {
+    const pages: RolePermissionMap = {}
+    Object.entries(perms as Record<string, any>).forEach(([key, value]) => {
+      if (value === true) {
+        pages[key] = { view: true }
+        return
+      }
+      if (value && typeof value === 'object') {
+        pages[key] = { ...value }
+      }
+    })
+    return { isAll: false, pages }
+  }
+
+  return { isAll: false, pages: {} }
+}
+
 interface UserRow extends RowDataPacket {
   id: number
   login_account: string
@@ -128,7 +178,8 @@ export class AdminService {
       )
 
       const admin = adminRows[0]
-      const isSuperAdmin = admin?.role_name === 'super_admin' || admin?.role_is_system
+      const rolePerms = normalizeRolePermissions(admin?.role_permissions)
+      const isSuperAdmin = admin?.role_name === 'super_admin' || rolePerms.isAll
       const token = signAuthToken({
         sub: String(user.id),
         type: 'admin',
@@ -136,20 +187,14 @@ export class AdminService {
       })
 
       console.log('[AdminService] login success:', username, 'role:', admin?.role_name, 'isSuperAdmin:', isSuperAdmin)
-      
-      // 解析权限（可能是 JSON 字符串）
-      let permissions = admin?.role_permissions || {}
-      if (typeof permissions === 'string') {
-        try { permissions = JSON.parse(permissions) } catch(e) { permissions = {} }
-      }
-      
+
       return {
         id: user.id,
         username: user.login_account,
         name: user.name || '管理员',
         role: admin?.role_name || 'admin',
         role_display_name: admin?.role_display_name || '管理员',
-        permissions: isSuperAdmin ? null : permissions,
+        permissions: isSuperAdmin ? null : rolePerms.pages,
         is_super_admin: isSuperAdmin,
         token
       }
@@ -1286,7 +1331,13 @@ export class AdminService {
       console.log('[AdminService] getRoles - querying roles table')
       const roles = await queryRows('SELECT * FROM roles ORDER BY id ASC')
       console.log('[AdminService] getRoles - found', roles.length, 'roles')
-      return roles
+      return roles.map((role: any) => {
+        const normalized = normalizeRolePermissions(role.permissions)
+        return {
+          ...role,
+          permissions: normalized.isAll ? ['*'] : normalized.pages,
+        }
+      })
     } catch (error) {
       console.error('[AdminService] getRoles error:', error)
       console.error('[AdminService] getRoles error details:', (error as Error).message)
@@ -1326,7 +1377,10 @@ export class AdminService {
       }
       if (dto.permissions !== undefined) {
         updates.push('permissions = ?')
-        values.push(JSON.stringify(dto.permissions))
+        const permissionValue = typeof dto.permissions === 'string'
+          ? dto.permissions
+          : JSON.stringify(dto.permissions)
+        values.push(permissionValue)
       }
 
       if (updates.length > 0) {
