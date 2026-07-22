@@ -1124,7 +1124,6 @@ const INDUSTRY_MAP = { tech: '科技互联网', finance: '金融资本', manufac
 
 // ===== 富文本编辑器（Quill）=====
 const richEditors = {}
-const richEditorOptions = {}
 const EMOJI_LIST = ['😀','😁','😂','🤣','😊','😍','😘','😎','🤔','👍','👏','🙏','🔥','✨','🎉','❤️','💯','✅','📌','📎','📄','🖼️','💼','🚀','⭐','💡']
 
 function destroyRichEditor(editorId) {
@@ -1144,7 +1143,6 @@ function destroyRichEditor(editorId) {
   host.removeAttribute('style')
   host.innerHTML = ''
   delete richEditors[editorId]
-  delete richEditorOptions[editorId]
 }
 
 function destroyRichEditors() {
@@ -1184,10 +1182,9 @@ function uploadEditorAsset(file, kind) {
   })
 }
 
-function initRichEditor(editorId, html, options = {}) {
+function initRichEditor(editorId, html) {
   const host = document.getElementById(editorId)
   if (!host || typeof Quill === 'undefined') return null
-  richEditorOptions[editorId] = options
   destroyRichEditor(editorId)
   const quill = new Quill(host, {
     theme: 'snow',
@@ -1205,11 +1202,8 @@ function initRichEditor(editorId, html, options = {}) {
         ],
         handlers: {
           image() {
-            const imageMaxBytes = richEditorOptions[editorId]?.imageMaxBytes || MEDIA_IMAGE_MAX_BYTES
             openMediaLibrary({
               type: 'image',
-              imageMaxBytes,
-              uploadPurpose: imageMaxBytes > MEDIA_IMAGE_MAX_BYTES ? 'content' : '',
               onSelect: (item) => {
                 const range = quill.getSelection(true)
                 quill.insertEmbed(range.index, 'image', item.previewUrl || item.url, 'user')
@@ -2203,7 +2197,7 @@ async function openProjectEditPage(id) {
     renderProjectScoreDimensions()
     description = p.description || ''
   }
-  initRichEditor('pjEditDescEditor', description, { imageMaxBytes: MEDIA_RICHTEXT_IMAGE_MAX_BYTES })
+  initRichEditor('pjEditDescEditor', description)
 }
 
 async function saveProjectEdit() {
@@ -3254,7 +3248,7 @@ async function showMallModal(id) {
       </div>
     </div>
   `, { wide: true })
-  initRichEditor('mlDescEditor', product?.description || '', { imageMaxBytes: MEDIA_RICHTEXT_IMAGE_MAX_BYTES })
+  initRichEditor('mlDescEditor', product?.description || '')
 }
 
 async function saveMallProduct(id) {
@@ -3481,8 +3475,7 @@ setInterval(() => {
 }, 1000)
 
 // ===== 媒体规范（按手机 375 逻辑宽 × 2x 视网膜出图）=====
-const MEDIA_IMAGE_MAX_BYTES = 2 * 1024 * 1024
-const MEDIA_RICHTEXT_IMAGE_MAX_BYTES = 3 * 1024 * 1024
+const MEDIA_IMAGE_MAX_BYTES = 3 * 1024 * 1024
 const MEDIA_VIDEO_MAX_BYTES = 200 * 1024 * 1024
 
 function formatMaxImageSize(bytes) {
@@ -3505,7 +3498,7 @@ const MEDIA_SPECS = {
 function mediaHint(specKey) {
   const spec = MEDIA_SPECS[specKey]
   if (!spec) return ''
-  return `${spec.tip}；单张 ≤2MB，JPG/PNG/WebP；可从媒体库复用已有资源`
+  return `${spec.tip}；单张 ≤3MB，JPG/PNG/WebP；可从媒体库复用已有资源`
 }
 
 function mediaPreviewBox(specKey) {
@@ -3542,8 +3535,6 @@ const mediaLibraryState = {
   targetId: '',
   expectedWidth: null,
   expectedHeight: null,
-  imageMaxBytes: null,
-  uploadPurpose: '',
   onSelect: null,
 }
 
@@ -3570,8 +3561,6 @@ function openMediaLibrary(options = {}) {
   mediaLibraryState.targetId = options.targetId || ''
   mediaLibraryState.expectedWidth = options.expectedWidth || null
   mediaLibraryState.expectedHeight = options.expectedHeight || null
-  mediaLibraryState.imageMaxBytes = options.imageMaxBytes || null
-  mediaLibraryState.uploadPurpose = options.uploadPurpose || ''
   mediaLibraryState.onSelect = typeof options.onSelect === 'function' ? options.onSelect : null
   mediaLibraryState.page = 1
   mediaLibraryState.selectedKey = ''
@@ -3724,10 +3713,7 @@ async function uploadToMediaLibrary(input) {
 
   toast('上传中...', 'info')
   try {
-    const imageEndpoint = mediaLibraryState.uploadPurpose
-      ? `/upload/image?purpose=${encodeURIComponent(mediaLibraryState.uploadPurpose)}`
-      : '/upload/image'
-    const endpoint = isImage ? imageEndpoint : isVideo ? '/upload/video' : '/upload/document'
+    const endpoint = isImage ? '/upload/image' : isVideo ? '/upload/video' : '/upload/document'
     const formData = new FormData()
     formData.append('file', file)
     const xhrRes = await new Promise((resolve, reject) => {

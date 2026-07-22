@@ -11,7 +11,7 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { UploadService } from './upload.service';
+import { UploadService, IMAGE_UPLOAD_MAX_BYTES } from './upload.service';
 import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard';
 import { Public } from '@/auth/public.decorator';
 
@@ -21,7 +21,7 @@ export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: IMAGE_UPLOAD_MAX_BYTES } }))
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new Error('No file uploaded');
@@ -36,17 +36,13 @@ export class UploadController {
   }
 
   @Post('image')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 3 * 1024 * 1024 } }))
-  async uploadImage(
-    @UploadedFile() file: Express.Multer.File,
-    @Query('purpose') purpose?: string,
-  ) {
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: IMAGE_UPLOAD_MAX_BYTES } }))
+  async uploadImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new Error('No file uploaded');
     }
 
-    const maxSize = purpose === 'content' ? 3 * 1024 * 1024 : 2 * 1024 * 1024;
-    const result = await this.uploadService.uploadImage(file, 'images', maxSize);
+    const result = await this.uploadService.uploadImage(file);
     return {
       code: 200,
       msg: 'Upload successful',
@@ -205,7 +201,7 @@ export class InviteUploadController {
 
   @Public()
   @Post('image')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: IMAGE_UPLOAD_MAX_BYTES } }))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new Error('No file uploaded');
@@ -226,7 +222,7 @@ export class MemberUploadController {
   constructor(private readonly uploadService: UploadService) {}
 
   @Post('image')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: IMAGE_UPLOAD_MAX_BYTES } }))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new Error('No file uploaded');

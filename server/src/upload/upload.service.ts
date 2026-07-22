@@ -9,6 +9,8 @@ import {
 } from '@/utils/media-url';
 
 const DEFAULT_SIGNED_URL_EXPIRES = 7200;
+export const IMAGE_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
+export const IMAGE_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
 
 type MediaLibraryType = 'image' | 'video' | 'document' | 'all';
 
@@ -612,7 +614,7 @@ export class UploadService {
   async uploadImage(
     file: Express.Multer.File,
     folder: string = 'images',
-    maxSize = 2 * 1024 * 1024,
+    maxSize = IMAGE_UPLOAD_MAX_BYTES,
   ): Promise<{
     fileId: string;
     url: string;
