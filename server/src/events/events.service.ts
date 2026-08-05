@@ -13,6 +13,7 @@ import { PointsEngineService } from '@/points/points-engine.service'
 import { InvitationEngineService } from '@/invitation/invitation-engine.service'
 import { createNotification } from '@/common/notify'
 import { TalentService } from '@/talent/talent.service'
+import { resolveEventStatus } from '@/common/event-status'
 
 function normalizeProjectUrlList(value: unknown): string[] {
   return parseJsonUrlList(value)
@@ -30,6 +31,29 @@ export class EventsService {
   ) {}
 
   private client() { return getSupabaseClient() }
+
+  private async syncEventRuntimeStatus(row: any) {
+    if (!row || String(row.status) === 'draft') return row
+    const next = resolveEventStatus({
+      status: row.status,
+      start_time: row.start_time,
+      end_time: row.end_time,
+      max_participants: row.max_participants,
+      current_participants: row.current_participants,
+    })
+    if (String(row.status) !== next) {
+      try {
+        await queryExecute(
+          `UPDATE events SET status = ? WHERE id = ? AND status <> 'draft'`,
+          [next, row.id],
+        )
+      } catch (error) {
+        console.warn('[EventsService] syncEventRuntimeStatus failed', error)
+      }
+      return { ...row, status: next }
+    }
+    return { ...row, status: next }
+  }
 
   /** 获取活动列表 */
   async getEvents(
@@ -54,6 +78,10 @@ export class EventsService {
     if (error) throw new HttpException(`查询失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
 
     let list = await this.uploadService.signRowsFields(data || [], ['cover_image', 'video_url'])
+    list = await Promise.all(list.map((item: any) => this.syncEventRuntimeStatus(item)))
+    if (params.status) {
+      list = list.filter((item: any) => String(item.status) === String(params.status))
+    }
     if (memberId && list.length) {
       const ids = list.map((item: any) => item.id).filter(Boolean)
       let registeredIds = new Set<string>()
@@ -119,13 +147,22 @@ export class EventsService {
       Number(signed.current_participants || 0),
       registrationCount,
     )
+    const synced = await this.syncEventRuntimeStatus({
+      ...signed,
+      current_participants: currentParticipants,
+    })
     const isRegistered = memberId
       ? (registrations || []).some((item: any) => String(item.member_id) === String(memberId))
       : false
+    const runtimeStatus = resolveEventStatus({
+      ...synced,
+      current_participants: currentParticipants,
+    })
     return {
-      ...signed,
+      ...synced,
+      status: runtimeStatus,
       view_count: Number(signed.view_count || 0) + 1,
-      form_fields: formFields.length ? formFields : signed.form_fields,
+      form_fields: formFields.length ? formFields : synced.form_fields,
       form_defaults: formDefaultsBundle.defaults,
       talent_defaults: formDefaultsBundle.talentDefaults,
       current_participants: currentParticipants,
@@ -133,7 +170,15 @@ export class EventsService {
       registrations: [],
       member_state: {
         is_registered: isRegistered,
-        can_register: !isRegistered && signed.status === 'open',
+        can_register: !isRegistered && runtimeStatus === 'open',
+        register_blocked_reason:
+          runtimeStatus === 'ended'
+            ? '已结束'
+            : runtimeStatus === 'full'
+              ? '已满员'
+              : runtimeStatus === 'draft'
+                ? '活动未开放'
+                : null,
       },
     }
   }
@@ -155,12 +200,34 @@ export class EventsService {
     // 检查活动名额
     const { data: event } = await this.client()
       .from('events')
-      .select('title, max_participants, current_participants, status, form_fields')
+      .select('id, title, max_participants, current_participants, status, form_fields, start_time, end_time')
       .eq('id', eventId)
       .single()
 
-    if (!event || event.status !== 'open') throw new HttpException('活动不可报名', HttpStatus.BAD_REQUEST)
-    if (event.current_participants >= event.max_participants) throw new HttpException('活动名额已满', HttpStatus.BAD_REQUEST)
+    if (!event) throw new HttpException('活动不存在', HttpStatus.NOT_FOUND)
+
+    const countRow = await queryOne(
+      'SELECT COUNT(*) AS total FROM event_registrations WHERE event_id = ?',
+      [eventId],
+    )
+    const currentParticipants = Math.max(
+      Number(event.current_participants || 0),
+      Number(countRow?.total || 0),
+    )
+    const runtimeStatus = resolveEventStatus({
+      ...event,
+      current_participants: currentParticipants,
+      status: event.status === 'draft' ? 'draft' : 'open',
+    })
+    if (runtimeStatus === 'draft') throw new HttpException('活动不可报名', HttpStatus.BAD_REQUEST)
+    if (runtimeStatus === 'ended') throw new HttpException('已结束', HttpStatus.BAD_REQUEST)
+    if (runtimeStatus === 'full') throw new HttpException('已满员', HttpStatus.BAD_REQUEST)
+    if (runtimeStatus !== 'open') throw new HttpException('活动不可报名', HttpStatus.BAD_REQUEST)
+
+    const max = Number(event.max_participants)
+    if (Number.isFinite(max) && max > 0 && currentParticipants >= max) {
+      throw new HttpException('已满员', HttpStatus.BAD_REQUEST)
+    }
 
     const answers =
       formAnswers && typeof formAnswers === 'object' && !Array.isArray(formAnswers)
@@ -191,10 +258,15 @@ export class EventsService {
 
     if (error) throw new HttpException(`报名失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
 
-    // 更新参与人数
+    const nextCount = currentParticipants + 1
+    const nextStatus = resolveEventStatus({
+      ...event,
+      status: 'open',
+      current_participants: nextCount,
+    })
     await this.client()
       .from('events')
-      .update({ current_participants: event.current_participants + 1 })
+      .update({ current_participants: nextCount, status: nextStatus })
       .eq('id', eventId)
 
     void this.pointsEngine
@@ -282,17 +354,31 @@ export class EventsService {
 
     if (error) throw new HttpException(`取消失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
 
-    // 更新参与人数
+    const countRow = await queryOne(
+      'SELECT COUNT(*) AS total FROM event_registrations WHERE event_id = ?',
+      [eventId],
+    )
+    const total = Number(countRow?.total || 0)
     const { data: event } = await this.client()
       .from('events')
-      .select('current_participants')
+      .select('id, status, start_time, end_time, max_participants')
       .eq('id', eventId)
       .single()
 
     if (event) {
+      const nextStatus =
+        String(event.status) === 'draft'
+          ? 'draft'
+          : resolveEventStatus({
+              status: 'open',
+              start_time: event.start_time,
+              end_time: event.end_time,
+              max_participants: event.max_participants,
+              current_participants: total,
+            })
       await this.client()
         .from('events')
-        .update({ current_participants: Math.max(0, event.current_participants - 1) })
+        .update({ current_participants: total, status: nextStatus })
         .eq('id', eventId)
     }
 

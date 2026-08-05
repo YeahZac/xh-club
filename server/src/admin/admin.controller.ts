@@ -1183,6 +1183,16 @@ export class AdminController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Delete('events/:id/registrations/:registrationId')
+  async deleteEventRegistration(
+    @Param('id') id: string,
+    @Param('registrationId') registrationId: string,
+  ) {
+    console.log('[AdminController] DELETE /api/admin/events/:id/registrations/:registrationId')
+    const result = await this.adminService.deleteEventRegistration(id, registrationId)
+    return { code: 200, msg: '删除成功', data: result }
+  }
+
   @Delete('events/:id')
   async deleteEvent(@Param('id') id: string) {
     console.log('[AdminController] DELETE /api/admin/events/:id')

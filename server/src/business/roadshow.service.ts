@@ -480,6 +480,17 @@ export class RoadshowService {
     return { success: true }
   }
 
+  async adminAddRegistration(
+    businessId: string,
+    dto: { member_id: string | number; form_answers?: Record<string, unknown> },
+  ) {
+    const memberId = String(dto?.member_id || '').trim()
+    if (!memberId) throw new HttpException('请选择会员', HttpStatus.BAD_REQUEST)
+    const member = await queryOne('SELECT id, name FROM members WHERE id = ?', [memberId])
+    if (!member) throw new HttpException('会员不存在', HttpStatus.NOT_FOUND)
+    return this.register(businessId, memberId, dto.form_answers || {})
+  }
+
   async getScoreSummary(businessId: string) {
     await this.getBusinessOrThrow(businessId)
     const projects = await this.getProjects(businessId)

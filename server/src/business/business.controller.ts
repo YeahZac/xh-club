@@ -110,6 +110,15 @@ export class BusinessAdminController {
     return { code: 200, msg: '删除成功', data: result }
   }
 
+  @Post(':id/roadshow/registrations')
+  async addRoadshowRegistration(
+    @Param('id') id: string,
+    @Body() body: { member_id: string | number; form_answers?: Record<string, unknown> },
+  ) {
+    const result = await this.roadshowService.adminAddRegistration(id, body || {})
+    return { code: 200, msg: '报名成功', data: result }
+  }
+
   @Get(':id/roadshow/summary')
   async roadshowSummary(@Param('id') id: string) {
     const result = await this.roadshowService.getScoreSummary(id)

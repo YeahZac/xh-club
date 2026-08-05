@@ -19,6 +19,7 @@ import {
   normalizePointsRuleDto,
 } from '@/points/points-rule.util'
 import { createNotification } from '@/common/notify'
+import { resolveEventStatus } from '@/common/event-status'
 
 type RolePermissionMap = Record<string, Record<string, boolean>>
 
@@ -458,6 +459,40 @@ export class AdminService {
     return {}
   }
 
+  private async syncEventRuntimeStatus(row: any) {
+    if (!row || String(row.status) === 'draft') return row
+    const next = resolveEventStatus({
+      status: row.status,
+      start_time: row.start_time,
+      end_time: row.end_time,
+      max_participants: row.max_participants,
+      current_participants: row.current_participants,
+    })
+    if (String(row.status) !== next) {
+      try {
+        await queryExecute(
+          `UPDATE events SET status = ? WHERE id = ? AND status <> 'draft'`,
+          [next, row.id],
+        )
+      } catch (error) {
+        console.warn('[AdminService] syncEventRuntimeStatus failed', error)
+      }
+      return { ...row, status: next }
+    }
+    return { ...row, status: next }
+  }
+
+  private resolvePersistedEventStatus(dto: any, currentParticipants = 0) {
+    if (String(dto?.status || '') === 'draft') return 'draft'
+    return resolveEventStatus({
+      status: 'open',
+      start_time: dto?.start_time,
+      end_time: dto?.end_time,
+      max_participants: dto?.max_participants,
+      current_participants: currentParticipants,
+    })
+  }
+
   async getAllEvents(query: any) {
     try {
       let sql = 'SELECT * FROM events'
@@ -467,8 +502,17 @@ export class AdminService {
         params.push(query.status)
       }
       sql += ' ORDER BY created_at DESC'
-      const rows = await queryRows(sql, params)
-      return this.uploadService.signRowsFields(rows, ['cover_image', 'video_url'])
+      const rows = (await queryRows(sql, params)) as any[]
+      const synced: any[] = []
+      for (const row of rows) {
+        const next: any = await this.syncEventRuntimeStatus(row)
+        synced.push(next)
+      }
+      // 若按状态筛选，同步后可能状态已变，再过滤一次
+      const filtered: any[] = query?.status
+        ? synced.filter((row: any) => String(row.status) === String(query.status))
+        : synced
+      return this.uploadService.signRowsFields(filtered, ['cover_image', 'video_url'])
     } catch (error) {
       console.error('[AdminService] getAllEvents error:', error)
       throw new HttpException('获取活动列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
@@ -479,16 +523,18 @@ export class AdminService {
     try {
       const row = await queryOne('SELECT * FROM events WHERE id = ?', [id])
       if (!row) throw new HttpException('活动不存在', HttpStatus.NOT_FOUND)
+      const synced = await this.syncEventRuntimeStatus(row)
       const signed = await this.uploadService.signDetailMediaFields(
-        row,
+        synced,
         ['cover_image', 'video_url'],
         ['description', 'content'],
       )
       return {
         ...signed,
-        form_fields: this.normalizeFormFields(row.form_fields),
-        start_time_local: this.toDatetimeLocalValue(row.start_time),
-        end_time_local: this.toDatetimeLocalValue(row.end_time),
+        form_fields: this.normalizeFormFields(synced.form_fields),
+        start_time_local: this.toDatetimeLocalValue(synced.start_time),
+        end_time_local: this.toDatetimeLocalValue(synced.end_time),
+        runtime_status: resolveEventStatus(synced),
       }
     } catch (error) {
       console.error('[AdminService] getEventById error:', error)
@@ -507,11 +553,12 @@ export class AdminService {
           : typeof dto.form_fields === 'string'
             ? dto.form_fields
             : JSON.stringify(dto.form_fields)
+      const status = this.resolvePersistedEventStatus(dto, 0)
       const result = await queryExecute(
         `INSERT INTO events (title, description, cover_image, video_url, event_type, status, start_time, end_time, location, address, max_participants, fee, form_fields)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [dto.title, dto.description || null, coverImage, videoUrl, dto.event_type || 'salon',
-         dto.status || 'draft', dto.start_time || null, dto.end_time || null,
+         status, dto.start_time || null, dto.end_time || null,
          dto.location || null, dto.address || null, dto.max_participants || 100, dto.fee || 0,
          formFieldsJson]
       )
@@ -530,7 +577,7 @@ export class AdminService {
 
   async updateEvent(id: string, dto: any) {
     try {
-      const existing = await queryOne('SELECT id FROM events WHERE id = ?', [id])
+      const existing = await queryOne('SELECT * FROM events WHERE id = ?', [id])
       if (!existing) throw new HttpException('活动不存在', HttpStatus.NOT_FOUND)
 
       const updates: string[] = []
@@ -545,7 +592,6 @@ export class AdminService {
       if (dto.cover_image !== undefined) assign('cover_image', assertCloudStorageImageUrl(dto.cover_image))
       if (dto.video_url !== undefined) assign('video_url', normalizeOptionalVideoUrl(dto.video_url))
       if (dto.event_type !== undefined) assign('event_type', dto.event_type || 'salon')
-      if (dto.status !== undefined) assign('status', dto.status || 'draft')
       if (dto.start_time !== undefined) assign('start_time', dto.start_time || null)
       if (dto.end_time !== undefined) assign('end_time', dto.end_time || null)
       if (dto.location !== undefined) assign('location', dto.location || null)
@@ -561,6 +607,19 @@ export class AdminService {
               : JSON.stringify(dto.form_fields)
         assign('form_fields', formFieldsJson)
       }
+
+      const merged = {
+        ...existing,
+        ...dto,
+        start_time: dto.start_time !== undefined ? dto.start_time : existing.start_time,
+        end_time: dto.end_time !== undefined ? dto.end_time : existing.end_time,
+        max_participants: dto.max_participants !== undefined ? dto.max_participants : existing.max_participants,
+        status: dto.status !== undefined ? dto.status : existing.status,
+      }
+      assign(
+        'status',
+        this.resolvePersistedEventStatus(merged, Number(existing.current_participants) || 0),
+      )
 
       if (!updates.length) {
         throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
@@ -635,6 +694,53 @@ export class AdminService {
       console.error('[AdminService] getEventRegistrations error:', error)
       if (error instanceof HttpException) throw error
       throw new HttpException('获取报名名单失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async deleteEventRegistration(eventId: string, registrationId: string) {
+    try {
+      const row = await queryOne(
+        'SELECT id, member_id FROM event_registrations WHERE id = ? AND event_id = ?',
+        [registrationId, eventId],
+      )
+      if (!row) throw new HttpException('报名记录不存在', HttpStatus.NOT_FOUND)
+
+      await queryExecute('DELETE FROM event_registrations WHERE id = ? AND event_id = ?', [
+        registrationId,
+        eventId,
+      ])
+
+      const countRow = await queryOne(
+        'SELECT COUNT(*) AS total FROM event_registrations WHERE event_id = ?',
+        [eventId],
+      )
+      const total = Number(countRow?.total || 0)
+      const event = await queryOne(
+        'SELECT id, status, start_time, end_time, max_participants FROM events WHERE id = ?',
+        [eventId],
+      )
+      if (event) {
+        const nextStatus =
+          String(event.status) === 'draft'
+            ? 'draft'
+            : resolveEventStatus({
+                status: 'open',
+                start_time: event.start_time,
+                end_time: event.end_time,
+                max_participants: event.max_participants,
+                current_participants: total,
+              })
+        await queryExecute(
+          'UPDATE events SET current_participants = ?, status = ? WHERE id = ?',
+          [total, nextStatus, eventId],
+        )
+      }
+
+      return { success: true, current_participants: total }
+    } catch (error) {
+      console.error('[AdminService] deleteEventRegistration error:', error)
+      if (error instanceof HttpException) throw error
+      throw new HttpException('删除报名失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 
