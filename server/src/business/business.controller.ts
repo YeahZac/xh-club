@@ -101,6 +101,15 @@ export class BusinessAdminController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Delete(':id/roadshow/registrations/:registrationId')
+  async deleteRoadshowRegistration(
+    @Param('id') id: string,
+    @Param('registrationId') registrationId: string,
+  ) {
+    const result = await this.roadshowService.deleteRegistration(id, registrationId)
+    return { code: 200, msg: '删除成功', data: result }
+  }
+
   @Get(':id/roadshow/summary')
   async roadshowSummary(@Param('id') id: string) {
     const result = await this.roadshowService.getScoreSummary(id)

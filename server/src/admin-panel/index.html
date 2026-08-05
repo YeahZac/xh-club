@@ -2443,9 +2443,7 @@ function renderBizFormFields() {
         <option value="number" ${field.type==='number'?'selected':''}>数字</option>
         <option value="select" ${field.type==='select'?'selected':''}>下拉选择</option>
       </select>
-      <label class="flex items-center gap-1 text-xs text-gray-600 whitespace-nowrap">
-        <input type="checkbox" ${field.required ? 'checked' : ''} onchange="_bizFormFields[${index}].required=this.checked"> 必填
-      </label>
+      <span class="text-xs px-2 py-1 rounded-full bg-red-50 text-red-600 whitespace-nowrap">必填</span>
       <label class="flex items-center gap-1 text-xs text-gray-600 whitespace-nowrap" title="下次报名自动带入该会员上次填写值">
         <input type="checkbox" ${field.reuse_last ? 'checked' : ''} onchange="_bizFormFields[${index}].reuse_last=this.checked"> 沿用上次
       </label>
@@ -2456,7 +2454,7 @@ function renderBizFormFields() {
 }
 
 function addBizFormField() {
-  _bizFormFields.push({ label: '', type: 'text', required: false, reuse_last: false })
+  _bizFormFields.push({ label: '', type: 'text', required: true, reuse_last: false })
   renderBizFormFields()
 }
 
@@ -2573,7 +2571,7 @@ function collectBizRoadshowPayload() {
     .map(f => ({
       label: f.label.trim(),
       type: f.type || 'text',
-      required: !!f.required,
+      required: true,
       reuse_last: !!f.reuse_last,
       ...(f.type === 'select' && f.options ? { options: f.options } : {}),
     }))
@@ -2598,8 +2596,11 @@ async function showRoadshowRegistrations(businessId) {
       <td class="px-4 py-3 text-sm">${escapeHtml(row.member_phone || '-')}</td>
       ${fields.map(f => `<td class="px-4 py-3 text-sm">${escapeHtml(String((row.form_answers || {})[f.label] ?? '-'))}</td>`).join('')}
       <td class="px-4 py-3 text-sm text-gray-500">${row.created_at || '-'}</td>
+      <td class="px-4 py-3 text-center">
+        <button onclick="deleteRoadshowRegistration('${escapeHtml(businessId)}','${escapeHtml(row.id)}')" class="px-2.5 py-1 text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100">删除</button>
+      </td>
     </tr>
-  `).join('') : '<tr><td colspan="99" class="px-4 py-8 text-center text-gray-400">暂无报名</td></tr>'
+  `).join('') : `<tr><td colspan="${4 + fields.length}" class="px-4 py-8 text-center text-gray-400">暂无报名</td></tr>`
   showModal(`
     <div class="p-6" style="max-width:900px">
       <h3 class="text-lg font-bold text-navy-800 mb-4">路演报名名单 (${list.length})</h3>
@@ -2610,12 +2611,30 @@ async function showRoadshowRegistrations(businessId) {
             <th class="px-4 py-3 text-left text-xs text-gray-500">手机号</th>
             ${extraHeaders}
             <th class="px-4 py-3 text-left text-xs text-gray-500">报名时间</th>
+            <th class="px-4 py-3 text-center text-xs text-gray-500">操作</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
     </div>
   `, { wide: true })
+}
+
+async function deleteRoadshowRegistration(businessId, registrationId) {
+  if (!confirm('确认删除该报名人员？删除后不可恢复，其评分记录也将一并清除。')) return
+  try {
+    const res = await api(`/admin/business/${businessId}/roadshow/registrations/${registrationId}`, {
+      method: 'DELETE',
+    })
+    if (res.code === 200) {
+      toast('已删除报名人员')
+      showRoadshowRegistrations(businessId)
+    } else {
+      toast(res.msg || '删除失败', 'error')
+    }
+  } catch (error) {
+    toast(error.message || '删除失败', 'error')
+  }
 }
 
 function renderRoadshowSummaryPanel(summary) {
@@ -2768,7 +2787,7 @@ async function showBusinessModal(editId) {
   _bizFormFields = parseBizFormFields(item?.form_fields).map(f => ({
     label: f.label || '',
     type: f.type || 'text',
-    required: !!f.required,
+    required: true,
     reuse_last: !!f.reuse_last,
     options: f.options || [],
   }))
@@ -2835,9 +2854,10 @@ async function showBusinessModal(editId) {
           <p class="text-xs text-gray-500">报名时间默认至结束时间前均可报名；评分仅在开始至结束时间内开放给已报名用户。</p>
           <div>
             <div class="flex items-center justify-between mb-2">
-              <label class="text-sm font-medium text-gray-700">报名表单字段（可选）</label>
+              <label class="text-sm font-medium text-gray-700">报名表单字段 <span class="text-red-500">*</span></label>
               <button onclick="addBizFormField()" class="px-3 py-1 text-xs bg-navy-100 text-navy-700 rounded-lg">+ 添加字段</button>
             </div>
+            <p class="text-xs text-gray-400 mb-2">已添加的字段均为必填，小程序端报名时必须填写。</p>
             <div id="bizFormFieldsList" class="space-y-2"></div>
           </div>
           <div>

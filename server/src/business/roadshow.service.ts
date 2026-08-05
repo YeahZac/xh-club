@@ -76,7 +76,9 @@ export class RoadshowService {
 
   normalizeFormFields(value: unknown): RoadshowFormField[] | null {
     const fields = normalizeRegisterFormFields(value)
-    return fields.length ? (fields as RoadshowFormField[]) : null
+    if (!fields.length) return null
+    // 项目路演报名字段统一必填
+    return fields.map((field) => ({ ...field, required: true })) as RoadshowFormField[]
   }
 
   private normalizeFormAnswers(value: unknown): Record<string, unknown> {
@@ -256,8 +258,8 @@ export class RoadshowService {
       throw new HttpException('请至少配置一个评分维度', HttpStatus.BAD_REQUEST)
     }
 
-    const formFieldsJson =
-      dto.form_fields == null ? null : JSON.stringify(dto.form_fields)
+    const formFields = this.normalizeFormFields(dto.form_fields)
+    const formFieldsJson = formFields == null ? null : JSON.stringify(formFields)
 
     await queryExecute(
       `UPDATE business_opportunities
@@ -456,6 +458,26 @@ export class RoadshowService {
         form_answers: this.normalizeFormAnswers(row.form_answers),
       })),
     }
+  }
+
+  async deleteRegistration(businessId: string, registrationId: string) {
+    await this.getBusinessOrThrow(businessId)
+    const row = await queryOne(
+      'SELECT id, member_id FROM roadshow_registrations WHERE id = ? AND business_id = ?',
+      [registrationId, businessId],
+    )
+    if (!row) {
+      throw new HttpException('报名记录不存在', HttpStatus.NOT_FOUND)
+    }
+    await queryExecute(
+      'DELETE FROM roadshow_scores WHERE business_id = ? AND member_id = ?',
+      [businessId, row.member_id],
+    )
+    await queryExecute(
+      'DELETE FROM roadshow_registrations WHERE id = ? AND business_id = ?',
+      [registrationId, businessId],
+    )
+    return { success: true }
   }
 
   async getScoreSummary(businessId: string) {
