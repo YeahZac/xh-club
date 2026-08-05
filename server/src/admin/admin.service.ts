@@ -640,6 +640,19 @@ export class AdminService {
 
   async deleteEvent(id: string) {
     try {
+      try {
+        await queryExecute(
+          `DELETE FROM homepage_items WHERE section = 'events' AND item_id = ?`,
+          [String(id)],
+        )
+      } catch {
+        // 首页关联清理失败不阻断活动删除
+      }
+      try {
+        await queryExecute('DELETE FROM event_registrations WHERE event_id = ?', [id])
+      } catch {
+        // 报名表可能不存在或结构不同，不影响活动删除
+      }
       await queryExecute('DELETE FROM events WHERE id = ?', [id])
       return { success: true }
     } catch (error) {
@@ -901,6 +914,14 @@ export class AdminService {
 
   async deleteProject(id: string) {
     try {
+      try {
+        await queryExecute(
+          `DELETE FROM homepage_items WHERE section IN ('projects', 'financing', 'roadshow') AND item_id = ?`,
+          [String(id)],
+        )
+      } catch {
+        // 首页关联清理失败不阻断项目删除
+      }
       await queryExecute('DELETE FROM project_scores WHERE project_id = ?', [id])
       await queryExecute('DELETE FROM project_score_dimensions WHERE project_id = ?', [id])
       await queryExecute('DELETE FROM projects WHERE id = ?', [id])

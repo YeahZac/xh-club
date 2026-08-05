@@ -1534,6 +1534,7 @@ async function loadDashboard() {
 
 // ===== 首页管理 =====
 let homepageCandidates = {}
+let homepageSectionsData = []
 let homepageSortMode = 'custom'
 const HOMEPAGE_SORT_LABEL = { time_desc: '时间倒序', view_count: '浏览次数', custom: '自定义排序' }
 
@@ -1547,24 +1548,59 @@ async function loadHomepage() {
       return
     }
 
-    const sections = configRes.data.sections || []
+    homepageSectionsData = configRes.data.sections || []
     homepageSortMode = configRes.data.sort_mode || 'custom'
     const sortEl = document.getElementById('homeSortMode')
     if (sortEl) sortEl.value = homepageSortMode
 
     const candidateResults = await Promise.all(
-      sections.map(section => api(`/admin/homepage/candidates/${section.section}`))
+      homepageSectionsData.map(section => api(`/admin/homepage/candidates/${section.section}`))
     )
     homepageCandidates = Object.fromEntries(
-      sections.map((section, index) => [
+      homepageSectionsData.map((section, index) => [
         section.section,
         candidateResults[index].code === 200 ? candidateResults[index].data || [] : [],
       ])
     )
-    container.innerHTML = sections.map(renderHomepageSection).join('')
+    renderAllHomepageSections()
   } catch (error) {
     container.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-2xl p-6 text-red-700">加载失败：${escapeHtml(error.message)}</div>`
   }
+}
+
+function renderAllHomepageSections() {
+  const container = document.getElementById('homepageSections')
+  if (!container) return
+  container.innerHTML = homepageSectionsData.map(renderHomepageSection).join('')
+}
+
+function refreshHomepageSection(sectionKey, preserveSearch = true) {
+  const section = homepageSectionsData.find(s => s.section === sectionKey)
+  const el = document.querySelector(`section[data-home-section="${sectionKey}"]`)
+  if (!section || !el) {
+    renderAllHomepageSections()
+    return
+  }
+  const keyword = preserveSearch ? (document.getElementById(`home-search-${sectionKey}`)?.value || '') : ''
+  const wrap = document.createElement('div')
+  wrap.innerHTML = renderHomepageSection(section)
+  const next = wrap.firstElementChild
+  if (next) el.replaceWith(next)
+  if (preserveSearch && keyword) {
+    const searchEl = document.getElementById(`home-search-${sectionKey}`)
+    if (searchEl) searchEl.value = keyword
+  }
+  const select = document.getElementById(`home-candidate-${sectionKey}`)
+  if (select && homepageCandidates[sectionKey]) {
+    select.innerHTML = '<option value="">选择要加入的内容</option>' +
+      homepageCandidates[sectionKey].map(item =>
+        `<option value="${escapeHtml(item.id)}">${escapeHtml(formatHomepageCandidateLabel(sectionKey, item))}</option>`
+      ).join('')
+  }
+}
+
+function findHomepageSectionByItemId(itemId) {
+  return homepageSectionsData.find(s => (s.items || []).some(i => String(i.id) === String(itemId)))
 }
 
 function formatHomepageCandidateLabel(section, item) {
@@ -1607,7 +1643,7 @@ function renderHomepageSection(section) {
   }).join('')
 
   return `
-    <section class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <section data-home-section="${escapeHtml(section.section)}" class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div class="p-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h3 class="font-bold text-navy-800">${escapeHtml(section.display_name)}</h3>
@@ -1648,8 +1684,9 @@ async function saveHomepageSortMode() {
   const sortMode = document.getElementById('homeSortMode')?.value || 'custom'
   try {
     await api('/admin/homepage/settings', { method: 'PUT', body: { sort_mode: sortMode } })
+    homepageSortMode = sortMode
     toast('排序设置已保存')
-    loadHomepage()
+    renderAllHomepageSections()
   } catch (error) {
     toast(error.message, 'error')
   }
@@ -1681,8 +1718,12 @@ async function saveHomepageSection(section) {
       method: 'PUT',
       body: { item_limit: itemLimit, is_enabled: isEnabled }
     })
+    const sectionData = homepageSectionsData.find(s => s.section === section)
+    if (sectionData) {
+      sectionData.item_limit = itemLimit
+      sectionData.is_enabled = isEnabled
+    }
     toast('模块设置已保存')
-    loadHomepage()
   } catch (error) {
     toast(error.message, 'error')
   }
@@ -1694,29 +1735,47 @@ async function addHomepageItem(section) {
     toast('请先选择内容', 'error')
     return
   }
+  const itemId = select.value
   try {
-    await api('/admin/homepage/items', {
+    const res = await api('/admin/homepage/items', {
       method: 'POST',
-      body: { section, item_id: select.value }
+      body: { section, item_id: itemId }
     })
+    const sectionData = homepageSectionsData.find(s => s.section === section)
+    if (sectionData) {
+      sectionData.items = sectionData.items || []
+      sectionData.items.push({
+        id: res.data?.id,
+        item_id: itemId,
+        sort_order: 0,
+        is_active: 1,
+      })
+    }
     toast('已加入首页')
-    loadHomepage()
+    refreshHomepageSection(section)
   } catch (error) {
     toast(error.message, 'error')
   }
 }
 
 async function saveHomepageItem(id) {
+  const sortOrder = Number(document.getElementById(`home-order-${id}`).value)
+  const isActive = document.getElementById(`home-active-${id}`).checked
   try {
     await api(`/admin/homepage/items/${id}`, {
       method: 'PUT',
       body: {
-        sort_order: Number(document.getElementById(`home-order-${id}`).value),
-        is_active: document.getElementById(`home-active-${id}`).checked,
+        sort_order: sortOrder,
+        is_active: isActive,
       }
     })
+    const sectionData = findHomepageSectionByItemId(id)
+    const item = sectionData?.items?.find(i => String(i.id) === String(id))
+    if (item) {
+      item.sort_order = sortOrder
+      item.is_active = isActive
+    }
     toast('内容设置已保存')
-    loadHomepage()
   } catch (error) {
     toast(error.message, 'error')
   }
@@ -1726,8 +1785,14 @@ async function removeHomepageItem(id) {
   if (!confirm('确认从首页移除此内容？原业务数据不会被删除。')) return
   try {
     await api(`/admin/homepage/items/${id}`, { method: 'DELETE' })
-    toast('已从首页移除')
-    loadHomepage()
+    const sectionData = findHomepageSectionByItemId(id)
+    if (sectionData) {
+      sectionData.items = (sectionData.items || []).filter(i => String(i.id) !== String(id))
+      toast('已从首页移除')
+      refreshHomepageSection(sectionData.section)
+    } else {
+      toast('已从首页移除')
+    }
   } catch (error) {
     toast(error.message, 'error')
   }
@@ -1853,7 +1918,8 @@ async function loadEvents() {
       <td class="px-6 py-4 text-center"><span class="text-xs px-2.5 py-1 rounded-full ${e.status === 'open' ? 'bg-green-100 text-green-700' : e.status === 'full' ? 'bg-yellow-100 text-yellow-700' : e.status === 'draft' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}">${e.status === 'open' ? '报名中' : e.status === 'full' ? '已满' : e.status === 'draft' ? '草稿' : '已结束'}</span></td>
       <td class="px-6 py-4 text-center" onclick="event.stopPropagation()">
         <button onclick="showEventDetail('${escapeHtml(e.id)}')" class="text-xs text-brand-600 hover:underline mr-2">详情</button>
-        <button onclick="showEventRegistrations('${escapeHtml(e.id)}')" class="text-xs text-navy-700 hover:underline">报名名单</button>
+        <button onclick="showEventRegistrations('${escapeHtml(e.id)}')" class="text-xs text-navy-700 hover:underline mr-2">报名名单</button>
+        <button onclick="deleteEvent('${escapeHtml(e.id)}')" class="text-xs text-red-500 hover:underline">删除</button>
       </td>
     </tr>
   `).join('')
@@ -2042,6 +2108,21 @@ async function showEventRegistrations(eventId) {
     `, { wide: true })
   } catch (error) {
     toast(error.message || '加载报名名单失败', 'error')
+  }
+}
+
+async function deleteEvent(id) {
+  if (!confirm('确认删除该活动？删除后不可恢复，相关报名记录也将一并清除。')) return
+  try {
+    const res = await api(`/admin/events/${id}`, { method: 'DELETE' })
+    if (res.code === 200) {
+      toast('活动已删除')
+      loadEvents()
+    } else {
+      toast(res.msg || '删除失败', 'error')
+    }
+  } catch (error) {
+    toast(error.message || '删除失败', 'error')
   }
 }
 
@@ -2278,6 +2359,7 @@ async function loadProjects() {
       <td class="px-6 py-4 text-center">
         <button onclick="openProjectEditPage('${p.id}')" class="px-3 py-1.5 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200">编辑</button>
         ${p.audit_status === 'pending' ? `<button onclick="auditProjectQuick('${p.id}','approved')" class="ml-1 px-3 py-1.5 text-xs rounded-lg bg-green-100 text-green-700">通过</button><button onclick="auditProjectQuick('${p.id}','rejected')" class="ml-1 px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-700">拒绝</button>` : ''}
+        <button onclick="deleteProject('${p.id}')" class="ml-1 px-3 py-1.5 text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100">删除</button>
       </td>
     </tr>`
   }).join('')
@@ -2300,6 +2382,21 @@ async function auditProjectQuick(id, status) {
     loadProjects()
   } else {
     toast(res.msg || '审核失败', 'error')
+  }
+}
+
+async function deleteProject(id) {
+  if (!confirm('确认删除该项目？删除后不可恢复。')) return
+  try {
+    const res = await api(`/admin/projects/${id}`, { method: 'DELETE' })
+    if (res.code === 200) {
+      toast('项目已删除')
+      loadProjects()
+    } else {
+      toast(res.msg || '删除失败', 'error')
+    }
+  } catch (error) {
+    toast(error.message || '删除失败', 'error')
   }
 }
 
@@ -4654,7 +4751,8 @@ async function loadTalents() {
       <td class="px-6 py-4 text-center">
         <button onclick="showTalentModal('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 mr-1">编辑</button>
         ${item.status === 'pending' ? `<button onclick="reviewTalent('${item.id}','approved')" class="px-2.5 py-1 text-xs rounded-lg bg-green-100 text-green-700 hover:bg-green-200 mr-1">通过</button>
-        <button onclick="rejectTalentPrompt('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200">拒绝</button>` : ''}
+        <button onclick="rejectTalentPrompt('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200 mr-1">拒绝</button>` : ''}
+        <button onclick="deleteTalent('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100">删除</button>
       </td>
     </tr>`
   }).join('')
@@ -4817,6 +4915,21 @@ async function rejectTalentPrompt(id) {
   const res = await api(`/admin/talents/${id}/review`, { method: 'POST', body: { status: 'rejected', reject_reason: reason.trim() } })
   if (res.code === 200) { toast('已拒绝'); loadTalents(); }
   else toast(res.msg || '操作失败', 'error')
+}
+
+async function deleteTalent(id) {
+  if (!confirm('确认删除该人才记录？删除后不可恢复。')) return
+  try {
+    const res = await api(`/admin/talents/${id}`, { method: 'DELETE' })
+    if (res.code === 200) {
+      toast('人才记录已删除')
+      loadTalents()
+    } else {
+      toast(res.msg || '删除失败', 'error')
+    }
+  } catch (error) {
+    toast(error.message || '删除失败', 'error')
+  }
 }
 
 // ===== 行业配置 =====

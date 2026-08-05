@@ -787,6 +787,10 @@ export class TalentService {
   }
 
   async adminRemove(id: string) {
+    const existing = await queryOne('SELECT id FROM talent_applications WHERE id = ?', [id])
+    if (!existing) {
+      throw new HttpException('人才申请不存在', HttpStatus.NOT_FOUND)
+    }
     await queryExecute('DELETE FROM talent_applications WHERE id = ?', [id])
     return { success: true }
   }
