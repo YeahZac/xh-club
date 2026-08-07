@@ -91,6 +91,14 @@ async function bootstrap() {
     console.log(`[启动] 静态根目录: ${dir}`)
   }
 
+  try {
+    const { getPublicHttpsBaseUrl } = await import('@/utils/public-base-url')
+    const publicBase = getPublicHttpsBaseUrl()
+    console.log(`[启动] 公网域名: ${publicBase || '(未配置 WEBVIEW_BASE_URL/PROJECT_DOMAIN)'}`)
+  } catch (error: any) {
+    console.warn('[启动] 读取公网域名失败:', error?.message || error)
+  }
+
   // 提供 Admin 管理后台静态页面（异步读取）
   const adminHtmlPath = path.resolve(process.cwd(), 'src/admin-panel/index.html');
   if (fs.existsSync(adminHtmlPath)) {

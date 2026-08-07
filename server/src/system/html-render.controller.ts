@@ -3,6 +3,7 @@ import type { Response } from 'express'
 import { Public } from '@/auth/public.decorator'
 import { queryOne } from '@/storage/database/mysql-client'
 import { UploadService } from '@/upload/upload.service'
+import { rewriteLegacyCloudHostUrls } from '@/utils/public-base-url'
 import { buildWebViewHtmlPageUrl } from '@/utils/webview-url'
 
 const CONFIG_KEYS = new Set(['about_us'])
@@ -118,7 +119,7 @@ export class HtmlRenderController {
     const kind = String(type || '').trim()
     try {
       const { html, title } = await this.loadHtmlSource(kind, key, id)
-      const signed = await this.uploadService.signHtmlMedia(html)
+      const signed = await this.uploadService.signHtmlMedia(rewriteLegacyCloudHostUrls(html))
       const page = ensureHtmlDocument(signed, title)
       res.status(200)
       res.setHeader('Content-Type', 'text/html; charset=utf-8')
@@ -152,7 +153,7 @@ export class HtmlRenderController {
       const url = buildWebViewHtmlPageUrl({ type: kind, key, id })
       if (!url) {
         throw new HttpException(
-          '未配置 WEBVIEW_BASE_URL（云托管已备案 HTTPS 自定义域名），无法生成 web-view 地址',
+          '未配置可用的公网 HTTPS 域名（WEBVIEW_BASE_URL / PROJECT_DOMAIN），无法生成 web-view 地址',
           HttpStatus.SERVICE_UNAVAILABLE,
         )
       }

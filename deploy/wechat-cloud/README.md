@@ -100,13 +100,18 @@ TARO_APP_WX_CLOUD_SERVICE=xh-server
 - 服务名与 `TARO_APP_WX_CLOUD_SERVICE` 一致
 - 公众平台「基础库最低版本」≥ `2.23.0`
 
-### 方式二：使用云托管域名（非 callContainer 场景）
+### 方式二：自定义公网域名（web-view / 管理台 / H5）
 
-- **内网域名**（当前项目 `PROJECT_DOMAIN`）：`http://vfvpilcv.xh-server.rp2kla7i.0y09mxrz.com`  
-  仅云托管内网/微信侧可达，浏览器公网一般无法直接访问。
-- **公网域名**（仅测试/对外 H5）：如 `https://xxx.sh.run.tcloudbase.com`，需在小程序后台配置服务器域名白名单。
+- **当前自定义域名**：`https://xinghegogo.cn`（已绑定服务 `xh-server`）
+- 环境变量请统一配置：
+  - `PROJECT_DOMAIN=https://xinghegogo.cn`
+  - `WEBVIEW_BASE_URL=https://xinghegogo.cn`
+  - `PUBLIC_BASE_URL=https://xinghegogo.cn`
+- **不要再使用**云托管内网域名（如 `*.0y09mxrz.com`）作为 `PROJECT_DOMAIN`：浏览器与小程序 web-view 均无法稳定访问。
+- 小程序 `web-view` 还需在公众平台配置业务域名：`xinghegogo.cn`
+- 业务 API 仍优先走方式一 callContainer；公网域名主要用于完整 H5、管理台、相对路径拼域。
 
-小程序业务请求请优先使用方式一 callContainer，无需也不应依赖公网域名。
+小程序业务请求请优先使用方式一 callContainer。
 
 ---
 

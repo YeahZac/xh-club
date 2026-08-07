@@ -15,8 +15,9 @@
     "JWT_SECRET": "xh-club-jwt-secret-change-in-production",
     "ADMIN_USERNAME": "admin",
     "ADMIN_PASSWORD": "admin123",
-    "PROJECT_DOMAIN": "http://vfvpilcv.xh-server.rp2kla7i.0y09mxrz.com",
+    "PROJECT_DOMAIN": "https://xinghegogo.cn",
     "WEBVIEW_BASE_URL": "https://xinghegogo.cn",
+    "PUBLIC_BASE_URL": "https://xinghegogo.cn",
     "WX_APP_ID": "",
     "WX_APP_SECRET": ""
   },

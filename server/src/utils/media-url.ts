@@ -1,6 +1,4 @@
-function trimTrailingSlash(value: string): string {
-  return value.replace(/\/+$/, '');
-}
+import { getPublicHttpsBaseUrl } from '@/utils/public-base-url'
 
 function buildCosUrl(bucket: string, region: string, key: string): string {
   return `https://${bucket}.cos.${region}.myqcloud.com/${key}`;
@@ -136,10 +134,8 @@ export function normalizeMediaUrl(input: unknown): string {
   }
 
   if (value.startsWith('/')) {
-    const projectDomain = process.env.PROJECT_DOMAIN
-      ? trimTrailingSlash(process.env.PROJECT_DOMAIN)
-      : '';
-    return projectDomain ? `${projectDomain}${value}` : value;
+    const projectDomain = getPublicHttpsBaseUrl()
+    return projectDomain ? `${projectDomain}${value}` : value
   }
 
   // Plain COS key path such as images/xxx.jpg
