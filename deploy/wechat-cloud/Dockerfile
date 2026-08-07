@@ -38,6 +38,9 @@ RUN if [ -f pnpm-lock.yaml ]; then pnpm install --prod --frozen-lockfile; else p
 # 复制构建产物
 COPY --from=builder /app/dist ./dist
 
+# 业务域名校验文件等根路径静态资源
+COPY --from=builder /app/public ./public
+
 # 微信云托管默认监听 80 端口
 ENV PORT=80
 EXPOSE 80

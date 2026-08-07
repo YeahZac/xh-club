@@ -72,6 +72,25 @@ async function bootstrap() {
   // 开启优雅关闭 Hooks
   app.enableShutdownHooks();
 
+  // 微信小程序「业务域名」校验文件：必须能通过 https://域名/xxx.txt 访问
+  const publicDirs = [
+    path.resolve(process.cwd(), 'public'),
+    path.resolve(process.cwd(), 'src/public'),
+    path.resolve(__dirname, '../public'),
+    path.resolve(__dirname, 'public'),
+  ].filter((dir, index, all) => fs.existsSync(dir) && all.indexOf(dir) === index)
+
+  for (const dir of publicDirs) {
+    app.use(express.static(dir, {
+      index: false,
+      fallthrough: true,
+      setHeaders: (res) => {
+        res.setHeader('Cache-Control', 'no-cache')
+      },
+    }))
+    console.log(`[启动] 静态根目录: ${dir}`)
+  }
+
   // 提供 Admin 管理后台静态页面（异步读取）
   const adminHtmlPath = path.resolve(process.cwd(), 'src/admin-panel/index.html');
   if (fs.existsSync(adminHtmlPath)) {

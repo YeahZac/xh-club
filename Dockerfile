@@ -35,9 +35,13 @@ RUN npm install -g pnpm && pnpm install --prod
 # 复制构建产物
 COPY --from=builder /app/dist ./dist
 
+# 业务域名校验文件等根路径静态资源（https://域名/xxx.txt）
+COPY --from=builder /app/public ./public
+
 # 创建 admin-panel 目录并复制（如果存在）
 RUN mkdir -p ./src/admin-panel
-RUN if [ -d "/app/dist/admin-panel" ]; then cp -r /app/dist/admin-panel/* ./src/admin-panel/; fi
+COPY --from=builder /app/src/admin-panel ./src/admin-panel
+RUN if [ -d "/app/dist/admin-panel" ]; then cp -r /app/dist/admin-panel/* ./src/admin-panel/ 2>/dev/null || true; fi
 
 # 微信云托管默认监听 80 端口
 ENV PORT=80
