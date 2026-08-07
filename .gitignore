@@ -45,6 +45,12 @@ pnpm-debug.log*
 # 微信开发者工具本地私有配置
 project.private.config.json
 
+# Cursor / AI 技能与本地审计产物（避免 Git 变更数过多导致开发者工具告警）
+.agents/
+.hallmark/
+.ui-audit/
+skills-lock.json
+
 .cozeproj/reduction
 node-compile-cache/
 .codegraph
