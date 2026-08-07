@@ -481,6 +481,61 @@ export class UploadService {
   }
 
   /**
+   * 将完整 HTML 页面上传到 COS，供小程序 web-view 以公网 HTTPS 打开
+   * （云托管内网域名无法作为 web-view 业务域名）
+   */
+  async uploadHtmlPage(html: string, folder = 'html-pages'): Promise<{
+    url: string
+    canonicalUrl: string
+    reused?: boolean
+  }> {
+    await this.ensureCOSInitialized();
+
+    if (!this.cos || !this.bucket) {
+      throw new Error('云存储未初始化，请确认服务部署在微信云托管环境中');
+    }
+
+    const body = Buffer.from(String(html || ''), 'utf8');
+    if (!body.length) {
+      throw new Error('HTML 内容为空');
+    }
+    const hash = crypto.createHash('md5').update(body).digest('hex');
+    const key = `${folder}/${hash}.html`;
+    const canonicalUrl = this.buildCanonicalUrl(key);
+    const exists = await this.objectExists(key);
+
+    if (!exists) {
+      await new Promise<void>((resolve, reject) => {
+        this.cos!.putObject(
+          {
+            Bucket: this.bucket,
+            Region: this.region,
+            Key: key,
+            Body: body,
+            ContentType: 'text/html; charset=utf-8',
+            ContentDisposition: 'inline',
+            CacheControl: 'public, max-age=300',
+          },
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          },
+        );
+      });
+      this.logger.log(`HTML 页面上传成功: ${key}`);
+    } else {
+      this.logger.log(`HTML 页面已存在，复用: ${key}`);
+    }
+
+    const signedUrl = await this.signMediaUrl(canonicalUrl, 7200);
+    return {
+      url: signedUrl || canonicalUrl,
+      canonicalUrl,
+      reused: exists,
+    };
+  }
+
+  /**
    * 上传文件到微信云托管对象存储（相同内容哈希复用，避免重复占空间）
    */
   async uploadFile(file: Express.Multer.File, folder: string = 'uploads'): Promise<{

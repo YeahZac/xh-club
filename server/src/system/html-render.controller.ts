@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Res } from '@nestjs/common'
+import { Controller, Get, HttpException, HttpStatus, Query, Res } from '@nestjs/common'
 import type { Response } from 'express'
 import { queryOne } from '@/storage/database/mysql-client'
 import { UploadService } from '@/upload/upload.service'
@@ -35,10 +35,75 @@ function ensureHtmlDocument(html: string, title = '星河俱乐部'): string {
 export class HtmlRenderController {
   constructor(private readonly uploadService: UploadService) {}
 
+  private async loadHtmlSource(
+    kind: string,
+    key: string,
+    id: string,
+  ): Promise<{ html: string; title: string }> {
+    let html = ''
+    let title = '星河俱乐部'
+
+    if (kind === 'config') {
+      const configKey = String(key || '').trim()
+      if (!CONFIG_KEYS.has(configKey)) {
+        throw new HttpException('not found', HttpStatus.NOT_FOUND)
+      }
+      const row = await queryOne('SELECT config_value FROM configs WHERE config_key = ?', [configKey])
+      html = String(row?.config_value || '')
+      title = configKey === 'about_us' ? '关于我们' : title
+    } else if (kind === 'article') {
+      const row = await queryOne(
+        'SELECT title, content FROM articles WHERE id = ? AND status = ?',
+        [id, 'published'],
+      )
+      if (!row) throw new HttpException('not found', HttpStatus.NOT_FOUND)
+      html = String(row.content || '')
+      title = String(row.title || title)
+    } else if (kind === 'event') {
+      const row = await queryOne('SELECT title, description, content FROM events WHERE id = ?', [id])
+      if (!row) throw new HttpException('not found', HttpStatus.NOT_FOUND)
+      html = String(row.description || row.content || '')
+      title = String(row.title || title)
+    } else if (kind === 'project') {
+      const row = await queryOne('SELECT title, description FROM projects WHERE id = ?', [id])
+      if (!row) throw new HttpException('not found', HttpStatus.NOT_FOUND)
+      html = String(row.description || '')
+      title = String(row.title || title)
+    } else if (kind === 'business') {
+      const row = await queryOne(
+        'SELECT title, content FROM business_opportunities WHERE id = ?',
+        [id],
+      )
+      if (!row) throw new HttpException('not found', HttpStatus.NOT_FOUND)
+      html = String(row.content || '')
+      title = String(row.title || title)
+    } else if (kind === 'product') {
+      const row = await queryOne(
+        'SELECT name, description FROM mall_products WHERE id = ? AND is_active = 1',
+        [id],
+      )
+      if (!row) throw new HttpException('not found', HttpStatus.NOT_FOUND)
+      html = String(row.description || '')
+      title = String(row.name || title)
+    } else if (kind === 'invitation') {
+      const row = await queryOne(
+        'SELECT title, content FROM invitation_reward_rules WHERE id = ? AND is_active = 1',
+        [id],
+      )
+      if (!row) throw new HttpException('not found', HttpStatus.NOT_FOUND)
+      html = String(row.content || '')
+      title = String(row.title || '邀请规则')
+    } else {
+      throw new HttpException('invalid type', HttpStatus.BAD_REQUEST)
+    }
+
+    return { html, title }
+  }
+
   /**
-   * 公开 HTML 渲染页：供小程序 web-view 打开完整富文本/H5 源码
+   * 公开 HTML 渲染页：供可访问公网域名的 web-view 打开
    * GET /api/system/html-render?type=config&key=about_us
-   * GET /api/system/html-render?type=article&id=1
+   * GET /api/system/html-render?type=event&id=1
    */
   @Get('html-render')
   async renderHtml(
@@ -48,94 +113,54 @@ export class HtmlRenderController {
     @Res() res: Response,
   ) {
     const kind = String(type || '').trim()
-    let html = ''
-    let title = '星河俱乐部'
-
     try {
-      if (kind === 'config') {
-        const configKey = String(key || '').trim()
-        if (!CONFIG_KEYS.has(configKey)) {
-          res.status(404).type('text/plain').send('not found')
-          return
-        }
-        const row = await queryOne('SELECT config_value FROM configs WHERE config_key = ?', [configKey])
-        html = String(row?.config_value || '')
-        title = configKey === 'about_us' ? '关于我们' : title
-      } else if (kind === 'article') {
-        const row = await queryOne(
-          'SELECT title, content FROM articles WHERE id = ? AND status = ?',
-          [id, 'published'],
-        )
-        if (!row) {
-          res.status(404).type('text/plain').send('not found')
-          return
-        }
-        html = String(row.content || '')
-        title = String(row.title || title)
-      } else if (kind === 'event') {
-        const row = await queryOne('SELECT title, description, content FROM events WHERE id = ?', [id])
-        if (!row) {
-          res.status(404).type('text/plain').send('not found')
-          return
-        }
-        html = String(row.description || row.content || '')
-        title = String(row.title || title)
-      } else if (kind === 'project') {
-        const row = await queryOne('SELECT title, description FROM projects WHERE id = ?', [id])
-        if (!row) {
-          res.status(404).type('text/plain').send('not found')
-          return
-        }
-        html = String(row.description || '')
-        title = String(row.title || title)
-      } else if (kind === 'business') {
-        const row = await queryOne(
-          'SELECT title, content FROM business_opportunities WHERE id = ?',
-          [id],
-        )
-        if (!row) {
-          res.status(404).type('text/plain').send('not found')
-          return
-        }
-        html = String(row.content || '')
-        title = String(row.title || title)
-      } else if (kind === 'product') {
-        const row = await queryOne(
-          'SELECT name, description FROM mall_products WHERE id = ? AND is_active = 1',
-          [id],
-        )
-        if (!row) {
-          res.status(404).type('text/plain').send('not found')
-          return
-        }
-        html = String(row.description || '')
-        title = String(row.name || title)
-      } else if (kind === 'invitation') {
-        const row = await queryOne(
-          'SELECT title, content FROM invitation_reward_rules WHERE id = ? AND is_active = 1',
-          [id],
-        )
-        if (!row) {
-          res.status(404).type('text/plain').send('not found')
-          return
-        }
-        html = String(row.content || '')
-        title = String(row.title || '邀请规则')
-      } else {
-        res.status(400).type('text/plain').send('invalid type')
+      const { html, title } = await this.loadHtmlSource(kind, key, id)
+      const signed = await this.uploadService.signHtmlMedia(html)
+      const page = ensureHtmlDocument(signed, title)
+      res.status(200)
+      res.setHeader('Content-Type', 'text/html; charset=utf-8')
+      res.setHeader('Cache-Control', 'public, max-age=60')
+      res.send(page)
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        res.status(error.getStatus()).type('text/plain').send(String(error.message || 'error'))
         return
       }
-    } catch (error) {
       console.error('[html-render] load failed', error)
       res.status(500).type('text/plain').send('error')
-      return
     }
+  }
 
-    const signed = await this.uploadService.signHtmlMedia(html)
-    const page = ensureHtmlDocument(signed, title)
-    res.status(200)
-    res.setHeader('Content-Type', 'text/html; charset=utf-8')
-    res.setHeader('Cache-Control', 'public, max-age=60')
-    res.send(page)
+  /**
+   * 返回可供小程序 web-view 打开的公网 HTTPS 地址（上传 COS）
+   * 微信小程序 web-view 无法走 callContainer / 云托管内网域名
+   * GET /api/system/html-page-url?type=event&id=5
+   */
+  @Get('html-page-url')
+  async htmlPageUrl(
+    @Query('type') type: string,
+    @Query('key') key: string,
+    @Query('id') id: string,
+  ) {
+    const kind = String(type || '').trim()
+    try {
+      const { html, title } = await this.loadHtmlSource(kind, key, id)
+      const signed = await this.uploadService.signHtmlMedia(html)
+      const page = ensureHtmlDocument(signed, title)
+      const uploaded = await this.uploadService.uploadHtmlPage(page, 'html-pages')
+      return {
+        code: 200,
+        msg: 'success',
+        data: {
+          url: uploaded.url,
+          canonical_url: uploaded.canonicalUrl,
+          title,
+        },
+      }
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error
+      console.error('[html-page-url] failed', error)
+      throw new HttpException(error?.message || '生成页面地址失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
   }
 }
