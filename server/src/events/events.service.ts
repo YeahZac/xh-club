@@ -693,16 +693,20 @@ export class EventsService {
     const project = await queryOne('SELECT id, title FROM projects WHERE id = ?', [projectId])
     if (!project) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
 
-    const talents = await this.talentService.listApprovedShareRecipients({
-      excludeMemberId: fromMemberId,
-    })
+    const fromId = String(fromMemberId || '').trim()
+    const { list } = await this.talentService.listApproved({ pageSize: 200 })
 
-    return (talents || []).map((talent: any) => ({
-      member_id: String(talent.member_id),
-      name: talent.real_name || '未命名人才',
-      company_name: talent.company_name || '',
-      job_title: talent.job_title || '',
-    }))
+    return (Array.isArray(list) ? list : [])
+      .filter((talent: any) => {
+        const memberId = String(talent?.member_id || '').trim()
+        return memberId && memberId !== fromId
+      })
+      .map((talent: any) => ({
+        member_id: String(talent.member_id),
+        name: talent.real_name || talent.member_name || '未命名人才',
+        company_name: talent.company_name || '',
+        job_title: talent.job_title || '',
+      }))
   }
 
   /** 分享项目给指定已入驻人才（每人一条可直达详情的通知） */
@@ -722,17 +726,15 @@ export class EventsService {
       throw new HttpException('请至少选择一位入驻人才', HttpStatus.BAD_REQUEST)
     }
 
-    const talents = await this.talentService.listApprovedShareRecipients({
-      excludeMemberId: fromMemberId,
-      memberIds: selectedIds,
-    })
+    const shareable = await this.getShareableTalents(projectId, fromMemberId)
+    const talents = shareable.filter((talent) => selectedIds.includes(talent.member_id))
     if (!talents.length) {
       throw new HttpException('所选人才不可接收分享', HttpStatus.BAD_REQUEST)
     }
 
     const sender = await queryOne('SELECT name FROM members WHERE id = ?', [fromMemberId])
     let sent = 0
-    for (const talent of talents || []) {
+    for (const talent of talents) {
       const receiverId = talent.member_id
       await createNotification({
         memberId: receiverId,
