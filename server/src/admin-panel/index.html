@@ -3464,6 +3464,27 @@ function formatBannerLinkDesc(linkType, lc = {}) {
   return ''
 }
 
+function bannerEventStatusLabel(status) {
+  const map = { draft: '草稿', open: '报名中', full: '已满员', ended: '已结束' }
+  return map[String(status || '')] || String(status || '未知')
+}
+
+function formatBannerEventOptionLabel(event) {
+  const title = String(event?.title || '').trim() || `活动#${event?.id || ''}`
+  const status = bannerEventStatusLabel(event?.status)
+  const start = event?.start_time
+    ? new Date(event.start_time).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : ''
+  return start ? `${title}（${status} · ${start}）` : `${title}（${status}）`
+}
+
+function normalizeBannerListPayload(payload) {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.list)) return payload.list
+  if (Array.isArray(payload?.data)) return payload.data
+  return []
+}
+
 async function loadBannerTitleMaps() {
   const [eventsRes, articlesRes, projectsRes, businessRes, productsRes] = await Promise.all([
     api('/admin/events'),
@@ -3473,13 +3494,19 @@ async function loadBannerTitleMaps() {
     api('/admin/mall-products'),
   ])
   const toMap = (rows, titleKey = 'title') => {
-    const list = Array.isArray(rows) ? rows : (rows?.list || [])
+    const list = normalizeBannerListPayload(rows)
     const map = {}
-    list.forEach(item => { map[String(item.id)] = item[titleKey] || item.name || item.title || '' })
+    list.forEach(item => {
+      if (titleKey === 'event') {
+        map[String(item.id)] = formatBannerEventOptionLabel(item)
+      } else {
+        map[String(item.id)] = item[titleKey] || item.name || item.title || ''
+      }
+    })
     return map
   }
   return {
-    events: eventsRes.code === 200 ? toMap(eventsRes.data) : {},
+    events: eventsRes.code === 200 ? toMap(eventsRes.data, 'event') : {},
     articles: articlesRes.code === 200 ? toMap(articlesRes.data) : {},
     projects: projectsRes.code === 200 ? toMap(projectsRes.data) : {},
     business: businessRes.code === 200 ? toMap(businessRes.data) : {},
@@ -3544,8 +3571,11 @@ async function showBannerModal(editId) {
     banner = (res.data || []).find((item) => String(item.id) === String(editId)) || null
     if (!banner) return toast('Banner 不存在', 'error')
   }
-  const lc = banner?.link_config || {}
+  const lc = typeof banner?.link_config === 'string'
+    ? (() => { try { return JSON.parse(banner.link_config) } catch { return {} } })()
+    : (banner?.link_config || {})
   const linkType = banner?.link_type || 'event'
+  const selectedEventId = lc.event_id || banner?.link_id || ''
   showModal(`
     <div class="p-6" style="max-width:720px">
       <h3 class="text-lg font-bold text-navy-800 mb-6">${editId ? '编辑Banner' : '添加Banner'}</h3>
@@ -3577,13 +3607,17 @@ async function showBannerModal(editId) {
           </div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">排序</label><input id="bnSort" type="number" value="${escapeHtml(banner?.sort_order ?? 1)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         </div>
-        <div id="bnEventField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1">选择活动</label><select id="bnEventId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
-        <div id="bnArticleField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1">选择文章</label><select id="bnArticleId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
-        <div id="bnProjectField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1">选择项目</label><select id="bnProjectId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
-        <div id="bnBusinessField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1" id="bnBusinessLabel">选择商机</label><select id="bnBusinessId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
-        <div id="bnProductField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1">选择商品</label><select id="bnProductId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
-        <div id="bnLinkField" class="hidden"><label class="block text-sm font-medium text-gray-700 mb-1">URL链接</label><input id="bnUrl" value="${escapeHtml(lc.url || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="https://..."></div>
-        <div id="bnMiniappField" class="hidden">
+        <div id="bnEventField" class="${linkType==='event'?'':'hidden'}">
+          <label class="block text-sm font-medium text-gray-700 mb-1">选择活动 <span class="text-red-500">*</span></label>
+          <p class="text-xs text-gray-400 mb-2">选项来自「活动管理」，保存后点击 Banner 将打开对应活动详情。</p>
+          <select id="bnEventId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select>
+        </div>
+        <div id="bnArticleField" class="${linkType==='article'?'':'hidden'}"><label class="block text-sm font-medium text-gray-700 mb-1">选择文章</label><select id="bnArticleId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
+        <div id="bnProjectField" class="${linkType==='project'?'':'hidden'}"><label class="block text-sm font-medium text-gray-700 mb-1">选择项目</label><select id="bnProjectId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
+        <div id="bnBusinessField" class="${(linkType==='financing'||linkType==='roadshow'||linkType==='resource')?'':'hidden'}"><label class="block text-sm font-medium text-gray-700 mb-1" id="bnBusinessLabel">选择商机</label><select id="bnBusinessId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
+        <div id="bnProductField" class="${linkType==='product'?'':'hidden'}"><label class="block text-sm font-medium text-gray-700 mb-1">选择商品</label><select id="bnProductId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
+        <div id="bnLinkField" class="${linkType==='link'?'':'hidden'}"><label class="block text-sm font-medium text-gray-700 mb-1">URL链接</label><input id="bnUrl" value="${escapeHtml(lc.url || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="https://..."></div>
+        <div id="bnMiniappField" class="${linkType==='miniapp'?'':'hidden'}">
           <div class="grid grid-cols-2 gap-4">
             <div><label class="block text-sm font-medium text-gray-700 mb-1">小程序APPID</label><input id="bnAppId" value="${escapeHtml(lc.appid || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="wx..."></div>
             <div><label class="block text-sm font-medium text-gray-700 mb-1">路径</label><input id="bnMiniPath" value="${escapeHtml(lc.path || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="pages/index/index"></div>
@@ -3599,7 +3633,7 @@ async function showBannerModal(editId) {
   syncExistingMediaTask('bnImage', '已上传封面')
   toggleBannerLinkFields()
   await Promise.all([
-    loadBannerEventOptions(lc.event_id || ''),
+    loadBannerEventOptions(selectedEventId),
     loadBannerArticleOptions(lc.article_id || ''),
     loadBannerProjectOptions(lc.project_id || ''),
     loadBannerBusinessOptions(linkType, lc.business_id || ''),
@@ -3626,6 +3660,10 @@ function toggleBannerLinkFields() {
   if (label) {
     label.textContent = type === 'financing' ? '选择融资招募' : type === 'roadshow' ? '选择项目路演' : type === 'resource' ? '选择资源对接' : '选择商机'
   }
+  if (type === 'event') {
+    const current = document.getElementById('bnEventId')?.value || ''
+    void loadBannerEventOptions(current)
+  }
   if (type === 'financing' || type === 'roadshow' || type === 'resource') {
     loadBannerBusinessOptions(type)
   }
@@ -3634,7 +3672,7 @@ function toggleBannerLinkFields() {
 async function loadBannerArticleOptions(selectedId = '') {
   const res = await api('/admin/articles?limit=200')
   if (res.code !== 200) return
-  const articles = res.data?.list || res.data || []
+  const articles = normalizeBannerListPayload(res.data)
   const sel = document.getElementById('bnArticleId')
   if (!sel) return
   sel.innerHTML = '<option value="">请选择文章</option>' + articles.map(a =>
@@ -3643,14 +3681,40 @@ async function loadBannerArticleOptions(selectedId = '') {
 }
 
 async function loadBannerEventOptions(selectedId = '') {
-  const res = await api('/admin/events')
-  if (res.code !== 200) return
-  const events = Array.isArray(res.data) ? res.data : (res.data?.list || [])
   const sel = document.getElementById('bnEventId')
   if (!sel) return
-  sel.innerHTML = '<option value="">请选择活动</option>' + events.map(e =>
-    `<option value="${e.id}" ${String(e.id) === String(selectedId) ? 'selected' : ''}>${escapeHtml(e.title)}</option>`
-  ).join('')
+  sel.innerHTML = '<option value="">加载活动列表...</option>'
+  try {
+    const res = await api('/admin/events')
+    if (res.code !== 200) {
+      sel.innerHTML = '<option value="">活动列表加载失败</option>'
+      return
+    }
+    const events = normalizeBannerListPayload(res.data)
+      .slice()
+      .sort((a, b) => {
+        const order = { open: 0, full: 1, draft: 2, ended: 3 }
+        const ao = order[String(a.status)] ?? 9
+        const bo = order[String(b.status)] ?? 9
+        if (ao !== bo) return ao - bo
+        return String(b.start_time || '').localeCompare(String(a.start_time || ''))
+      })
+    if (!events.length) {
+      sel.innerHTML = '<option value="">暂无活动，请先在「活动管理」中创建</option>'
+      return
+    }
+    const selected = String(selectedId || '')
+    const hasSelected = events.some((e) => String(e.id) === selected)
+    sel.innerHTML = '<option value="">请选择活动管理中的活动</option>' + events.map((e) =>
+      `<option value="${escapeHtml(String(e.id))}" ${String(e.id) === selected ? 'selected' : ''}>${escapeHtml(formatBannerEventOptionLabel(e))}</option>`
+    ).join('')
+    if (selected && !hasSelected) {
+      sel.innerHTML += `<option value="${escapeHtml(selected)}" selected>已关联活动#${escapeHtml(selected)}（当前列表中未找到）</option>`
+    }
+  } catch (error) {
+    console.error('[Banner] load events failed', error)
+    sel.innerHTML = '<option value="">活动列表加载失败，请刷新重试</option>'
+  }
 }
 
 async function loadBannerProjectOptions(selectedId = '') {
