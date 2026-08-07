@@ -26,6 +26,17 @@ function normalizeProjectUrlList(value: unknown): string[] {
     .filter((url) => isCloudStorageUrl(url))
 }
 
+const DEFAULT_PROJECT_SCORE_DIMENSIONS = ['项目吸引力', '项目门槛', '变现能力'] as const
+
+function isFullHtmlProjectBody(html?: string | null): boolean {
+  const value = String(html || '').trim()
+  if (!value) return false
+  if (/<!DOCTYPE\s+html/i.test(value) || /<html[\s>]/i.test(value)) return true
+  if (/<style[\s>]/i.test(value) && /<\/style>/i.test(value) && value.length > 600) return true
+  if (/<head[\s>]/i.test(value) && /<body[\s>]/i.test(value)) return true
+  return false
+}
+
 @Injectable()
 export class EventsService {
   constructor(
@@ -77,7 +88,11 @@ export class EventsService {
       .range(from, to)
 
     if (params.event_type) query = query.eq('event_type', params.event_type)
-    if (params.status) query = query.eq('status', params.status)
+    if (params.status) {
+      query = query.eq('status', params.status)
+    } else {
+      query = query.neq('status', 'draft')
+    }
 
     const { data, error, count } = await query
     if (error) throw new HttpException(`查询失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
@@ -122,6 +137,9 @@ export class EventsService {
       .single()
 
     if (error || !data) throw new HttpException('活动不存在', HttpStatus.NOT_FOUND)
+    if (String(data.status) === 'draft') {
+      throw new HttpException('活动不存在', HttpStatus.NOT_FOUND)
+    }
 
     try {
       await queryExecute(
@@ -467,6 +485,30 @@ export class EventsService {
     }
   }
 
+  /** H5 富文本项目若未配置评分维度，自动补齐默认三项 */
+  private async ensureDefaultProjectScoreDimensions(
+    projectId: string | number,
+    projectRow: Record<string, any>,
+  ) {
+    const body = [projectRow?.description, projectRow?.content]
+      .map((v) => String(v || '').trim())
+      .find((v) => v && v !== '<p><br></p>')
+    if (!isFullHtmlProjectBody(body)) return
+
+    const existing = await queryRows(
+      'SELECT id FROM project_score_dimensions WHERE project_id = ? LIMIT 1',
+      [projectId],
+    )
+    if (existing.length) return
+
+    for (let i = 0; i < DEFAULT_PROJECT_SCORE_DIMENSIONS.length; i += 1) {
+      await queryExecute(
+        `INSERT INTO project_score_dimensions (project_id, name, sort_order) VALUES (?, ?, ?)`,
+        [projectId, DEFAULT_PROJECT_SCORE_DIMENSIONS[i], i],
+      )
+    }
+  }
+
   /** 获取项目详情（含评分维度） */
   async getProjectById(id: string, memberId?: string | number) {
     const data = await queryOne('SELECT * FROM projects WHERE id = ?', [id])
@@ -477,6 +519,8 @@ export class EventsService {
     if (auditStatus !== 'approved' && !isOwner) {
       throw new HttpException('项目不存在或未通过审核', HttpStatus.NOT_FOUND)
     }
+
+    await this.ensureDefaultProjectScoreDimensions(id, data as any)
 
     if (auditStatus === 'approved') {
       try {
