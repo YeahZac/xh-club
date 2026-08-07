@@ -258,7 +258,27 @@ export class EventsService {
 
     if (error) throw new HttpException(`报名失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
 
-    const nextCount = currentParticipants + 1
+    // 并发报名兜底：插入后再核验名额，超员则回滚本条
+    if (Number.isFinite(max) && max > 0) {
+      const afterRow = await queryOne(
+        'SELECT COUNT(*) AS total FROM event_registrations WHERE event_id = ?',
+        [eventId],
+      )
+      const afterCount = Number(afterRow?.total || 0)
+      if (afterCount > max) {
+        await queryExecute(
+          'DELETE FROM event_registrations WHERE event_id = ? AND member_id = ?',
+          [eventId, memberId],
+        )
+        throw new HttpException('已满员', HttpStatus.BAD_REQUEST)
+      }
+    }
+
+    const recount = await queryOne(
+      'SELECT COUNT(*) AS total FROM event_registrations WHERE event_id = ?',
+      [eventId],
+    )
+    const nextCount = Number(recount?.total || currentParticipants + 1)
     const nextStatus = resolveEventStatus({
       ...event,
       status: 'open',

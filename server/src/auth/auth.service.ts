@@ -74,8 +74,23 @@ export class AuthService {
 
       if (existing) {
         const memberId = (existing as any).id
-        const updates: string[] = ['updated_at = NOW()', 'phone = ?']
-        const params: any[] = [phone]
+        const existingPhone = String((existing as any).phone || '').trim()
+        if (existingPhone && existingPhone !== phone) {
+          const phoneOwner = await queryOne(
+            'SELECT id FROM members WHERE phone = ? AND id <> ?',
+            [phone, memberId],
+          )
+          if (phoneOwner) {
+            throw new HttpException('该手机号已绑定其他会员账号', HttpStatus.CONFLICT)
+          }
+        }
+
+        const updates: string[] = ['updated_at = NOW()']
+        const params: any[] = []
+        if (!existingPhone || existingPhone !== phone) {
+          updates.push('phone = ?')
+          params.push(phone)
+        }
 
         if (safeName && !(existing as any).name) {
           updates.push('name = ?')
@@ -92,9 +107,13 @@ export class AuthService {
         return this.buildLoginResult(memberId, openid, { isNewMember: false, canBindInvite: false })
       }
 
-      // 若手机号已被旧账号占用，优先绑定到当前 openid
+      // 若手机号已被旧账号占用：仅在对方未绑定微信时合并；已绑定其他微信则拒绝，避免账号接管
       const byPhone = await queryOne('SELECT id, wx_openid FROM members WHERE phone = ?', [phone])
       if (byPhone) {
+        const boundOpenid = String((byPhone as any).wx_openid || '').trim()
+        if (boundOpenid && boundOpenid !== openid) {
+          throw new HttpException('该手机号已绑定其他微信账号', HttpStatus.CONFLICT)
+        }
         const memberId = (byPhone as any).id
         await queryExecute(
           `UPDATE members SET wx_openid = ?, name = COALESCE(NULLIF(name, ''), ?),

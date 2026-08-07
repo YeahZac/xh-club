@@ -158,11 +158,12 @@ export class DealApplicationsService {
     )
     if (!owner) throw new HttpException('项目负责人不存在', HttpStatus.BAD_REQUEST)
 
+    // 会员侧创建时强制未成交，需负责人确认后再更新成交状态
     const result = await queryExecute(
       `INSERT INTO project_deal_applications
         (member_id, owner_member_id, business_id, project_name, deal_time, contract_amount, commission_rate,
          contact_name, deal_status, is_deal, image_urls, cooperation_description, audit_status, payment_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'unpaid')`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'connecting', 0, ?, ?, 'pending', 'unpaid')`,
       [
         memberId,
         payload.ownerMemberId,
@@ -172,8 +173,6 @@ export class DealApplicationsService {
         payload.contractAmount,
         payload.commissionRate,
         payload.contactName,
-        payload.dealStatus,
-        payload.isDeal,
         JSON.stringify(payload.images),
         payload.cooperationDescription,
       ],
@@ -226,6 +225,9 @@ export class DealApplicationsService {
     if (!project) throw new HttpException('所选项目不存在', HttpStatus.BAD_REQUEST)
 
     if (ownerChanged) {
+      if (String(payload.ownerMemberId) === String(memberId)) {
+        throw new HttpException('项目负责人不能是自己', HttpStatus.BAD_REQUEST)
+      }
       const owner = await queryOne(
         `SELECT id FROM members WHERE id = ? AND ${this.ownerMemberStatusSql}`,
         [payload.ownerMemberId],
@@ -233,6 +235,9 @@ export class DealApplicationsService {
       if (!owner) throw new HttpException('项目负责人不存在', HttpStatus.BAD_REQUEST)
     }
     const nextConfirm = canResubmit ? 'pending' : existing.audit_status
+    // 待确认或重新提交时不允许直接标记成交
+    const nextDealStatus = canResubmit ? 'connecting' : payload.dealStatus
+    const nextIsDeal = canResubmit ? 0 : payload.isDeal
     await queryExecute(
       `UPDATE project_deal_applications SET
          business_id = ?, owner_member_id = ?, project_name = ?, deal_time = ?, contract_amount = ?,
@@ -248,8 +253,8 @@ export class DealApplicationsService {
         payload.contractAmount,
         payload.commissionRate,
         payload.contactName,
-        payload.dealStatus,
-        payload.isDeal,
+        nextDealStatus,
+        nextIsDeal,
         JSON.stringify(payload.images),
         payload.cooperationDescription,
         nextConfirm,
@@ -515,6 +520,7 @@ export class DealApplicationsService {
       throw new HttpException('项目成交后才能标记为已打款', HttpStatus.BAD_REQUEST)
     }
 
+    const wasDeal = Number(existing.is_deal) === 1 || existing.deal_status === 'completed'
     await queryExecute(
       `UPDATE project_deal_applications SET
          business_id = ?, owner_member_id = ?, project_name = ?, deal_time = ?, contract_amount = ?,
@@ -541,6 +547,22 @@ export class DealApplicationsService {
         id,
       ],
     )
+
+    if (!wasDeal && payload.isDeal && confirm === 'approved') {
+      void this.pointsEngine
+        .evaluate(existing.member_id, 'deal_complete', {
+          referenceType: 'deal_application',
+          referenceId: id,
+          description: '项目成交奖励积分',
+        })
+        .catch((err) => console.warn('[DealApplications] admin points evaluate failed', err))
+      void this.invitationEngine
+        .grantConditionRewards(existing.member_id, 'invitee_deal', {
+          description: '推荐会员完成项目成交',
+          referenceId: id,
+        })
+        .catch((err) => console.warn('[DealApplications] admin invite reward failed', err))
+    }
 
     await createNotification({
       memberId: existing.member_id,

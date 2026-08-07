@@ -227,17 +227,25 @@ export class PointsEngineService {
     if (!rule.repeatable && totalGranted >= 1) return null
     if (Number(rule.total_limit) > 0 && totalGranted >= Number(rule.total_limit)) return null
 
-    if (Number(rule.daily_limit) > 0) {
+    const actionType = String(rule.action_type || '')
+    // 每日登录/签到：metric 恒为 1，不能用 lifetime floor(metric/threshold)，否则终身只能发一次
+    const isDailyPresence = actionType === 'daily_login' || actionType === 'daily_checkin'
+    const dailyCap = isDailyPresence
+      ? (Number(rule.daily_limit) > 0 ? Number(rule.daily_limit) : 1)
+      : (Number(rule.daily_limit) > 0 ? Number(rule.daily_limit) : 0)
+
+    if (dailyCap > 0) {
       const daily = await queryOne<RowDataPacket>(
         `SELECT COUNT(*) AS cnt FROM points_grants
          WHERE member_id = ? AND rule_id = ? AND DATE(created_at) = CURDATE()`,
         [memberId, rule.id],
       )
-      if (Number(daily?.cnt || 0) >= Number(rule.daily_limit)) return null
+      if (Number(daily?.cnt || 0) >= dailyCap) return null
     }
 
     // 可重复：按「每达到 threshold 倍数」发放，已发次数不能超过 floor(metric/threshold)
-    if (rule.repeatable) {
+    // 每日类动作改由 dailyCap 约束，跳过 lifetime metric 上限
+    if (rule.repeatable && !isDailyPresence) {
       const allowedTimes = Math.floor(metric / threshold)
       if (totalGranted >= allowedTimes) return null
     }

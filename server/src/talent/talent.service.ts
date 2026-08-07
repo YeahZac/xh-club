@@ -787,9 +787,26 @@ export class TalentService {
   }
 
   async adminRemove(id: string) {
-    const existing = await queryOne('SELECT id FROM talent_applications WHERE id = ?', [id])
+    const existing = await queryOne(
+      'SELECT id, status, update_status FROM talent_applications WHERE id = ?',
+      [id],
+    )
     if (!existing) {
       throw new HttpException('人才申请不存在', HttpStatus.NOT_FOUND)
+    }
+    // 已入驻人才若仅有「资料更新待审」，删除应清掉待审资料，而不是整行硬删导致公开展示消失
+    if (
+      String(existing.status) === 'approved'
+      && String(existing.update_status || '').trim()
+    ) {
+      await queryExecute(
+        `UPDATE talent_applications SET
+           pending_data = NULL, update_status = NULL, update_reject_reason = NULL,
+           updated_at = NOW()
+         WHERE id = ?`,
+        [id],
+      )
+      return { success: true, cleared_pending_update: true }
     }
     await queryExecute('DELETE FROM talent_applications WHERE id = ?', [id])
     return { success: true }

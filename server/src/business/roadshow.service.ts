@@ -337,9 +337,20 @@ export class RoadshowService {
     return this.getAdminDetail(businessId)
   }
 
-  async register(businessId: string, memberId: string | number, formAnswers?: Record<string, unknown>) {
+  async register(
+    businessId: string,
+    memberId: string | number,
+    formAnswers?: Record<string, unknown>,
+    options?: { skipPublishCheck?: boolean; skipDeadlineCheck?: boolean; skipPoints?: boolean },
+  ) {
     const business = await this.getBusinessOrThrow(businessId)
-    if (!this.isBeforeEnd(business.end_time)) {
+    const audit = String(business.audit_status || 'approved')
+    const isPublished =
+      business.status === 'published' && (audit === 'approved' || !business.audit_status)
+    if (!options?.skipPublishCheck && !isPublished) {
+      throw new HttpException('路演未发布或未通过审核，暂不可报名', HttpStatus.BAD_REQUEST)
+    }
+    if (!options?.skipDeadlineCheck && !this.isBeforeEnd(business.end_time)) {
       throw new HttpException('报名已截止', HttpStatus.BAD_REQUEST)
     }
 
@@ -377,13 +388,15 @@ export class RoadshowService {
       result: 'approved',
     })
 
-    void this.pointsEngine
-      .evaluate(memberId, 'attend_roadshow', {
-        referenceType: 'roadshow',
-        referenceId: businessId,
-        description: '参加项目路演奖励积分',
-      })
-      .catch((err) => this.logger.warn(`[RoadshowService] points evaluate failed: ${err}`))
+    if (!options?.skipPoints) {
+      void this.pointsEngine
+        .evaluate(memberId, 'attend_roadshow', {
+          referenceType: 'roadshow',
+          referenceId: businessId,
+          description: '参加项目路演奖励积分',
+        })
+        .catch((err) => this.logger.warn(`[RoadshowService] points evaluate failed: ${err}`))
+    }
 
     return { id: result.insertId, success: true }
   }
@@ -488,7 +501,11 @@ export class RoadshowService {
     if (!memberId) throw new HttpException('请选择会员', HttpStatus.BAD_REQUEST)
     const member = await queryOne('SELECT id, name FROM members WHERE id = ?', [memberId])
     if (!member) throw new HttpException('会员不存在', HttpStatus.NOT_FOUND)
-    return this.register(businessId, memberId, dto.form_answers || {})
+    return this.register(businessId, memberId, dto.form_answers || {}, {
+      skipPublishCheck: true,
+      skipDeadlineCheck: true,
+      skipPoints: true,
+    })
   }
 
   async getScoreSummary(businessId: string) {

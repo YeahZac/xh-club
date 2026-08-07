@@ -559,7 +559,9 @@ export class AdminService {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [dto.title, dto.description || null, coverImage, videoUrl, dto.event_type || 'salon',
          status, dto.start_time || null, dto.end_time || null,
-         dto.location || null, dto.address || null, dto.max_participants || 100, dto.fee || 0,
+         dto.location || null, dto.address || null,
+         dto.max_participants == null ? 100 : Number(dto.max_participants) || 0,
+         dto.fee || 0,
          formFieldsJson]
       )
       const insertedId = result.insertId
@@ -596,7 +598,12 @@ export class AdminService {
       if (dto.end_time !== undefined) assign('end_time', dto.end_time || null)
       if (dto.location !== undefined) assign('location', dto.location || null)
       if (dto.address !== undefined) assign('address', dto.address || null)
-      if (dto.max_participants !== undefined) assign('max_participants', dto.max_participants || 100)
+      if (dto.max_participants !== undefined) {
+        assign(
+          'max_participants',
+          dto.max_participants == null ? 100 : Number(dto.max_participants) || 0,
+        )
+      }
       if (dto.fee !== undefined) assign('fee', dto.fee || 0)
       if (dto.form_fields !== undefined) {
         const formFieldsJson =

@@ -64,6 +64,12 @@ export class BusinessService {
     }
   }
 
+  private isRoadshowRegisterable(endTime?: string | Date | null) {
+    if (!endTime) return true
+    const end = new Date(endTime)
+    return !Number.isNaN(end.getTime()) && Date.now() <= end.getTime()
+  }
+
   private async notifyMember(
     memberId: string | number | null | undefined,
     payload: {
@@ -155,9 +161,18 @@ export class BusinessService {
         ...item,
         is_registered:
           item.category === 'roadshow' ? registeredIds.has(String(item.id)) : false,
+        can_register:
+          item.category === 'roadshow'
+            ? !registeredIds.has(String(item.id)) && this.isRoadshowRegisterable(item.end_time)
+            : false,
       }))
     } else {
-      list = list.map((item: any) => ({ ...item, is_registered: false }))
+      list = list.map((item: any) => ({
+        ...item,
+        is_registered: false,
+        can_register:
+          item.category === 'roadshow' ? this.isRoadshowRegisterable(item.end_time) : false,
+      }))
     }
 
     return {

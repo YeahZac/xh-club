@@ -127,6 +127,9 @@ export class MembersService {
     if (error || !data) throw new HttpException('用户不存在', HttpStatus.NOT_FOUND)
     const passwordValid = await bcrypt.compare(password, data.password_hash)
     if (!passwordValid) throw new HttpException('手机号或密码错误', HttpStatus.UNAUTHORIZED)
+    if (String(data.status || '') !== 'active') {
+      throw new HttpException('账号未激活或已停用，暂不可登录', HttpStatus.FORBIDDEN)
+    }
 
     const token = signAuthToken({ sub: String(data.id), type: 'member' })
 
