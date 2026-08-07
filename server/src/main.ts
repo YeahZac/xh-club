@@ -2,10 +2,12 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from '@/app.module';
 import * as express from 'express';
 import { HttpStatusInterceptor } from '@/interceptors/http-status.interceptor';
 import { initMySQL } from '@/storage/database/mysql-client';
+import { WECHAT_DOMAIN_VERIFY_FILES } from '@/wechat-domain-verify';
 
 // 兼容从 server/ 或仓库根目录启动：优先加载项目根 .env
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
@@ -37,6 +39,32 @@ function parsePort(): number {
   return 3000;
 }
 
+function resolvePublicDirs(): string[] {
+  return [
+    path.resolve(process.cwd(), 'public'),
+    path.resolve(process.cwd(), 'src/public'),
+    path.resolve(__dirname, '../public'),
+    path.resolve(__dirname, '../../public'),
+    path.resolve(__dirname, 'public'),
+  ].filter((dir, index, all) => fs.existsSync(dir) && all.indexOf(dir) === index)
+}
+
+function readDomainVerifyBody(fileName: string, publicDirs: string[]): string | null {
+  for (const dir of publicDirs) {
+    const fullPath = path.join(dir, fileName)
+    if (!fs.existsSync(fullPath)) continue
+    try {
+      return fs.readFileSync(fullPath, 'utf8').replace(/^\uFEFF/, '').trim()
+    } catch {
+      /* ignore */
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(WECHAT_DOMAIN_VERIFY_FILES, fileName)) {
+    return WECHAT_DOMAIN_VERIFY_FILES[fileName]
+  }
+  return null
+}
+
 async function bootstrap() {
   console.log('[启动] 开始初始化...');
   
@@ -49,9 +77,43 @@ async function bootstrap() {
   }
 
   console.log('[启动] 创建 NestJS 应用...');
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
+
+  const publicDirs = resolvePublicDirs()
+  const expressApp = app.getHttpAdapter().getInstance() as express.Express
+
+  // 必须挂在 Nest 路由之前：微信业务域名校验要求根路径 /xxx.txt 返回纯文本
+  expressApp.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      next()
+      return
+    }
+    const match = String(req.path || '').match(/^\/([A-Za-z0-9_-]+\.txt)$/)
+    if (!match) {
+      next()
+      return
+    }
+    const body = readDomainVerifyBody(match[1], publicDirs)
+    if (body == null) {
+      next()
+      return
+    }
+    res.status(200)
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+    res.setHeader('Cache-Control', 'no-store')
+    if (req.method === 'HEAD') {
+      res.end()
+      return
+    }
+    res.send(body)
+  })
+  console.log(
+    `[启动] 业务域名校验: /7NSG7VLDwr.txt -> ${
+      readDomainVerifyBody('7NSG7VLDwr.txt', publicDirs) ? 'ready' : 'missing'
+    }`,
+  )
 
   // CORS 配置
   app.enableCors({
@@ -72,22 +134,11 @@ async function bootstrap() {
   // 开启优雅关闭 Hooks
   app.enableShutdownHooks();
 
-  // 微信小程序「业务域名」校验文件：必须能通过 https://域名/xxx.txt 访问
-  const publicDirs = [
-    path.resolve(process.cwd(), 'public'),
-    path.resolve(process.cwd(), 'src/public'),
-    path.resolve(__dirname, '../public'),
-    path.resolve(__dirname, 'public'),
-  ].filter((dir, index, all) => fs.existsSync(dir) && all.indexOf(dir) === index)
-
   for (const dir of publicDirs) {
-    app.use(express.static(dir, {
+    app.useStaticAssets(dir, {
       index: false,
-      fallthrough: true,
-      setHeaders: (res) => {
-        res.setHeader('Cache-Control', 'no-cache')
-      },
-    }))
+      prefix: '/',
+    })
     console.log(`[启动] 静态根目录: ${dir}`)
   }
 
