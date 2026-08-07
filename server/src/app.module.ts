@@ -20,6 +20,7 @@ import { InvitationModule } from './invitation/invitation.module'
 import { PointsModule } from './points/points.module'
 import { DealApplicationsModule } from './deal-applications/deal-applications.module'
 import { SearchModule } from './search/search.module'
+import { FeedbackModule } from './feedback/feedback.module'
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { SearchModule } from './search/search.module'
     PointsModule,
     DealApplicationsModule,
     SearchModule,
+    FeedbackModule,
   ],
   controllers: [AppController],
   providers: [AppService],

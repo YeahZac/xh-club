@@ -5,6 +5,7 @@ import * as bcrypt from 'bcryptjs'
 import { signAuthToken } from '@/auth/jwt'
 import { UploadService } from '@/upload/upload.service'
 import { canonicalizeCloudStorageUrl } from '@/utils/media-url'
+import { normalizeUserCategory, userCategoryLabel } from '@/common/user-category'
 
 @Injectable()
 export class MembersService {
@@ -45,7 +46,15 @@ export class MembersService {
       password_hash?: string
       wx_openid?: string
     }
-    return safe as Omit<T, 'password_hash' | 'wx_openid'>
+    const category = normalizeUserCategory((safe as any).user_category)
+    return {
+      ...safe,
+      user_category: category,
+      user_category_label: userCategoryLabel(category),
+    } as Omit<T, 'password_hash' | 'wx_openid'> & {
+      user_category: string
+      user_category_label: string
+    }
   }
 
   /** 会员注册 */
@@ -83,6 +92,7 @@ export class MembersService {
       wechat_id: dto.wechat_id || null,
       bio: dto.bio || null,
       member_type: dto.member_type || 'unpaid',
+      user_category: 'normal',
       membership_level: 'normal',
       credit_score: 60,
       active_score: 0,

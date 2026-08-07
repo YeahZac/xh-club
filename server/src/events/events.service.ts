@@ -14,6 +14,11 @@ import { InvitationEngineService } from '@/invitation/invitation-engine.service'
 import { createNotification } from '@/common/notify'
 import { TalentService } from '@/talent/talent.service'
 import { resolveEventStatus } from '@/common/event-status'
+import {
+  normalizePromoCoopMode,
+  promoCoopModeLabel,
+} from '@/common/project-promo'
+import { userCategoryLabel, normalizeUserCategory } from '@/common/user-category'
 
 function normalizeProjectUrlList(value: unknown): string[] {
   return parseJsonUrlList(value)
@@ -514,6 +519,22 @@ export class EventsService {
     const fileUrls = await this.uploadService.signMediaUrls(
       normalizeProjectUrlList((data as any).file_urls),
     )
+
+    let ownerMemberId = (data as any).submitter_id || null
+    let ownerName: string | null = null
+    let ownerUserCategory: string | null = null
+    if (ownerMemberId) {
+      const owner = await queryOne(
+        'SELECT id, name, user_category FROM members WHERE id = ?',
+        [ownerMemberId],
+      )
+      if (owner) {
+        ownerName = owner.name || null
+        ownerUserCategory = normalizeUserCategory(owner.user_category)
+      }
+    }
+
+    const promoMode = normalizePromoCoopMode((data as any).promo_coop_mode)
     return {
       ...signed,
       gallery_images: galleryImages,
@@ -525,6 +546,23 @@ export class EventsService {
       avg_score: Number(data.avg_score || 0),
       score_count: Number(data.score_count || 0),
       score_dimensions: dimensions || [],
+      submitter_id: ownerMemberId,
+      owner_member_id: ownerMemberId,
+      owner_name: ownerName,
+      owner_user_category: ownerUserCategory,
+      owner_user_category_label: ownerUserCategory ? userCategoryLabel(ownerUserCategory) : null,
+      promo_coop_mode: promoMode,
+      promo_coop_mode_label: promoMode ? promoCoopModeLabel(promoMode) : null,
+      promo_commission_rate:
+        (data as any).promo_commission_rate != null
+          ? Number((data as any).promo_commission_rate)
+          : null,
+      promo_amount_wan:
+        (data as any).promo_amount_wan != null
+          ? Number((data as any).promo_amount_wan)
+          : null,
+      promo_remark: (data as any).promo_remark || null,
+      promo_share_count: Number((data as any).promo_share_count || 0),
       member_state: {
         has_scored: hasScored,
         can_score: !hasScored && (dimensions || []).length > 0,
@@ -667,6 +705,17 @@ export class EventsService {
       sent += 1
     }
 
+    if (sent > 0) {
+      try {
+        await queryExecute(
+          'UPDATE projects SET promo_share_count = IFNULL(promo_share_count, 0) + ?, updated_at = NOW() WHERE id = ?',
+          [sent, projectId],
+        )
+      } catch (error) {
+        console.warn('[EventsService] increment promo_share_count failed:', error)
+      }
+    }
+
     return { success: true, count: sent }
   }
 
@@ -684,8 +733,9 @@ export class EventsService {
     const result = await queryExecute(
       `INSERT INTO projects
          (title, description, cover_image, video_url, gallery_images, file_urls, industry, stage, amount_max, status,
-          audit_status, submitter_id, view_count, avg_score, score_count)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 'pending', ?, 0, 0, 0)`,
+          audit_status, submitter_id, view_count, avg_score, score_count,
+          promo_coop_mode, promo_commission_rate, promo_amount_wan, promo_remark, promo_share_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 'pending', ?, 0, 0, 0, ?, ?, ?, ?, 0)`,
       [
         String(dto.title).trim(),
         dto.description || null,
@@ -697,6 +747,14 @@ export class EventsService {
         dto.stage || 'seed',
         dto.amount_max || null,
         memberId,
+        normalizePromoCoopMode(dto.promo_coop_mode),
+        dto.promo_commission_rate != null && dto.promo_commission_rate !== ''
+          ? Number(dto.promo_commission_rate)
+          : null,
+        dto.promo_amount_wan != null && dto.promo_amount_wan !== ''
+          ? Number(dto.promo_amount_wan)
+          : null,
+        dto.promo_remark != null ? String(dto.promo_remark || '').trim() || null : null,
       ],
     )
     const project = await queryOne('SELECT * FROM projects WHERE id = ?', [result.insertId])

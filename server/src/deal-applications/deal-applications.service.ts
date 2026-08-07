@@ -128,7 +128,7 @@ export class DealApplicationsService {
       values.push(like, like, like)
     }
     const rows = await queryRows(
-      `SELECT id, name, avatar, phone, company_name, company_position
+      `SELECT id, name, avatar, phone, company_name, company_position, user_category
        FROM members
        WHERE ${where}
        ORDER BY updated_at DESC, id DESC
@@ -142,6 +142,13 @@ export class DealApplicationsService {
       phone: row.phone ? String(row.phone).replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : null,
       company_name: row.company_name,
       company_position: row.company_position,
+      user_category: row.user_category || 'normal',
+      user_category_label:
+        row.user_category === 'promoter'
+          ? '推广员'
+          : row.user_category === 'member_unit'
+            ? '会员单位'
+            : '普通用户',
     }))
   }
 

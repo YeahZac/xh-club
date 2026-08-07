@@ -1147,6 +1147,15 @@ export class AdminController {
     return { code: 200, msg: '已拒绝', data: result }
   }
 
+  @Put('members/:id/user-category')
+  async updateMemberUserCategory(
+    @Param('id') id: string,
+    @Body() body: { user_category: string },
+  ) {
+    const result = await this.adminService.updateMemberUserCategory(id, body?.user_category)
+    return { code: 200, msg: '用户类型已更新', data: result }
+  }
+
   /** ====== 活动管理 ====== */
   @Get('events')
   async getEvents(@Query() query: any) {

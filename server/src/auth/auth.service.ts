@@ -127,10 +127,10 @@ export class AuthService {
       await queryExecute(
         `INSERT INTO members (
            name, avatar, wx_openid, phone, password_hash,
-           membership_level, member_type, status,
+           membership_level, member_type, user_category, status,
            credit_score, active_score, contribution_score, total_points, available_points,
            join_source
-         ) VALUES (?, ?, ?, ?, ?, 'normal', 'individual', 'active', 100, 0, 0, 0, 0, 'wechat')`,
+         ) VALUES (?, ?, ?, ?, ?, 'normal', 'unpaid', 'normal', 'active', 100, 0, 0, 0, 0, 'wechat')`,
         [safeName, safeAvatar || null, openid, phone, 'wx_oauth_no_password'],
       )
 

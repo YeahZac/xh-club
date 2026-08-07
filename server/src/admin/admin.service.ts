@@ -20,6 +20,11 @@ import {
 } from '@/points/points-rule.util'
 import { createNotification } from '@/common/notify'
 import { resolveEventStatus } from '@/common/event-status'
+import { normalizeUserCategory, userCategoryLabel } from '@/common/user-category'
+import {
+  normalizePromoCoopMode,
+  promoCoopModeLabel,
+} from '@/common/project-promo'
 
 type RolePermissionMap = Record<string, Record<string, boolean>>
 
@@ -396,6 +401,21 @@ export class AdminService {
     } catch (error) {
       console.error('[AdminService] rejectMember error:', error)
       throw new HttpException('拒绝失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async updateMemberUserCategory(id: string, userCategory: string) {
+    const category = normalizeUserCategory(userCategory)
+    const existing = await queryOne('SELECT id FROM members WHERE id = ?', [id])
+    if (!existing) throw new HttpException('会员不存在', HttpStatus.NOT_FOUND)
+    await queryExecute(
+      'UPDATE members SET user_category = ?, updated_at = NOW() WHERE id = ?',
+      [category, id],
+    )
+    return {
+      success: true,
+      user_category: category,
+      user_category_label: userCategoryLabel(category),
     }
   }
 
@@ -898,8 +918,9 @@ export class AdminService {
       const result = await queryExecute(
         `INSERT INTO projects
            (title, description, cover_image, video_url, gallery_images, file_urls, industry, stage, amount_max, status,
-            audit_status, avg_score, score_count)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 0, 0)`,
+            audit_status, avg_score, score_count,
+            promo_coop_mode, promo_commission_rate, promo_amount_wan, promo_remark, promo_share_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 0, 0, ?, ?, ?, ?, ?)`,
         [
           dto.title,
           dto.description || null,
@@ -911,6 +932,15 @@ export class AdminService {
           dto.stage || 'seed',
           dto.amount_max || null,
           dto.status || 'active',
+          normalizePromoCoopMode(dto.promo_coop_mode),
+          dto.promo_commission_rate != null && dto.promo_commission_rate !== ''
+            ? Number(dto.promo_commission_rate)
+            : null,
+          dto.promo_amount_wan != null && dto.promo_amount_wan !== ''
+            ? Number(dto.promo_amount_wan)
+            : null,
+          dto.promo_remark != null ? String(dto.promo_remark || '').trim() || null : null,
+          Math.max(0, Number(dto.promo_share_count) || 0),
         ],
       )
       const dimensions = this.normalizeScoreDimensions(dto.score_dimensions)
@@ -957,6 +987,31 @@ export class AdminService {
       if (dto.stage !== undefined) assign('stage', dto.stage || 'seed')
       if (dto.amount_max !== undefined) assign('amount_max', dto.amount_max || null)
       if (dto.status !== undefined) assign('status', dto.status || 'draft')
+      if (dto.promo_coop_mode !== undefined) {
+        assign('promo_coop_mode', normalizePromoCoopMode(dto.promo_coop_mode))
+      }
+      if (dto.promo_commission_rate !== undefined) {
+        assign(
+          'promo_commission_rate',
+          dto.promo_commission_rate === '' || dto.promo_commission_rate == null
+            ? null
+            : Number(dto.promo_commission_rate),
+        )
+      }
+      if (dto.promo_amount_wan !== undefined) {
+        assign(
+          'promo_amount_wan',
+          dto.promo_amount_wan === '' || dto.promo_amount_wan == null
+            ? null
+            : Number(dto.promo_amount_wan),
+        )
+      }
+      if (dto.promo_remark !== undefined) {
+        assign('promo_remark', String(dto.promo_remark || '').trim() || null)
+      }
+      if (dto.promo_share_count !== undefined) {
+        assign('promo_share_count', Math.max(0, Number(dto.promo_share_count) || 0))
+      }
       if (dto.audit_status !== undefined) {
         const audit = String(dto.audit_status)
         if (!['pending', 'approved', 'rejected'].includes(audit)) {
@@ -1069,17 +1124,36 @@ export class AdminService {
   /** ====== 配置管理 ====== */
   async getConfigs() {
     try {
-      return await queryRows('SELECT * FROM configs ORDER BY created_at DESC')
+      return await queryRows('SELECT * FROM configs ORDER BY id ASC')
     } catch (error) {
       return []
     }
   }
 
-  async updateConfig(id: string, dto: any) {
+  async getConfigByKey(key: string) {
+    const row = await queryOne('SELECT * FROM configs WHERE config_key = ?', [key])
+    return row || null
+  }
+
+  async updateConfig(key: string, value: string) {
     try {
-      await queryExecute('UPDATE configs SET ? WHERE id = ?', [dto, id])
-      return { success: true }
+      const configKey = String(key || '').trim()
+      if (!configKey) throw new HttpException('配置键无效', HttpStatus.BAD_REQUEST)
+      const existing = await queryOne('SELECT id FROM configs WHERE config_key = ?', [configKey])
+      if (existing) {
+        await queryExecute(
+          'UPDATE configs SET config_value = ?, updated_at = NOW() WHERE config_key = ?',
+          [value ?? '', configKey],
+        )
+      } else {
+        await queryExecute(
+          'INSERT INTO configs (config_key, config_value, description) VALUES (?, ?, ?)',
+          [configKey, value ?? '', configKey === 'about_us' ? '关于我们（富文本）' : null],
+        )
+      }
+      return await this.getConfigByKey(configKey)
     } catch (error) {
+      if (error instanceof HttpException) throw error
       throw new HttpException('更新配置失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }

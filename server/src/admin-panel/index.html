@@ -131,6 +131,10 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-2.2 0-4 1.12-4 2.5S9.8 13 12 13s4 1.12 4 2.5S14.2 18 12 18m0-10V6m0 12v2M5 4h14a2 2 0 012 2v14H3V6a2 2 0 012-2z"/></svg>
         项目成交记录
       </a>
+      <a onclick="switchPage('feedbacks')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="feedbacks">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+        用户反馈
+      </a>
       <a onclick="switchPage('banners')" class="sidebar-item flex items-center gap-3 px-5 py-3 cursor-pointer text-sm text-navy-200 transition" data-nav="banners">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         Banner管理
@@ -484,6 +488,39 @@
           <p class="text-xs text-gray-400 mb-2">富文本内插入图片单张 ≤3MB，支持 JPG/PNG/GIF/WebP</p>
           <div id="pjEditDescEditor"></div>
         </div>
+        <div class="rounded-xl border border-blue-100 bg-blue-50/40 p-4 space-y-4">
+          <p class="text-sm font-semibold text-navy-800">推广合作收益</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">合作模式</label>
+              <select id="pjEditPromoMode" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white">
+                <option value="">未设置</option>
+                <option value="customer_referral">客户引荐</option>
+                <option value="project_deal">项目成交</option>
+                <option value="resource_match">资源对接</option>
+                <option value="channel_coop">渠道合作</option>
+                <option value="equity_coop">股权合作</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">分成比例(%)</label>
+              <input id="pjEditPromoRate" type="number" step="0.01" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="如 10">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">项目金额(万)</label>
+              <input id="pjEditPromoAmount" type="number" step="0.01" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="如 200">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">推广次数</label>
+              <input id="pjEditPromoShareCount" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="可手动校正">
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">备注说明</label>
+            <textarea id="pjEditPromoRemark" rows="3" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="其他说明"></textarea>
+          </div>
+        </div>
+
         <div class="pt-2">
           <div class="flex items-center justify-between mb-2">
             <label class="block text-sm font-medium text-gray-700">评分维度（可增删改，会员仅可评分一次）</label>
@@ -723,6 +760,46 @@
       </div>
     </div>
 
+
+    <!-- ====== 用户反馈 ====== -->
+    <div data-page="feedbacks" class="p-8 fade-in">
+      <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div class="flex items-center gap-3">
+          <select id="feedbackTypeFilter" onchange="loadFeedbacks()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+            <option value="">全部类型</option>
+            <option value="trade_complaint">交易投诉</option>
+            <option value="project_suggestion">项目建议</option>
+            <option value="feature_feedback">功能反馈</option>
+            <option value="other">其他反馈</option>
+          </select>
+          <select id="feedbackStatusFilter" onchange="loadFeedbacks()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+            <option value="">全部状态</option>
+            <option value="pending">待处理</option>
+            <option value="processing">处理中</option>
+            <option value="resolved">已解决</option>
+            <option value="closed">已关闭</option>
+          </select>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table class="w-full">
+          <thead class="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">类型</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">会员</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">项目</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">内容</th>
+              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">状态</th>
+              <th class="px-4 py-4 text-center text-xs font-semibold text-gray-500 uppercase">操作</th>
+            </tr>
+          </thead>
+          <tbody id="feedbackTableBody" class="divide-y divide-gray-50">
+            <tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- ====== 系统配置 ====== -->
     <div data-page="config" class="p-8 fade-in">
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -734,6 +811,16 @@
           <button onclick="saveConfigs()" class="px-8 py-3 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl font-medium hover:shadow-lg transition">保存配置</button>
         </div>
       </div>
+
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mt-6">
+        <h3 class="font-bold text-navy-800 mb-2">关于我们</h3>
+        <p class="text-xs text-gray-400 mb-4">小程序首页入口展示，支持富文本编辑</p>
+        <div id="aboutUsEditor"></div>
+        <div class="mt-6 flex justify-end">
+          <button onclick="saveAboutUs()" class="px-8 py-3 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl font-medium hover:shadow-lg transition">保存关于我们</button>
+        </div>
+      </div>
+
     </div>
 
     <!-- ====== 管理员管理 ====== -->
@@ -1470,10 +1557,10 @@ function switchPage(page) {
     const navItem = document.querySelector(`[data-nav="${page}"]`)
     if (navItem) navItem.classList.add('active')
   }
-  const titles = { dashboard: '数据看板', homepage: '首页管理', members: '会员管理', talents: '人才管理', events: '活动管理', projects: '项目管理', business: '商机管理', dealApplications: '项目成交记录', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', 'project-edit': '编辑项目', industries: '行业配置', memberLevels: '会员等级', invitations: '邀请奖励', memberInvitations: '会员邀请', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
+  const titles = { dashboard: '数据看板', homepage: '首页管理', members: '会员管理', talents: '人才管理', events: '活动管理', projects: '项目管理', business: '商机管理', dealApplications: '项目成交记录', feedbacks: '用户反馈', banners: 'Banner管理', articles: '文章管理', mall: '积分商城', org: '组织架构', config: '系统配置', admins: '管理员管理', roles: '角色权限', 'role-edit': '编辑角色权限', 'project-edit': '编辑项目', industries: '行业配置', memberLevels: '会员等级', invitations: '邀请奖励', memberInvitations: '会员邀请', pointsRules: '积分规则', contributions: '贡献值规则', departments: '部门管理' }
   document.getElementById('pageTitle').textContent = titles[page] || page
   // 加载数据（role-edit页面不加载数据）
-  const loaders = { dashboard: loadDashboard, homepage: loadHomepage, members: loadMembers, talents: loadTalents, events: loadEvents, projects: loadProjects, business: loadBusiness, dealApplications: loadDealApplications, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, industries: loadIndustries, memberLevels: loadMemberLevels, invitations: loadInvitationRules, memberInvitations: loadMemberInvitations, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
+  const loaders = { dashboard: loadDashboard, homepage: loadHomepage, members: loadMembers, talents: loadTalents, events: loadEvents, projects: loadProjects, business: loadBusiness, dealApplications: loadDealApplications, feedbacks: loadFeedbacks, banners: loadBanners, articles: loadArticles, mall: loadMallProducts, org: loadOrg, config: loadConfig, admins: loadAdmins, roles: loadRoles, industries: loadIndustries, memberLevels: loadMemberLevels, invitations: loadInvitationRules, memberInvitations: loadMemberInvitations, pointsRules: loadPointsRules, contributions: loadContributionRules, departments: loadDepartments }
   if (loaders[page]) loaders[page]()
 }
 
@@ -1831,7 +1918,10 @@ async function loadMembers() {
       </td>
       <td class="px-6 py-4"><p class="text-sm">${escapeHtml(m.company_name || '-')}</p><p class="text-xs text-gray-400">${escapeHtml(m.company_position || '')}</p></td>
       <td class="px-6 py-4 text-sm">${INDUSTRY_MAP[m.industry_primary] || m.industry_primary || '-'}</td>
-      <td class="px-6 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${m.membership_level === 'diamond' ? 'bg-blue-100 text-blue-700' : m.membership_level === 'gold' ? 'bg-yellow-100 text-yellow-700' : m.membership_level === 'silver' ? 'bg-gray-200 text-gray-700' : 'bg-gray-100 text-gray-500'}">${LEVEL_MAP[m.membership_level] || '普通'}</span></td>
+      <td class="px-6 py-4">
+        <span class="text-xs px-2.5 py-1 rounded-full ${m.membership_level === 'diamond' ? 'bg-blue-100 text-blue-700' : m.membership_level === 'gold' ? 'bg-yellow-100 text-yellow-700' : m.membership_level === 'silver' ? 'bg-gray-200 text-gray-700' : 'bg-gray-100 text-gray-500'}">${LEVEL_MAP[m.membership_level] || '普通'}</span>
+        <div class="mt-1"><span class="text-xs px-2 py-0.5 rounded-full bg-navy-50 text-navy-700">${USER_CATEGORY_MAP[m.user_category] || '普通用户'}</span></div>
+      </td>
       <td class="px-6 py-4"><span class="font-medium ${m.credit_score >= 80 ? 'text-green-600' : m.credit_score >= 60 ? 'text-yellow-600' : 'text-red-600'}">${m.credit_score || 60}</span></td>
       <td class="px-6 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${STATUS_COLORS[m.status] || 'bg-gray-100 text-gray-500'}">${STATUS_MAP[m.status] || m.status}</span></td>
       <td class="px-6 py-4 text-center">
@@ -1887,6 +1977,13 @@ async function viewMember(id) {
         <div class="flex"><span class="text-gray-500 w-24">城市</span><span>${m.city || '-'}</span></div>
         <div class="flex"><span class="text-gray-500 w-24">行业</span><span>${INDUSTRY_MAP[m.industry_primary] || '-'} / ${m.industry_secondary || '-'}</span></div>
         <div class="flex"><span class="text-gray-500 w-24">等级</span><span>${LEVEL_MAP[m.membership_level] || '普通'}</span></div>
+        <div class="flex items-center"><span class="text-gray-500 w-24">用户类型</span>
+          <select onchange="setMemberUserCategory('${m.id}', this.value)" class="px-2 py-1 border rounded-lg text-sm">
+            <option value="normal" ${(!m.user_category || m.user_category==='normal')?'selected':''}>普通用户</option>
+            <option value="promoter" ${m.user_category==='promoter'?'selected':''}>推广员</option>
+            <option value="member_unit" ${m.user_category==='member_unit'?'selected':''}>会员单位</option>
+          </select>
+        </div>
         <div class="flex"><span class="text-gray-500 w-24">积分</span><span>${m.available_points || 0}</span></div>
         <div class="flex"><span class="text-gray-500 w-24">可提供</span><span>${m.resources_supply || '-'}</span></div>
         <div class="flex"><span class="text-gray-500 w-24">需求</span><span>${m.resources_demand || '-'}</span></div>
@@ -2358,6 +2455,11 @@ async function openProjectEditPage(id) {
     document.getElementById('pjEditVideo').value = p.video_url || ''
     document.getElementById('pjEditIndustry').value = p.industry || Object.keys(INDUSTRY_MAP)[0] || ''
     document.getElementById('pjEditAmount').value = p.amount_max ? Math.round(p.amount_max / 10000) : ''
+    document.getElementById('pjEditPromoMode').value = p.promo_coop_mode || ''
+    document.getElementById('pjEditPromoRate').value = p.promo_commission_rate ?? ''
+    document.getElementById('pjEditPromoAmount').value = p.promo_amount_wan ?? ''
+    document.getElementById('pjEditPromoShareCount').value = p.promo_share_count ?? 0
+    document.getElementById('pjEditPromoRemark').value = p.promo_remark || ''
     document.getElementById('pjEditAuditStatus').value = p.audit_status || 'approved'
     document.getElementById('pjEditRejectReason').value = p.reject_reason || ''
     if (p.submitter_id || p.audit_status === 'pending' || p.audit_status === 'rejected') {
@@ -2387,6 +2489,11 @@ async function saveProjectEdit() {
     description: getRichEditorHtml('pjEditDescEditor'),
     status: document.getElementById('pjEditStatus').value,
     score_dimensions: dimensions,
+    promo_coop_mode: document.getElementById('pjEditPromoMode').value || null,
+    promo_commission_rate: document.getElementById('pjEditPromoRate').value || null,
+    promo_amount_wan: document.getElementById('pjEditPromoAmount').value || null,
+    promo_share_count: document.getElementById('pjEditPromoShareCount').value || 0,
+    promo_remark: document.getElementById('pjEditPromoRemark').value || null,
   }
   const auditBox = document.getElementById('pjAuditBox')
   if (auditBox && !auditBox.classList.contains('hidden')) {
@@ -3748,6 +3855,106 @@ async function createOrg() {
   else toast(res.msg || '创建失败', 'error')
 }
 
+
+
+const USER_CATEGORY_MAP = { normal: '普通用户', promoter: '推广员', member_unit: '会员单位' }
+const FEEDBACK_TYPE_MAP = { trade_complaint: '交易投诉', project_suggestion: '项目建议', feature_feedback: '功能反馈', other: '其他反馈' }
+const FEEDBACK_STATUS_MAP = { pending: '待处理', processing: '处理中', resolved: '已解决', closed: '已关闭' }
+
+async function loadFeedbacks() {
+  const type = document.getElementById('feedbackTypeFilter')?.value || ''
+  const status = document.getElementById('feedbackStatusFilter')?.value || ''
+  let url = '/admin/feedbacks?'
+  if (type) url += `type=${encodeURIComponent(type)}&`
+  if (status) url += `status=${encodeURIComponent(status)}&`
+  const res = await api(url)
+  const tbody = document.getElementById('feedbackTableBody')
+  if (!tbody) return
+  const list = Array.isArray(res.data) ? res.data : []
+  if (res.code !== 200 || !list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">暂无反馈</td></tr>'
+    return
+  }
+  tbody.innerHTML = list.map(item => `
+    <tr class="hover:bg-gray-50">
+      <td class="px-4 py-3 text-sm">${escapeHtml(item.feedback_type_label || FEEDBACK_TYPE_MAP[item.feedback_type] || item.feedback_type || '-')}</td>
+      <td class="px-4 py-3 text-sm">${escapeHtml(item.member_name || '-')}<div class="text-xs text-gray-400">${escapeHtml(item.phone || item.member_phone || '')}</div></td>
+      <td class="px-4 py-3 text-sm">${escapeHtml(item.project_title || '-')}</td>
+      <td class="px-4 py-3 text-sm max-w-xs truncate">${escapeHtml(item.content || '-')}</td>
+      <td class="px-4 py-3 text-xs"><span class="px-2 py-1 rounded-full bg-gray-100">${escapeHtml(FEEDBACK_STATUS_MAP[item.status] || item.status || '-')}</span></td>
+      <td class="px-4 py-3 text-center">
+        <button onclick="viewFeedback('${item.id}')" class="text-brand-600 text-xs font-medium mr-2">处理</button>
+        <button onclick="deleteFeedback('${item.id}')" class="text-red-600 text-xs font-medium">删除</button>
+      </td>
+    </tr>
+  `).join('')
+}
+
+async function viewFeedback(id) {
+  const res = await api(`/admin/feedbacks/${id}`)
+  if (res.code !== 200) return toast(res.msg || '加载失败', 'error')
+  const item = res.data || {}
+  showModal(`
+    <div class="p-6 max-w-xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-navy-800">反馈详情</h3>
+        <button onclick="closeModal()" class="text-gray-400">✕</button>
+      </div>
+      <div class="space-y-2 text-sm mb-4">
+        <div>类型：${escapeHtml(item.feedback_type_label || item.feedback_type || '-')}</div>
+        <div>会员：${escapeHtml(item.member_name || '-')} ${escapeHtml(item.phone || item.member_phone || '')}</div>
+        <div>项目：${escapeHtml(item.project_title || '-')}</div>
+        <div>邮箱：${escapeHtml(item.email || '-')}</div>
+        <div class="whitespace-pre-wrap leading-relaxed">${escapeHtml(item.content || '')}</div>
+      </div>
+      <div class="mb-3">
+        <label class="block text-sm mb-1">处理状态</label>
+        <select id="fbStatus" class="w-full px-3 py-2 border rounded-xl text-sm">
+          ${['pending','processing','resolved','closed'].map(s => `<option value="${s}" ${item.status===s?'selected':''}>${FEEDBACK_STATUS_MAP[s]}</option>`).join('')}
+        </select>
+      </div>
+      <div class="mb-4">
+        <label class="block text-sm mb-1">管理员回复</label>
+        <textarea id="fbReply" rows="3" class="w-full px-3 py-2 border rounded-xl text-sm">${escapeHtml(item.admin_reply || '')}</textarea>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button onclick="closeModal()" class="px-4 py-2 border rounded-xl text-sm">取消</button>
+        <button onclick="saveFeedback('${item.id}')" class="px-4 py-2 bg-brand-500 text-white rounded-xl text-sm">保存</button>
+      </div>
+    </div>
+  `)
+}
+
+async function saveFeedback(id) {
+  const body = {
+    status: document.getElementById('fbStatus').value,
+    admin_reply: document.getElementById('fbReply').value,
+  }
+  const res = await api(`/admin/feedbacks/${id}`, { method: 'PUT', body })
+  if (res.code === 200) { toast('已更新'); closeModal(); loadFeedbacks() }
+  else toast(res.msg || '保存失败', 'error')
+}
+
+async function deleteFeedback(id) {
+  if (!confirm('确认删除该反馈？')) return
+  const res = await api(`/admin/feedbacks/${id}`, { method: 'DELETE' })
+  if (res.code === 200) { toast('已删除'); loadFeedbacks() }
+  else toast(res.msg || '删除失败', 'error')
+}
+
+async function saveAboutUs() {
+  const html = getRichEditorHtml('aboutUsEditor')
+  const res = await api('/admin/configs', { method: 'PUT', body: { key: 'about_us', value: html } })
+  if (res.code === 200) toast('关于我们已保存')
+  else toast(res.msg || '保存失败', 'error')
+}
+
+async function setMemberUserCategory(id, category) {
+  const res = await api(`/admin/members/${id}/user-category`, { method: 'PUT', body: { user_category: category } })
+  if (res.code === 200) { toast('用户类型已更新'); loadMembers() }
+  else toast(res.msg || '更新失败', 'error')
+}
+
 // ===== 系统配置 =====
 async function loadConfig() {
   const res = await api('/admin/configs')
@@ -3763,13 +3970,18 @@ async function loadConfig() {
     active_decay_days: '活跃值衰减起始天数',
     active_decay_rate: '活跃值每日衰减比例'
   }
-  document.getElementById('configForm').innerHTML = configs.map(c => `
+  const simpleConfigs = configs.filter(c => c.config_key !== 'about_us')
+  document.getElementById('configForm').innerHTML = simpleConfigs.map(c => `
     <div class="flex items-center gap-6">
       <label class="w-48 text-sm font-medium text-gray-700 shrink-0">${CONFIG_LABELS[c.config_key] || c.config_key}</label>
-      <input data-config-key="${c.config_key}" value="${c.config_value}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
+      <input data-config-key="${c.config_key}" value="${String(c.config_value || '').replace(/"/g, '&quot;')}" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400">
       <span class="text-xs text-gray-400 w-40">${c.description || ''}</span>
     </div>
   `).join('') || '<p class="text-gray-400">暂无配置</p>'
+  const about = configs.find(c => c.config_key === 'about_us')
+  if (document.getElementById('aboutUsEditor')) {
+    initRichEditor('aboutUsEditor', about?.config_value || '')
+  }
 }
 
 async function saveConfigs() {

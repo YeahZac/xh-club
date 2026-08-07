@@ -5,6 +5,7 @@ import { assertCloudStorageImageUrl } from '@/utils/media-validators'
 import { PointsEngineService } from '@/points/points-engine.service'
 import { InvitationEngineService } from '@/invitation/invitation-engine.service'
 import { createNotification } from '@/common/notify'
+import { normalizeUserCategory, userCategoryLabel } from '@/common/user-category'
 
 export const TALENT_STATUSES = ['pending', 'approved', 'rejected'] as const
 export type TalentStatus = (typeof TALENT_STATUSES)[number]
@@ -196,6 +197,8 @@ export class TalentService {
       contact: options?.maskContact ? maskPublicContact(signed.contact) : signed.contact,
       industry_tags: parseIndustryTags(signed.industry_tags),
       ...this.computeMembership(signed),
+      user_category: normalizeUserCategory(signed.user_category),
+      user_category_label: userCategoryLabel(signed.user_category),
     }
   }
 
@@ -256,7 +259,7 @@ export class TalentService {
       values,
     )
     const rows = await queryRows(
-      `SELECT t.*, m.avatar AS member_avatar, m.name AS member_name
+      `SELECT t.*, m.avatar AS member_avatar, m.name AS member_name, m.user_category
        FROM talent_applications t
        LEFT JOIN members m ON m.id = t.member_id
        ${whereSql}
@@ -275,7 +278,8 @@ export class TalentService {
   async getApprovedById(id: string) {
     const row = await queryOne(
       `SELECT t.*, m.avatar AS member_avatar, m.name AS member_name,
-              m.available_points, m.total_points, m.created_at AS member_created_at
+              m.available_points, m.total_points, m.created_at AS member_created_at,
+              m.user_category
        FROM talent_applications t
        LEFT JOIN members m ON m.id = t.member_id
        WHERE t.id = ? AND t.status = 'approved'`,

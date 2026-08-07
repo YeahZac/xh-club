@@ -1,0 +1,12 @@
+import { Module } from '@nestjs/common'
+import { AdminFeedbackController, FeedbackController } from './feedback.controller'
+import { FeedbackService } from './feedback.service'
+import { UploadModule } from '@/upload/upload.module'
+
+@Module({
+  imports: [UploadModule],
+  controllers: [FeedbackController, AdminFeedbackController],
+  providers: [FeedbackService],
+  exports: [FeedbackService],
+})
+export class FeedbackModule {}

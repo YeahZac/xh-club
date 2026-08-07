@@ -19,6 +19,14 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['projects', 'score_count', 'INT NOT NULL DEFAULT 0'],
   ['projects', 'gallery_images', 'JSON NULL'],
   ['projects', 'file_urls', 'JSON NULL'],
+  // 推广合作收益
+  ['projects', 'promo_coop_mode', 'VARCHAR(32) NULL'],
+  ['projects', 'promo_commission_rate', 'DECIMAL(5,2) NULL'],
+  ['projects', 'promo_amount_wan', 'DECIMAL(14,2) NULL'],
+  ['projects', 'promo_remark', 'TEXT NULL'],
+  ['projects', 'promo_share_count', 'INT NOT NULL DEFAULT 0'],
+  // 用户类型：普通用户 / 推广员 / 会员单位
+  ['members', 'user_category', `VARCHAR(32) NOT NULL DEFAULT 'normal'`],
   // 项目成交对接：负责人确认
   ['project_deal_applications', 'owner_member_id', 'INT NULL'],
   ['project_deal_applications', 'is_deal', `TINYINT(1) NOT NULL DEFAULT 0`],
@@ -1038,6 +1046,29 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       INDEX idx_member_invite_created (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   },
+  {
+    name: 'user_feedbacks',
+    sql: `CREATE TABLE IF NOT EXISTS user_feedbacks (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      member_id INT NULL,
+      feedback_type VARCHAR(32) NOT NULL,
+      project_id INT NULL,
+      content TEXT NOT NULL,
+      phone VARCHAR(32) NULL,
+      email VARCHAR(128) NULL,
+      image_urls JSON NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      admin_reply TEXT NULL,
+      handled_by VARCHAR(64) NULL,
+      handled_at TIMESTAMP NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_feedback_type (feedback_type),
+      INDEX idx_feedback_status (status),
+      INDEX idx_feedback_member (member_id),
+      INDEX idx_feedback_project (project_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
 ]
 
 function isDuplicateColumnError(message?: string): boolean {
@@ -1122,6 +1153,9 @@ export async function ensureSchemaColumns(): Promise<void> {
     ['events', 'description'],
     ['events', 'content'],
     ['articles', 'content'],
+    ['configs', 'config_value'],
+    ['projects', 'promo_remark'],
+    ['projects', 'description'],
   ] as const) {
     try {
       await pool.query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` MEDIUMTEXT NULL`)
@@ -1134,6 +1168,22 @@ export async function ensureSchemaColumns(): Promise<void> {
       ) {
         console.warn(`[MySQL] 调整 ${table}.${column} 为 MEDIUMTEXT 失败:`, error?.message || error)
       }
+    }
+  }
+
+  // 确保「关于我们」配置项存在
+  try {
+    await pool.query(
+      `INSERT INTO configs (config_key, config_value, description)
+       SELECT 'about_us', ?, '关于我们（富文本）'
+       FROM DUAL
+       WHERE NOT EXISTS (SELECT 1 FROM configs WHERE config_key = 'about_us')`,
+      ['<p>星河俱乐部致力于连接优质项目、人才与产业资源，共建高价值合作生态。</p>'],
+    )
+  } catch (error: any) {
+    const msg = String(error?.message || '')
+    if (!msg.includes("doesn't exist") && error?.code !== 'ER_NO_SUCH_TABLE') {
+      console.warn('[MySQL] 初始化 about_us 配置失败:', error?.message || error)
     }
   }
 
