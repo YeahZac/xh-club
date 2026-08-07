@@ -930,15 +930,13 @@ export class AdminService {
           serializeJsonUrlList(fileUrls),
           dto.industry || null,
           dto.stage || 'seed',
-          dto.amount_max || null,
+          null,
           dto.status || 'active',
           normalizePromoCoopMode(dto.promo_coop_mode),
           dto.promo_commission_rate != null && dto.promo_commission_rate !== ''
             ? Number(dto.promo_commission_rate)
             : null,
-          dto.promo_amount_wan != null && dto.promo_amount_wan !== ''
-            ? Number(dto.promo_amount_wan)
-            : null,
+          null,
           dto.promo_remark != null ? String(dto.promo_remark || '').trim() || null : null,
           Math.max(0, Number(dto.promo_share_count) || 0),
         ],
@@ -985,7 +983,6 @@ export class AdminService {
       }
       if (dto.industry !== undefined) assign('industry', dto.industry || null)
       if (dto.stage !== undefined) assign('stage', dto.stage || 'seed')
-      if (dto.amount_max !== undefined) assign('amount_max', dto.amount_max || null)
       if (dto.status !== undefined) assign('status', dto.status || 'draft')
       if (dto.promo_coop_mode !== undefined) {
         assign('promo_coop_mode', normalizePromoCoopMode(dto.promo_coop_mode))
@@ -996,14 +993,6 @@ export class AdminService {
           dto.promo_commission_rate === '' || dto.promo_commission_rate == null
             ? null
             : Number(dto.promo_commission_rate),
-        )
-      }
-      if (dto.promo_amount_wan !== undefined) {
-        assign(
-          'promo_amount_wan',
-          dto.promo_amount_wan === '' || dto.promo_amount_wan == null
-            ? null
-            : Number(dto.promo_amount_wan),
         )
       }
       if (dto.promo_remark !== undefined) {

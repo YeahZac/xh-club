@@ -557,10 +557,8 @@ export class EventsService {
         (data as any).promo_commission_rate != null
           ? Number((data as any).promo_commission_rate)
           : null,
-      promo_amount_wan:
-        (data as any).promo_amount_wan != null
-          ? Number((data as any).promo_amount_wan)
-          : null,
+      promo_amount_wan: null,
+      amount_max: null,
       promo_remark: (data as any).promo_remark || null,
       promo_share_count: Number((data as any).promo_share_count || 0),
       member_state: {
@@ -729,7 +727,6 @@ export class EventsService {
       throw new HttpException('项目视频必须使用微信云托管对象存储 URL', HttpStatus.BAD_REQUEST)
     }
     const galleryImages = normalizeProjectUrlList(dto.gallery_images)
-    const fileUrls = normalizeProjectUrlList(dto.file_urls)
     const result = await queryExecute(
       `INSERT INTO projects
          (title, description, cover_image, video_url, gallery_images, file_urls, industry, stage, amount_max, status,
@@ -742,18 +739,16 @@ export class EventsService {
         canonicalizeCloudStorageUrl(dto.cover_image),
         dto.video_url ? canonicalizeCloudStorageUrl(dto.video_url) : null,
         serializeJsonUrlList(galleryImages),
-        serializeJsonUrlList(fileUrls),
+        serializeJsonUrlList([]),
         dto.industry || null,
         dto.stage || 'seed',
-        dto.amount_max || null,
+        null,
         memberId,
         normalizePromoCoopMode(dto.promo_coop_mode),
         dto.promo_commission_rate != null && dto.promo_commission_rate !== ''
           ? Number(dto.promo_commission_rate)
           : null,
-        dto.promo_amount_wan != null && dto.promo_amount_wan !== ''
-          ? Number(dto.promo_amount_wan)
-          : null,
+        null,
         dto.promo_remark != null ? String(dto.promo_remark || '').trim() || null : null,
       ],
     )
@@ -791,7 +786,7 @@ export class EventsService {
         dto.video_url ? canonicalizeCloudStorageUrl(dto.video_url) : null,
         dto.industry || null,
         dto.stage || 'seed',
-        dto.amount_max || null,
+        null,
         dto.status || 'active',
       ],
     )
