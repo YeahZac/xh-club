@@ -1,10 +1,14 @@
 import { Controller, Get, Param } from '@nestjs/common'
 import { AppService } from '@/app.service'
 import { queryOne } from '@/storage/database/mysql-client'
+import { UploadService } from '@/upload/upload.service'
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly appService: AppService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   @Get('hello')
   getHello(): { status: string; data: string } {
@@ -46,6 +50,11 @@ export class AppController {
         },
       }
     }
-    return { code: 200, msg: 'success', data: row }
+    const config_value = await this.uploadService.signHtmlMedia(row.config_value)
+    return {
+      code: 200,
+      msg: 'success',
+      data: { ...row, config_value },
+    }
   }
 }

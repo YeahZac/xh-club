@@ -49,6 +49,14 @@
     .ql-container.ql-snow { border-radius: 0 0 12px 12px; border-color: #e5e7eb; min-height: 220px; font-size: 14px; }
     .ql-editor { min-height: 220px; }
     .ql-editor img { max-width: 100%; border-radius: 8px; }
+    .ql-htmlsource.ql-active { background: #1b2a4a !important; color: #e8d5a8 !important; border-radius: 4px; }
+    .rich-source-wrap { border: 1px solid #e5e7eb; border-top: 0; border-radius: 0 0 12px 12px; background: #0f172a; }
+    .rich-source-wrap textarea {
+      width: 100%; min-height: 320px; padding: 14px 16px; border: 0; outline: none; resize: vertical;
+      background: transparent; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px; line-height: 1.55;
+    }
+    .rich-source-hint { padding: 8px 14px; border-top: 1px solid #1e293b; color: #94a3b8; font-size: 11px; }
     .emoji-popover { position: absolute; z-index: 80; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 8px; width: 280px; max-height: 180px; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,.12); display: none; }
     .emoji-popover button { font-size: 18px; width: 32px; height: 32px; border-radius: 8px; }
     .emoji-popover button:hover { background: #f3f4f6; }
@@ -814,7 +822,7 @@
 
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mt-6">
         <h3 class="font-bold text-navy-800 mb-2">关于我们</h3>
-        <p class="text-xs text-gray-400 mb-4">小程序首页入口展示，支持富文本编辑</p>
+        <p class="text-xs text-gray-400 mb-4">小程序首页入口展示。可点工具栏「&lt;/&gt;」进入 HTML 源码模式，粘贴完整 H5 页面代码；小程序将按代码渲染。</p>
         <div id="aboutUsEditor"></div>
         <div class="mt-6 flex justify-end">
           <button onclick="saveAboutUs()" class="px-8 py-3 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl font-medium hover:shadow-lg transition">保存关于我们</button>
@@ -1209,12 +1217,24 @@ const PROJECT_STATUS_COLORS = { active: 'bg-green-100 text-green-700', funded: '
 let _editingProjectId = null
 const INDUSTRY_MAP = { tech: '科技互联网', finance: '金融资本', manufacture: '先进制造', realestate: '房地产建筑', health: '大健康', education: '教育培训', media: '文化传媒', law: '法律服务', agriculture: '现代农业', trade: '跨境贸易', food: '餐饮消费', energy: '环保能源', service: '综合服务' }
 
-// ===== 富文本编辑器（Quill）=====
+// ===== 富文本编辑器（Quill + HTML 源码模式）=====
 const richEditors = {}
+const richEditorMeta = {}
 const EMOJI_LIST = ['😀','😁','😂','🤣','😊','😍','😘','😎','🤔','👍','👏','🙏','🔥','✨','🎉','❤️','💯','✅','📌','📎','📄','🖼️','💼','🚀','⭐','💡']
+
+function isFullHtmlDocument(html) {
+  const v = String(html || '').trim()
+  if (!v) return false
+  if (/<!DOCTYPE\s+html/i.test(v) || /<html[\s>]/i.test(v)) return true
+  if (/<style[\s>]/i.test(v) && /<\/style>/i.test(v) && v.length > 600) return true
+  return false
+}
 
 function destroyRichEditor(editorId) {
   const host = document.getElementById(editorId)
+  const meta = richEditorMeta[editorId]
+  if (meta?.sourceWrap) meta.sourceWrap.remove()
+  delete richEditorMeta[editorId]
   if (!host) {
     delete richEditors[editorId]
     return
@@ -1229,18 +1249,85 @@ function destroyRichEditor(editorId) {
   host.className = ''
   host.removeAttribute('style')
   host.innerHTML = ''
+  host.style.display = ''
   delete richEditors[editorId]
 }
 
 function destroyRichEditors() {
   Object.keys(richEditors).forEach((key) => destroyRichEditor(key))
+  Object.keys(richEditorMeta).forEach((key) => destroyRichEditor(key))
 }
 
 function getRichEditorHtml(editorId) {
+  const meta = richEditorMeta[editorId]
+  if (meta?.sourceEl && (meta.sourceMode || meta.rawPreferred)) {
+    const raw = String(meta.sourceEl.value || '').trim()
+    if (raw) return raw
+  }
   const editor = richEditors[editorId]
   if (!editor) return ''
   const html = editor.root.innerHTML || ''
   return html === '<p><br></p>' ? '' : html
+}
+
+function ensureRichSourceWrap(editorId, host) {
+  let meta = richEditorMeta[editorId]
+  if (meta?.sourceWrap && meta.sourceEl) return meta
+  const wrap = document.createElement('div')
+  wrap.className = 'rich-source-wrap'
+  wrap.style.display = 'none'
+  const ta = document.createElement('textarea')
+  ta.spellcheck = false
+  ta.placeholder = '在此粘贴或编辑 HTML 源码（支持完整 H5 页面）。小程序将按代码渲染展示。'
+  const hint = document.createElement('div')
+  hint.className = 'rich-source-hint'
+  hint.textContent = '提示：完整 HTML（含 <style>）请在源码模式保存；切回可视化可能简化部分标签。'
+  wrap.appendChild(ta)
+  wrap.appendChild(hint)
+  host.insertAdjacentElement('afterend', wrap)
+  meta = { sourceMode: false, sourceWrap: wrap, sourceEl: ta, rawPreferred: false }
+  richEditorMeta[editorId] = meta
+  return meta
+}
+
+function setRichEditorSourceMode(editorId, enabled) {
+  const host = document.getElementById(editorId)
+  const quill = richEditors[editorId]
+  if (!host || !quill) return
+  const meta = ensureRichSourceWrap(editorId, host)
+  const toolbar = host.previousElementSibling
+  const btn = toolbar?.querySelector?.('.ql-htmlsource')
+  if (enabled) {
+    if (!meta.sourceMode) {
+      meta.sourceEl.value = quill.root.innerHTML === '<p><br></p>' ? '' : (quill.root.innerHTML || '')
+    }
+    meta.sourceMode = true
+    host.style.display = 'none'
+    meta.sourceWrap.style.display = 'block'
+    if (btn) btn.classList.add('ql-active')
+  } else {
+    const raw = String(meta.sourceEl.value || '')
+    meta.sourceMode = false
+    meta.sourceWrap.style.display = 'none'
+    host.style.display = ''
+    if (btn) btn.classList.remove('ql-active')
+    if (isFullHtmlDocument(raw)) {
+      meta.rawPreferred = true
+      // 完整页面保留在源码区；可视化仅作摘要提示，避免 Quill 破坏结构
+      quill.setText('')
+      quill.clipboard.dangerouslyPasteHTML(0, '<p>【已保存完整 HTML 源码】请继续用「&lt;/&gt; 源码」编辑，勿在可视化中改写。</p>')
+      meta.sourceEl.value = raw
+      meta.sourceMode = true
+      host.style.display = 'none'
+      meta.sourceWrap.style.display = 'block'
+      if (btn) btn.classList.add('ql-active')
+      toast('检测到完整 HTML，已保持源码模式', 'info')
+      return
+    }
+    meta.rawPreferred = false
+    quill.setText('')
+    quill.clipboard.dangerouslyPasteHTML(0, raw || '<p><br></p>')
+  }
 }
 
 function uploadEditorAsset(file, kind) {
@@ -1284,11 +1371,16 @@ function initRichEditor(editorId, html) {
           [{ color: [] }],
           [{ list: 'ordered' }, { list: 'bullet' }],
           [{ align: [] }],
-          ['link', 'image', 'emoji', 'attachment', 'htmlcopy'],
+          ['link', 'image', 'emoji', 'attachment', 'htmlsource', 'htmlcopy'],
           ['clean']
         ],
         handlers: {
           image() {
+            const meta = richEditorMeta[editorId]
+            if (meta?.sourceMode) {
+              toast('请先退出源码模式，或在源码中手动写入 <img> 标签', 'error')
+              return
+            }
             openMediaLibrary({
               type: 'image',
               onSelect: (item) => {
@@ -1300,6 +1392,11 @@ function initRichEditor(editorId, html) {
             })
           },
           emoji() {
+            const meta = richEditorMeta[editorId]
+            if (meta?.sourceMode) {
+              toast('源码模式请直接输入表情字符', 'error')
+              return
+            }
             const toolbar = host.previousElementSibling
             let pop = document.getElementById('emojiPopover_' + editorId)
             if (!pop) {
@@ -1323,6 +1420,11 @@ function initRichEditor(editorId, html) {
             pop.style.display = pop.style.display === 'block' ? 'none' : 'block'
           },
           attachment() {
+            const meta = richEditorMeta[editorId]
+            if (meta?.sourceMode) {
+              toast('请先退出源码模式，或在源码中手动写入链接', 'error')
+              return
+            }
             openMediaLibrary({
               type: 'document',
               onSelect: (item) => {
@@ -1335,8 +1437,12 @@ function initRichEditor(editorId, html) {
               },
             })
           },
+          htmlsource() {
+            const meta = ensureRichSourceWrap(editorId, host)
+            setRichEditorSourceMode(editorId, !meta.sourceMode)
+          },
           htmlcopy() {
-            const html = quill.root.innerHTML || ''
+            const html = getRichEditorHtml(editorId)
             const done = () => toast('HTML 已复制到剪贴板')
             const fail = () => toast('复制失败，请手动复制', 'error')
             if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1354,18 +1460,30 @@ function initRichEditor(editorId, html) {
 
   // 自定义 toolbar 图标文案
   setTimeout(() => {
-    const emojiBtn = host.parentElement?.querySelector('.ql-emoji')
-    const attachBtn = host.parentElement?.querySelector('.ql-attachment')
-    const htmlCopyBtn = host.parentElement?.querySelector('.ql-htmlcopy')
+    const toolbarRoot = host.previousElementSibling
+    const emojiBtn = toolbarRoot?.querySelector('.ql-emoji')
+    const attachBtn = toolbarRoot?.querySelector('.ql-attachment')
+    const htmlSourceBtn = toolbarRoot?.querySelector('.ql-htmlsource')
+    const htmlCopyBtn = toolbarRoot?.querySelector('.ql-htmlcopy')
     if (emojiBtn && !emojiBtn.dataset.ready) { emojiBtn.dataset.ready = '1'; emojiBtn.innerHTML = '😊'; emojiBtn.title = '表情' }
     if (attachBtn && !attachBtn.dataset.ready) { attachBtn.dataset.ready = '1'; attachBtn.innerHTML = '📎'; attachBtn.title = '插入文件' }
-    if (htmlCopyBtn && !htmlCopyBtn.dataset.ready) { htmlCopyBtn.dataset.ready = '1'; htmlCopyBtn.textContent = '</>'; htmlCopyBtn.title = '复制 HTML 代码' }
+    if (htmlSourceBtn && !htmlSourceBtn.dataset.ready) { htmlSourceBtn.dataset.ready = '1'; htmlSourceBtn.textContent = '</>'; htmlSourceBtn.title = 'HTML 源码编辑（可粘贴完整页面）' }
+    if (htmlCopyBtn && !htmlCopyBtn.dataset.ready) { htmlCopyBtn.dataset.ready = '1'; htmlCopyBtn.textContent = '复制'; htmlCopyBtn.title = '复制 HTML 代码' }
   }, 0)
 
-  if (html) {
-    quill.root.innerHTML = html
-  }
   richEditors[editorId] = quill
+  ensureRichSourceWrap(editorId, host)
+
+  if (html) {
+    if (isFullHtmlDocument(html)) {
+      const meta = richEditorMeta[editorId]
+      meta.sourceEl.value = html
+      meta.rawPreferred = true
+      setRichEditorSourceMode(editorId, true)
+    } else {
+      quill.root.innerHTML = html
+    }
+  }
   return quill
 }
 
