@@ -1,7 +1,9 @@
 import { Controller, Get, HttpException, HttpStatus, Query, Res } from '@nestjs/common'
 import type { Response } from 'express'
+import { Public } from '@/auth/public.decorator'
 import { queryOne } from '@/storage/database/mysql-client'
 import { UploadService } from '@/upload/upload.service'
+import { buildWebViewHtmlPageUrl } from '@/utils/webview-url'
 
 const CONFIG_KEYS = new Set(['about_us'])
 
@@ -105,6 +107,7 @@ export class HtmlRenderController {
    * GET /api/system/html-render?type=config&key=about_us
    * GET /api/system/html-render?type=event&id=1
    */
+  @Public()
   @Get('html-render')
   async renderHtml(
     @Query('type') type: string,
@@ -132,10 +135,11 @@ export class HtmlRenderController {
   }
 
   /**
-   * 返回可供小程序 web-view 打开的公网 HTTPS 地址（上传 COS）
-   * 微信小程序 web-view 无法走 callContainer / 云托管内网域名
+   * 返回可供小程序 web-view 打开的 HTTPS 地址（云托管自定义域名 + html-render）。
+   * web-view 不支持 callContainer，且 COS 域名默认不在业务域名白名单内。
    * GET /api/system/html-page-url?type=event&id=5
    */
+  @Public()
   @Get('html-page-url')
   async htmlPageUrl(
     @Query('type') type: string,
@@ -144,16 +148,19 @@ export class HtmlRenderController {
   ) {
     const kind = String(type || '').trim()
     try {
-      const { html, title } = await this.loadHtmlSource(kind, key, id)
-      const signed = await this.uploadService.signHtmlMedia(html)
-      const page = ensureHtmlDocument(signed, title)
-      const uploaded = await this.uploadService.uploadHtmlPage(page, 'html-pages')
+      const { title } = await this.loadHtmlSource(kind, key, id)
+      const url = buildWebViewHtmlPageUrl({ type: kind, key, id })
+      if (!url) {
+        throw new HttpException(
+          '未配置 WEBVIEW_BASE_URL（云托管已备案 HTTPS 自定义域名），无法生成 web-view 地址',
+          HttpStatus.SERVICE_UNAVAILABLE,
+        )
+      }
       return {
         code: 200,
         msg: 'success',
         data: {
-          url: uploaded.url,
-          canonical_url: uploaded.canonicalUrl,
+          url,
           title,
         },
       }
