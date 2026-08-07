@@ -82,8 +82,8 @@ export class HtmlRenderController {
       title = String(row.title || title)
     } else if (kind === 'product') {
       const row = await queryOne(
-        'SELECT name, description FROM mall_products WHERE id = ? AND is_active = 1',
-        [id],
+        'SELECT name, description FROM mall_products WHERE id = ? AND status = ?',
+        [id, 'active'],
       )
       if (!row) throw new HttpException('not found', HttpStatus.NOT_FOUND)
       html = String(row.description || '')

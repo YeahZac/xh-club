@@ -1,14 +1,26 @@
 import { useState } from 'react'
 import { View, Text, WebView } from '@tarojs/components'
 import Taro, { useLoad } from '@tarojs/taro'
+import { PageShell, ui } from '@/components/brand-ui'
+import { WEBVIEW_URL_STORAGE_KEY } from '@/lib/open-html-content'
+import { normalizeWebViewPageUrl } from '@/lib/webview-url'
 
 const WebviewPage = () => {
   const [url, setUrl] = useState('')
 
   useLoad((query) => {
-    const target = decodeURIComponent(String(query?.url || '')).trim()
+    const fromStorage = String(Taro.getStorageSync(WEBVIEW_URL_STORAGE_KEY) || '')
+    const fromQuery = decodeURIComponent(String(query?.url || ''))
+    const target = normalizeWebViewPageUrl(fromStorage || fromQuery)
+    if (fromStorage) {
+      try {
+        Taro.removeStorageSync(WEBVIEW_URL_STORAGE_KEY)
+      } catch {
+        /* ignore */
+      }
+    }
     if (!target) {
-      Taro.showToast({ title: '链接无效', icon: 'none' })
+      Taro.showToast({ title: '链接无效或不安全', icon: 'none' })
       setTimeout(() => Taro.navigateBack(), 1200)
       return
     }
@@ -18,9 +30,11 @@ const WebviewPage = () => {
 
   if (!url) {
     return (
-      <View className="flex items-center justify-center h-full bg-[#F5F6FA]">
-        <Text className="block text-sm text-gray-400">加载中...</Text>
-      </View>
+      <PageShell scroll={false}>
+        <View className="flex min-h-screen items-center justify-center bg-background">
+          <Text className={ui.caption}>加载中...</Text>
+        </View>
+      </PageShell>
     )
   }
 

@@ -1,3 +1,5 @@
+export const DEFAULT_PUBLIC_ORIGIN = 'https://xinghegogo.cn'
+
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '')
 }
@@ -42,12 +44,13 @@ export function getPublicHttpsBaseUrl(): string {
     process.env.WEBVIEW_BASE_URL,
     process.env.PUBLIC_BASE_URL,
     process.env.PROJECT_DOMAIN,
+    DEFAULT_PUBLIC_ORIGIN,
   ]
   for (const raw of candidates) {
     const next = toHttpsCandidate(String(raw || ''))
     if (next) return next
   }
-  return ''
+  return DEFAULT_PUBLIC_ORIGIN
 }
 
 /** 把历史内网域名绝对地址改写为当前公网域名，避免富文本/配置里残留旧链接 */

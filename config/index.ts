@@ -14,6 +14,47 @@ import pkg from '../package.json';
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../.env.local'), override: true });
 
+const DEFAULT_PUBLIC_ORIGIN = 'https://xinghegogo.cn';
+
+const isBlockedBuildHost = (hostname: string): boolean => {
+  const host = String(hostname || '').toLowerCase();
+  if (!host) return true;
+  if (/(?:^|\.)0y09mxrz\.com$/i.test(host)) return true;
+  if (/(?:^|\.)tcb\.qcloud\.la$/i.test(host)) return true;
+  if (/\.cos\.[a-z0-9-]+\.myqcloud\.com$/i.test(host)) return true;
+  return false;
+};
+
+/** 编译期注入的公网域名：过滤云托管内网域，避免 web-view 打开失败 */
+const pickPublicOriginForBuild = (): string => {
+  const candidates = [
+    process.env.WEBVIEW_BASE_URL,
+    process.env.TARO_APP_WEBVIEW_BASE_URL,
+    process.env.PROJECT_DOMAIN,
+    process.env.COZE_PROJECT_DOMAIN_DEFAULT,
+    DEFAULT_PUBLIC_ORIGIN,
+  ];
+  for (const raw of candidates) {
+    let value = String(raw || '').trim().replace(/\/+$/, '');
+    if (!value) continue;
+    if (!/^https?:\/\//i.test(value)) value = `https://${value}`;
+    if (value.startsWith('http://') && !/localhost|127\.0\.0\.1/i.test(value)) {
+      value = `https://${value.slice('http://'.length)}`;
+    }
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol !== 'https:') continue;
+      if (isBlockedBuildHost(parsed.hostname)) continue;
+      return parsed.origin;
+    } catch {
+      /* ignore */
+    }
+  }
+  return DEFAULT_PUBLIC_ORIGIN;
+};
+
+const PUBLIC_ORIGIN_FOR_BUILD = pickPublicOriginForBuild();
+
 const generateTTProjectConfig = (outputRoot: string) => {
   const config = {
     miniprogramRoot: './',
@@ -92,11 +133,8 @@ export default defineConfig<'vite'>(async (merge, _env) => {
     outputRoot,
     plugins: ['@tarojs/plugin-generator', ...buildMiniCIPluginConfig()],
     defineConstants: {
-      PROJECT_DOMAIN: JSON.stringify(
-        process.env.PROJECT_DOMAIN ||
-          process.env.COZE_PROJECT_DOMAIN_DEFAULT ||
-          '',
-      ),
+      PROJECT_DOMAIN: JSON.stringify(PUBLIC_ORIGIN_FOR_BUILD),
+      WEBVIEW_BASE_URL: JSON.stringify(PUBLIC_ORIGIN_FOR_BUILD),
       WX_CLOUD_ENV: JSON.stringify(
         process.env.TARO_APP_WX_CLOUD_ENV || process.env.WX_CLOUD_ENV || '',
       ),
