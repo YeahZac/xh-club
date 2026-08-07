@@ -370,6 +370,7 @@
               <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">联系方式</th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">行业标签</th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">缴费会员</th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">会员类型</th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">状态</th>
               <th class="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">操作</th>
             </tr>
@@ -2071,7 +2072,7 @@ async function loadMembers() {
       <td class="px-6 py-4 text-sm">${INDUSTRY_MAP[m.industry_primary] || m.industry_primary || '-'}</td>
       <td class="px-6 py-4">
         <span class="text-xs px-2.5 py-1 rounded-full ${m.membership_level === 'diamond' ? 'bg-blue-100 text-blue-700' : m.membership_level === 'gold' ? 'bg-yellow-100 text-yellow-700' : m.membership_level === 'silver' ? 'bg-gray-200 text-gray-700' : 'bg-gray-100 text-gray-500'}">${LEVEL_MAP[m.membership_level] || '普通'}</span>
-        <div class="mt-1"><span class="text-xs px-2 py-0.5 rounded-full bg-navy-50 text-navy-700">${USER_CATEGORY_MAP[m.user_category] || '普通用户'}</span></div>
+        <div class="mt-1">${renderMemberCategorySelect(m.id, m.user_category)}</div>
       </td>
       <td class="px-6 py-4"><span class="font-medium ${m.credit_score >= 80 ? 'text-green-600' : m.credit_score >= 60 ? 'text-yellow-600' : 'text-red-600'}">${m.credit_score || 60}</span></td>
       <td class="px-6 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${STATUS_COLORS[m.status] || 'bg-gray-100 text-gray-500'}">${STATUS_MAP[m.status] || m.status}</span></td>
@@ -2100,7 +2101,7 @@ async function rejectMember(id) {
 }
 
 async function viewMember(id) {
-  const res = await api(`/members/profile/${id}`)
+  const res = await api(`/admin/members/${id}`)
   if (res.code !== 200) { toast('加载失败', 'error'); return }
   const m = res.data
   showModal(`
@@ -2304,20 +2305,40 @@ async function showEventDetail(id) {
 
 function parseBeijingDateTimeMs(value) {
   if (!value) return null
-  const raw = String(value).trim()
-  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/)
-  if (!match) {
-    const t = Date.parse(raw)
-    return Number.isNaN(t) ? null : t
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null
+    return Date.UTC(
+      value.getUTCFullYear(),
+      value.getUTCMonth(),
+      value.getUTCDate(),
+      value.getUTCHours() - 8,
+      value.getUTCMinutes(),
+      value.getUTCSeconds(),
+    )
   }
-  return Date.UTC(
-    Number(match[1]),
-    Number(match[2]) - 1,
-    Number(match[3]),
-    Number(match[4]) - 8,
-    Number(match[5]),
-    Number(match[6] || 0),
-  )
+  const raw = String(value).trim()
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/)
+  if (match) {
+    return Date.UTC(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4]) - 8,
+      Number(match[5]),
+      Number(match[6] || 0),
+    )
+  }
+  const t = Date.parse(raw)
+  return Number.isNaN(t) ? null : t
+}
+
+function toMysqlDateTime(value) {
+  if (!value) return null
+  const raw = String(value).trim()
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(raw)) return raw.length === 16 ? `${raw}:00` : raw
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/)
+  if (match) return `${match[1]}-${match[2]}-${match[3]} ${match[4]}:${match[5]}:${match[6] || '00'}`
+  return null
 }
 
 function computeEventRuntimeStatus({ statusMode, start, end, max, current }) {
@@ -2501,8 +2522,8 @@ function buildEventPayload(statusFallback = 'auto') {
     video_url: document.getElementById('evVideo').value || null,
     event_type: document.getElementById('evType').value,
     status,
-    start_time,
-    end_time,
+    start_time: toMysqlDateTime(start_time),
+    end_time: toMysqlDateTime(end_time),
     location: document.getElementById('evLocation').value,
     max_participants,
     fee: parseInt(document.getElementById('evFee').value) || 0,
@@ -4011,6 +4032,15 @@ async function createOrg() {
 
 
 const USER_CATEGORY_MAP = { normal: '普通用户', promoter: '推广员', member_unit: '会员单位' }
+
+function renderMemberCategorySelect(memberId, value) {
+  const current = value || 'normal'
+  return `<select onchange="setMemberUserCategory('${memberId}', this.value)" class="text-xs px-2 py-1 border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-brand-400">
+    <option value="normal" ${current === 'normal' ? 'selected' : ''}>普通用户</option>
+    <option value="promoter" ${current === 'promoter' ? 'selected' : ''}>推广员</option>
+    <option value="member_unit" ${current === 'member_unit' ? 'selected' : ''}>会员单位</option>
+  </select>`
+}
 const FEEDBACK_TYPE_MAP = { trade_complaint: '交易投诉', project_suggestion: '项目建议', feature_feedback: '功能反馈', other: '其他反馈' }
 const FEEDBACK_STATUS_MAP = { pending: '待处理', processing: '处理中', resolved: '已解决', closed: '已关闭' }
 
@@ -4104,7 +4134,7 @@ async function saveAboutUs() {
 
 async function setMemberUserCategory(id, category) {
   const res = await api(`/admin/members/${id}/user-category`, { method: 'PUT', body: { user_category: category } })
-  if (res.code === 200) { toast('用户类型已更新'); loadMembers() }
+  if (res.code === 200) { toast('用户类型已更新'); loadMembers(); loadTalents() }
   else toast(res.msg || '更新失败', 'error')
 }
 
@@ -5292,7 +5322,7 @@ async function loadTalents() {
   if (res.code !== 200) return
   const list = Array.isArray(res.data) ? res.data : []
   if (!list.length) {
-    document.getElementById('talentTableBody').innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">暂无人才申请</td></tr>'
+    document.getElementById('talentTableBody').innerHTML = '<tr><td colspan="8" class="px-6 py-12 text-center text-gray-400">暂无人才申请</td></tr>'
     return
   }
   document.getElementById('talentTableBody').innerHTML = list.map((item) => {
@@ -5327,6 +5357,7 @@ async function loadTalents() {
         <span class="text-xs px-2.5 py-1 rounded-full ${payClass}">${escapeHtml(payLabel)}</span>
         ${payExpire}
       </td>
+      <td class="px-6 py-4">${renderMemberCategorySelect(item.member_id, item.user_category)}</td>
       <td class="px-6 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${TALENT_STATUS_COLOR[item.status] || 'bg-gray-100 text-gray-500'}">${TALENT_STATUS_MAP[item.status] || item.status}</span></td>
       <td class="px-6 py-4 text-center">
         <button onclick="showTalentModal('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 mr-1">编辑</button>
@@ -5351,8 +5382,12 @@ async function showTalentModal(id) {
   showModal(`
     <div class="p-6" style="max-width:760px">
       <h3 class="text-lg font-bold text-navy-800 mb-2">编辑人才信息</h3>
-      <p class="text-xs text-gray-400 mb-4">关联用户ID：${escapeHtml(item.member_id)} · 昵称：${escapeHtml(item.member_name || '-')}</p>
+      <p class="text-xs text-gray-400 mb-4">关联用户ID：${escapeHtml(item.member_id)} · 昵称：${escapeHtml(item.member_name || '-')} · 会员类型：${escapeHtml(item.user_category_label || USER_CATEGORY_MAP[item.user_category] || '普通用户')}</p>
       <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">会员类型（同步会员资料）</label>
+          ${renderMemberCategorySelect(item.member_id, item.user_category)}
+        </div>
         <div class="grid grid-cols-2 gap-4">
           <div><label class="block text-sm font-medium text-gray-700 mb-1">真实姓名</label><input id="talRealName" value="${escapeHtml(item.real_name || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">联系方式</label><input id="talContact" value="${escapeHtml(item.contact || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>

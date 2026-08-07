@@ -550,7 +550,7 @@ export class TalentService {
     }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
     const rows = await queryRows(
-      `SELECT t.*, m.avatar AS member_avatar, m.name AS member_name, m.phone AS member_phone
+      `SELECT t.*, m.avatar AS member_avatar, m.name AS member_name, m.phone AS member_phone, m.user_category
        FROM talent_applications t
        LEFT JOIN members m ON m.id = t.member_id
        ${whereSql}
@@ -565,7 +565,7 @@ export class TalentService {
 
   async adminGetById(id: string) {
     const row = await queryOne(
-      `SELECT t.*, m.avatar AS member_avatar, m.name AS member_name, m.phone AS member_phone
+      `SELECT t.*, m.avatar AS member_avatar, m.name AS member_name, m.phone AS member_phone, m.user_category
        FROM talent_applications t
        LEFT JOIN members m ON m.id = t.member_id
        WHERE t.id = ?`,

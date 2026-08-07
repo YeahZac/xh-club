@@ -1133,6 +1133,13 @@ export class AdminController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Get('members/:id')
+  async getMemberById(@Param('id') id: string) {
+    console.log('[AdminController] GET /api/admin/members/:id')
+    const result = await this.adminService.getMemberById(id)
+    return { code: 200, msg: 'success', data: result }
+  }
+
   @Post('members/:id/approve')
   async approveMember(@Param('id') id: string, @Body() body: { approved_by: string }) {
     console.log('[AdminController] POST /api/admin/members/:id/approve')

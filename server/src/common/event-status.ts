@@ -12,14 +12,25 @@ const EVENT_STATUS_LABEL: Record<EventRuntimeStatus, string> = {
 /** 将库内无时区 DATETIME 按北京时间（UTC+8）解析为 epoch ms */
 export function parseBeijingDateTime(value: unknown): number | null {
   if (value == null || value === '') return null
+
   if (value instanceof Date) {
-    const t = value.getTime()
-    return Number.isNaN(t) ? null : t
+    if (Number.isNaN(value.getTime())) return null
+    // mysql2 timezone:Z 下，UTC 分量即库内北京时间墙钟
+    return Date.UTC(
+      value.getUTCFullYear(),
+      value.getUTCMonth(),
+      value.getUTCDate(),
+      value.getUTCHours() - 8,
+      value.getUTCMinutes(),
+      value.getUTCSeconds(),
+    )
   }
+
   const raw = String(value).trim()
   if (!raw) return null
+
   const match = raw.match(
-    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/,
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/,
   )
   if (match) {
     const year = Number(match[1])
@@ -28,9 +39,9 @@ export function parseBeijingDateTime(value: unknown): number | null {
     const hour = Number(match[4])
     const minute = Number(match[5])
     const second = Number(match[6] || 0)
-    // 北京时间墙钟 → UTC epoch
     return Date.UTC(year, month - 1, day, hour - 8, minute, second)
   }
+
   const parsed = Date.parse(raw)
   return Number.isNaN(parsed) ? null : parsed
 }

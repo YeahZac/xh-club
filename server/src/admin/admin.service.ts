@@ -21,6 +21,7 @@ import {
 import { createNotification } from '@/common/notify'
 import { resolveEventStatus } from '@/common/event-status'
 import { normalizeUserCategory, userCategoryLabel } from '@/common/user-category'
+import { toDatetimeLocalValue, toMysqlDateTime } from '@/common/mysql-datetime'
 import {
   normalizePromoCoopMode,
   promoCoopModeLabel,
@@ -346,10 +347,33 @@ export class AdminService {
   async getAllMembers(query: any) {
     try {
       const rows = await queryRows('SELECT * FROM members ORDER BY created_at DESC')
-      return this.uploadService.signRowsFields(rows || [], ['avatar'])
+      const signed = await this.uploadService.signRowsFields(rows || [], ['avatar'])
+      return (signed || []).map((row: any) => ({
+        ...row,
+        user_category: normalizeUserCategory(row.user_category),
+        user_category_label: userCategoryLabel(row.user_category),
+      }))
     } catch (error) {
       console.error('[AdminService] getAllMembers error:', error)
       throw new HttpException('获取会员列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    }
+  }
+
+  async getMemberById(id: string) {
+    try {
+      const row = await queryOne('SELECT * FROM members WHERE id = ?', [id])
+      if (!row) throw new HttpException('会员不存在', HttpStatus.NOT_FOUND)
+      const signed = await this.uploadService.signRowFields(row, ['avatar'])
+      const category = normalizeUserCategory(signed.user_category)
+      return {
+        ...signed,
+        user_category: category,
+        user_category_label: userCategoryLabel(category),
+      }
+    } catch (error) {
+      console.error('[AdminService] getMemberById error:', error)
+      if (error instanceof HttpException) throw error
+      throw new HttpException('获取会员详情失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 
@@ -444,15 +468,7 @@ export class AdminService {
   }
 
   private toDatetimeLocalValue(value: unknown): string {
-    if (!value) return ''
-    const date = value instanceof Date ? value : new Date(String(value))
-    if (Number.isNaN(date.getTime())) return ''
-    const y = date.getFullYear()
-    const m = String(date.getMonth() + 1).padStart(2, '0')
-    const d = String(date.getDate()).padStart(2, '0')
-    const hh = String(date.getHours()).padStart(2, '0')
-    const mm = String(date.getMinutes()).padStart(2, '0')
-    return `${y}-${m}-${d}T${hh}:${mm}`
+    return toDatetimeLocalValue(value)
   }
 
   private normalizeFormFields(value: unknown): unknown[] | null {
@@ -506,8 +522,8 @@ export class AdminService {
     if (String(dto?.status || '') === 'draft') return 'draft'
     return resolveEventStatus({
       status: 'open',
-      start_time: dto?.start_time,
-      end_time: dto?.end_time,
+      start_time: toMysqlDateTime(dto?.start_time) ?? dto?.start_time,
+      end_time: toMysqlDateTime(dto?.end_time) ?? dto?.end_time,
       max_participants: dto?.max_participants,
       current_participants: currentParticipants,
     })
@@ -578,7 +594,7 @@ export class AdminService {
         `INSERT INTO events (title, description, cover_image, video_url, event_type, status, start_time, end_time, location, address, max_participants, fee, form_fields)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [dto.title, dto.description || null, coverImage, videoUrl, dto.event_type || 'salon',
-         status, dto.start_time || null, dto.end_time || null,
+         status, toMysqlDateTime(dto.start_time), toMysqlDateTime(dto.end_time),
          dto.location || null, dto.address || null,
          dto.max_participants == null ? 100 : Number(dto.max_participants) || 0,
          dto.fee || 0,
@@ -614,8 +630,8 @@ export class AdminService {
       if (dto.cover_image !== undefined) assign('cover_image', assertCloudStorageImageUrl(dto.cover_image))
       if (dto.video_url !== undefined) assign('video_url', normalizeOptionalVideoUrl(dto.video_url))
       if (dto.event_type !== undefined) assign('event_type', dto.event_type || 'salon')
-      if (dto.start_time !== undefined) assign('start_time', dto.start_time || null)
-      if (dto.end_time !== undefined) assign('end_time', dto.end_time || null)
+      if (dto.start_time !== undefined) assign('start_time', toMysqlDateTime(dto.start_time))
+      if (dto.end_time !== undefined) assign('end_time', toMysqlDateTime(dto.end_time))
       if (dto.location !== undefined) assign('location', dto.location || null)
       if (dto.address !== undefined) assign('address', dto.address || null)
       if (dto.max_participants !== undefined) {
@@ -638,8 +654,8 @@ export class AdminService {
       const merged = {
         ...existing,
         ...dto,
-        start_time: dto.start_time !== undefined ? dto.start_time : existing.start_time,
-        end_time: dto.end_time !== undefined ? dto.end_time : existing.end_time,
+        start_time: dto.start_time !== undefined ? toMysqlDateTime(dto.start_time) : existing.start_time,
+        end_time: dto.end_time !== undefined ? toMysqlDateTime(dto.end_time) : existing.end_time,
         max_participants: dto.max_participants !== undefined ? dto.max_participants : existing.max_participants,
         status: dto.status !== undefined ? dto.status : existing.status,
       }
