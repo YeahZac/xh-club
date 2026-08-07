@@ -5,7 +5,7 @@
   "compilerOptions": {
     "deleteOutDir": true,
     "exclude": ["node_modules", "dist", ".git", "../dist", "../src"],
-    "assets": ["admin-panel/**/*"]
+    "assets": ["admin-panel/**/*", "assets/**/*"]
   },
   "webpack": false
 }

@@ -1260,13 +1260,21 @@ function destroyRichEditors() {
 
 function getRichEditorHtml(editorId) {
   const meta = richEditorMeta[editorId]
-  if (meta?.sourceEl && (meta.sourceMode || meta.rawPreferred)) {
-    const raw = String(meta.sourceEl.value || '').trim()
-    if (raw) return raw
+  const rawFromSource = String(meta?.sourceEl?.value || '').trim()
+  // 源码模式 / 完整 H5 / 源码区已有完整文档：一律以 textarea 为准，避免 Quill 吃掉结构
+  if (
+    rawFromSource &&
+    (meta?.sourceMode || meta?.rawPreferred || isFullHtmlDocument(rawFromSource))
+  ) {
+    return rawFromSource
   }
   const editor = richEditors[editorId]
-  if (!editor) return ''
+  if (!editor) return rawFromSource || ''
   const html = editor.root.innerHTML || ''
+  // 可视化区仅有「已保存完整 HTML」占位时，仍回退源码区
+  if (html.includes('【已保存完整 HTML 源码】') && rawFromSource) {
+    return rawFromSource
+  }
   return html === '<p><br></p>' ? '' : html
 }
 
@@ -1299,7 +1307,14 @@ function setRichEditorSourceMode(editorId, enabled) {
   const btn = toolbar?.querySelector?.('.ql-htmlsource')
   if (enabled) {
     if (!meta.sourceMode) {
-      meta.sourceEl.value = quill.root.innerHTML === '<p><br></p>' ? '' : (quill.root.innerHTML || '')
+      const existing = String(meta.sourceEl.value || '').trim()
+      // 关键：勿用空 Quill 覆盖已写入的完整 HTML / rawPreferred 源码
+      const keepExisting =
+        (meta.rawPreferred && existing) || isFullHtmlDocument(existing)
+      if (!keepExisting) {
+        meta.sourceEl.value =
+          quill.root.innerHTML === '<p><br></p>' ? '' : (quill.root.innerHTML || '')
+      }
     }
     meta.sourceMode = true
     host.style.display = 'none'
@@ -1479,10 +1494,32 @@ function initRichEditor(editorId, html) {
       const meta = richEditorMeta[editorId]
       meta.sourceEl.value = html
       meta.rawPreferred = true
-      setRichEditorSourceMode(editorId, true)
+      meta.sourceMode = true
+      host.style.display = 'none'
+      meta.sourceWrap.style.display = 'block'
+      quill.setText('')
+      quill.clipboard.dangerouslyPasteHTML(
+        0,
+        '<p>【已保存完整 HTML 源码】请继续用「&lt;/&gt; 源码」编辑，勿在可视化中改写。</p>',
+      )
+      setTimeout(() => {
+        const toolbarRoot = host.previousElementSibling
+        const htmlSourceBtn = toolbarRoot?.querySelector?.('.ql-htmlsource')
+        if (htmlSourceBtn) htmlSourceBtn.classList.add('ql-active')
+      }, 0)
     } else {
       quill.root.innerHTML = html
     }
+  }
+
+  // 源码区粘贴完整 H5 时自动标记，防止误切可视化丢内容
+  const metaForPaste = richEditorMeta[editorId]
+  if (metaForPaste?.sourceEl && !metaForPaste._pasteBound) {
+    metaForPaste._pasteBound = true
+    metaForPaste.sourceEl.addEventListener('input', () => {
+      const raw = String(metaForPaste.sourceEl.value || '').trim()
+      if (isFullHtmlDocument(raw)) metaForPaste.rawPreferred = true
+    })
   }
   return quill
 }
@@ -2497,6 +2534,13 @@ async function submitUpdateEvent(id) {
   const body = buildEventPayload('open')
   if (!body.title.trim()) return toast('请输入活动名称', 'error')
   if (!body.cover_image.trim()) return toast('活动封面图片为必填项', 'error')
+  const sourceLen = String(richEditorMeta.evDescEditor?.sourceEl?.value || '').trim().length
+  if (!body.description && sourceLen > 0) {
+    return toast('活动详情源码未写入，请保持「</> 源码」模式后再保存', 'error')
+  }
+  if (body.description && body.description.length > 12_000_000) {
+    return toast('活动详情 HTML 过大，请压缩内嵌图片后重试', 'error')
+  }
   const res = await api(`/admin/events/${id}`, { method: 'PUT', body })
   if (res.code === 200) { toast('活动已更新'); closeModal(); loadEvents(); }
   else toast(res.msg || '更新失败', 'error')

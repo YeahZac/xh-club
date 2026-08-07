@@ -67,8 +67,8 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['mall_products', 'enable_distribution', 'TINYINT(1) NOT NULL DEFAULT 0'],
   ['mall_products', 'distribution_rate', 'DECIMAL(5,2) DEFAULT 0'],
   ['mall_products', 'sales_count', 'INT NOT NULL DEFAULT 0'],
-  ['events', 'description', 'MEDIUMTEXT NULL'],
-  ['events', 'content', 'MEDIUMTEXT NULL'],
+  ['events', 'description', 'LONGTEXT NULL'],
+  ['events', 'content', 'LONGTEXT NULL'],
   ['events', 'view_count', 'INT NOT NULL DEFAULT 0'],
   ['homepage_sections', 'sort_mode', `VARCHAR(32) NOT NULL DEFAULT 'custom'`],
   // 商机管理（兼容旧 business_opportunities 表结构）
@@ -1147,7 +1147,7 @@ export async function ensureSchemaColumns(): Promise<void> {
     }
   }
 
-  // 富文本字段升级为 MEDIUMTEXT，避免图文内容被截断
+  // 富文本字段升级为 LONGTEXT，支持完整 H5 源码（含内嵌图片）
   for (const [table, column] of [
     ['mall_products', 'description'],
     ['events', 'description'],
@@ -1156,9 +1156,11 @@ export async function ensureSchemaColumns(): Promise<void> {
     ['configs', 'config_value'],
     ['projects', 'promo_remark'],
     ['projects', 'description'],
+    ['business_opportunities', 'content'],
+    ['invitation_reward_rules', 'content'],
   ] as const) {
     try {
-      await pool.query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` MEDIUMTEXT NULL`)
+      await pool.query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` LONGTEXT NULL`)
     } catch (error: any) {
       const msg = String(error?.message || '')
       if (
@@ -1166,7 +1168,7 @@ export async function ensureSchemaColumns(): Promise<void> {
         !msg.includes("doesn't exist") &&
         error?.code !== 'ER_NO_SUCH_TABLE'
       ) {
-        console.warn(`[MySQL] 调整 ${table}.${column} 为 MEDIUMTEXT 失败:`, error?.message || error)
+        console.warn(`[MySQL] 调整 ${table}.${column} 为 LONGTEXT 失败:`, error?.message || error)
       }
     }
   }
@@ -1288,5 +1290,42 @@ async function ensureSeedData(pool: NonNullable<ReturnType<typeof getPool>>): Pr
     }
   } catch (error: any) {
     console.warn('[MySQL] 补齐初始管理员失败:', error?.message || error)
+  }
+
+  // 为「项目赋能共创8月8日」活动回填完整议程 H5（仅当正文为空时）
+  try {
+    const fs = await import('fs')
+    const path = await import('path')
+    const candidates = [
+      path.join(__dirname, '..', '..', 'assets', 'event-agenda-0808.html'),
+      path.join(__dirname, 'assets', 'event-agenda-0808.html'),
+      path.join(__dirname, '..', 'assets', 'event-agenda-0808.html'),
+      path.join(process.cwd(), 'dist', 'assets', 'event-agenda-0808.html'),
+      path.join(process.cwd(), 'src', 'assets', 'event-agenda-0808.html'),
+      path.join(process.cwd(), 'h5', 'event-agenda-0808', 'agenda-0808-inline.html'),
+    ]
+    let agendaHtml = ''
+    for (const file of candidates) {
+      if (fs.existsSync(file)) {
+        agendaHtml = fs.readFileSync(file, 'utf8').trim()
+        if (agendaHtml) break
+      }
+    }
+    if (agendaHtml.length > 500) {
+      const [result] = await pool.query(
+        `UPDATE events
+         SET description = ?
+         WHERE id = 5
+           AND title LIKE ?
+           AND (description IS NULL OR TRIM(description) = '' OR description = '<p><br></p>')`,
+        [agendaHtml, '%项目赋能共创%'],
+      )
+      const affected = Number((result as any)?.affectedRows || 0)
+      if (affected > 0) {
+        console.log('[MySQL] 已回填活动 id=5 的完整议程 HTML')
+      }
+    }
+  } catch (error: any) {
+    console.warn('[MySQL] 回填 8/8 议程 HTML 失败:', error?.message || error)
   }
 }
