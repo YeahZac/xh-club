@@ -57,6 +57,13 @@
       font-size: 12px; line-height: 1.55;
     }
     .rich-source-hint { padding: 8px 14px; border-top: 1px solid #1e293b; color: #94a3b8; font-size: 11px; }
+    .rich-source-actions { padding: 8px 14px; border-top: 1px solid #1e293b; display: flex; gap: 8px; flex-wrap: wrap; }
+    .rich-source-visual-btn {
+      padding: 6px 12px; border-radius: 8px; border: 1px solid #334155;
+      background: #1e3a5f; color: #e2e8f0; font-size: 12px; cursor: pointer;
+    }
+    .rich-source-visual-btn:hover { background: #274b7a; }
+    .ql-htmlvisual.ql-active { background: #2d6a4f !important; color: #d8f3dc !important; border-radius: 4px; }
     .emoji-popover { position: absolute; z-index: 80; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 8px; width: 280px; max-height: 180px; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,.12); display: none; }
     .emoji-popover button { font-size: 18px; width: 32px; height: 32px; border-radius: 8px; }
     .emoji-popover button:hover { background: #f3f4f6; }
@@ -819,7 +826,7 @@
 
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mt-6">
         <h3 class="font-bold text-navy-800 mb-2">关于我们</h3>
-        <p class="text-xs text-gray-400 mb-4">小程序首页入口展示。可点工具栏「&lt;/&gt;」进入 HTML 源码模式，粘贴完整 H5 页面代码；小程序将按代码渲染。</p>
+        <p class="text-xs text-gray-400 mb-4">小程序首页入口展示。支持「&lt;/&gt;」源码模式粘贴完整 H5；完成后点「可视化」可切回文字与图片编辑。</p>
         <div id="aboutUsEditor"></div>
         <div class="mt-6 flex justify-end">
           <button onclick="saveAboutUs()" class="px-8 py-3 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl font-medium hover:shadow-lg transition">保存关于我们</button>
@@ -1227,6 +1234,77 @@ function isFullHtmlDocument(html) {
   return false
 }
 
+/** 从完整 HTML 或源码中提取可供 Quill 可视化的正文（保留文字、图片、基础排版） */
+function extractEditableHtmlFromSource(raw) {
+  let html = String(raw || '').trim()
+  if (!html) return ''
+
+  if (isFullHtmlDocument(html)) {
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+    if (bodyMatch?.[1]) {
+      html = bodyMatch[1].trim()
+    } else {
+      html = html
+        .replace(/<!DOCTYPE[\s\S]*?>/gi, '')
+        .replace(/<\/?html[^>]*>/gi, '')
+        .replace(/<head[\s\S]*?<\/head>/gi, '')
+        .replace(/<\/?body[^>]*>/gi, '')
+        .trim()
+    }
+  }
+
+  html = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const doc = new DOMParser().parseFromString(`<div id="xh-rich-root">${html}</div>`, 'text/html')
+      const root = doc.getElementById('xh-rich-root')
+      if (root) {
+        root.querySelectorAll('script, style, link, meta, iframe, object, embed').forEach((node) => node.remove())
+        html = root.innerHTML.trim()
+      }
+    } catch {
+      /* 解析失败时保留已剥离 script/style 的字符串 */
+    }
+  }
+
+  if (!html || html === '<br>') return '<p><br></p>'
+  return html
+}
+
+function switchRichEditorToVisual(editorId, options = {}) {
+  const host = document.getElementById(editorId)
+  const quill = richEditors[editorId]
+  if (!host || !quill) return
+  const meta = ensureRichSourceWrap(editorId, host)
+  const raw = String(meta.sourceEl?.value || '').trim()
+  const toolbar = host.previousElementSibling
+  const sourceBtn = toolbar?.querySelector?.('.ql-htmlsource')
+  const visualBtn = toolbar?.querySelector?.('.ql-htmlvisual')
+
+  if (isFullHtmlDocument(raw) && options.confirmFullHtml !== false) {
+    const ok = confirm(
+      '当前为完整 HTML 页面源码。切换到可视化编辑会提取正文中的文字与图片，复杂版式与样式将丢失。\n\n确定切换到可视化模式吗？'
+    )
+    if (!ok) return
+  }
+
+  const fragment = extractEditableHtmlFromSource(raw)
+  meta.rawPreferred = false
+  meta.sourceMode = false
+  meta.sourceWrap.style.display = 'none'
+  host.style.display = ''
+  if (sourceBtn) sourceBtn.classList.remove('ql-active')
+  if (visualBtn) visualBtn.classList.remove('ql-active')
+  meta.sourceEl.value = fragment
+  quill.setText('')
+  quill.clipboard.dangerouslyPasteHTML(0, fragment || '<p><br></p>')
+  toast('已切换到可视化编辑（文字与图片）', 'success')
+}
+
 function destroyRichEditor(editorId) {
   const host = document.getElementById(editorId)
   const meta = richEditorMeta[editorId]
@@ -1286,8 +1364,19 @@ function ensureRichSourceWrap(editorId, host) {
   ta.placeholder = '在此粘贴或编辑 HTML 源码（支持完整 H5 页面）。小程序将按代码渲染展示。'
   const hint = document.createElement('div')
   hint.className = 'rich-source-hint'
-  hint.textContent = '提示：完整 HTML（含 <style>）请在源码模式保存；切回可视化可能简化部分标签。'
+  hint.textContent = '源码模式：可粘贴完整 H5。完成后点「可视化」或下方按钮，切回文字与图片编辑。'
+  const actions = document.createElement('div')
+  actions.className = 'rich-source-actions'
+  const visualBtn = document.createElement('button')
+  visualBtn.type = 'button'
+  visualBtn.className = 'rich-source-visual-btn'
+  visualBtn.textContent = '切换到可视化编辑'
+  visualBtn.addEventListener('click', () => {
+    switchRichEditorToVisual(editorId, { confirmFullHtml: true })
+  })
+  actions.appendChild(visualBtn)
   wrap.appendChild(ta)
+  wrap.appendChild(actions)
   wrap.appendChild(hint)
   host.insertAdjacentElement('afterend', wrap)
   meta = { sourceMode: false, sourceWrap: wrap, sourceEl: ta, rawPreferred: false }
@@ -1305,7 +1394,6 @@ function setRichEditorSourceMode(editorId, enabled) {
   if (enabled) {
     if (!meta.sourceMode) {
       const existing = String(meta.sourceEl.value || '').trim()
-      // 关键：勿用空 Quill 覆盖已写入的完整 HTML / rawPreferred 源码
       const keepExisting =
         (meta.rawPreferred && existing) || isFullHtmlDocument(existing)
       if (!keepExisting) {
@@ -1317,28 +1405,20 @@ function setRichEditorSourceMode(editorId, enabled) {
     host.style.display = 'none'
     meta.sourceWrap.style.display = 'block'
     if (btn) btn.classList.add('ql-active')
+    const visualBtn = toolbar?.querySelector?.('.ql-htmlvisual')
+    if (visualBtn) visualBtn.classList.remove('ql-active')
   } else {
-    const raw = String(meta.sourceEl.value || '')
-    meta.sourceMode = false
-    meta.sourceWrap.style.display = 'none'
-    host.style.display = ''
-    if (btn) btn.classList.remove('ql-active')
-    if (isFullHtmlDocument(raw)) {
-      meta.rawPreferred = true
-      // 完整页面保留在源码区；可视化仅作摘要提示，避免 Quill 破坏结构
-      quill.setText('')
-      quill.clipboard.dangerouslyPasteHTML(0, '<p>【已保存完整 HTML 源码】请继续用「&lt;/&gt; 源码」编辑，勿在可视化中改写。</p>')
-      meta.sourceEl.value = raw
-      meta.sourceMode = true
-      host.style.display = 'none'
-      meta.sourceWrap.style.display = 'block'
-      if (btn) btn.classList.add('ql-active')
-      toast('检测到完整 HTML，已保持源码模式', 'info')
+    if (!meta.sourceMode) return
+    const raw = String(meta.sourceEl.value || '').trim()
+    if (!raw) {
+      meta.sourceMode = false
+      meta.rawPreferred = false
+      meta.sourceWrap.style.display = 'none'
+      host.style.display = ''
+      if (btn) btn.classList.remove('ql-active')
       return
     }
-    meta.rawPreferred = false
-    quill.setText('')
-    quill.clipboard.dangerouslyPasteHTML(0, raw || '<p><br></p>')
+    switchRichEditorToVisual(editorId, { confirmFullHtml: isFullHtmlDocument(raw) })
   }
 }
 
@@ -1383,7 +1463,7 @@ function initRichEditor(editorId, html) {
           [{ color: [] }],
           [{ list: 'ordered' }, { list: 'bullet' }],
           [{ align: [] }],
-          ['link', 'image', 'emoji', 'attachment', 'htmlsource', 'htmlcopy'],
+          ['link', 'image', 'emoji', 'attachment', 'htmlsource', 'htmlvisual', 'htmlcopy'],
           ['clean']
         ],
         handlers: {
@@ -1451,7 +1531,16 @@ function initRichEditor(editorId, html) {
           },
           htmlsource() {
             const meta = ensureRichSourceWrap(editorId, host)
-            setRichEditorSourceMode(editorId, !meta.sourceMode)
+            if (meta.sourceMode) {
+              switchRichEditorToVisual(editorId, {
+                confirmFullHtml: isFullHtmlDocument(meta.sourceEl?.value || ''),
+              })
+            } else {
+              setRichEditorSourceMode(editorId, true)
+            }
+          },
+          htmlvisual() {
+            switchRichEditorToVisual(editorId, { confirmFullHtml: true })
           },
           htmlcopy() {
             const html = getRichEditorHtml(editorId)
@@ -1476,10 +1565,12 @@ function initRichEditor(editorId, html) {
     const emojiBtn = toolbarRoot?.querySelector('.ql-emoji')
     const attachBtn = toolbarRoot?.querySelector('.ql-attachment')
     const htmlSourceBtn = toolbarRoot?.querySelector('.ql-htmlsource')
+    const htmlVisualBtn = toolbarRoot?.querySelector('.ql-htmlvisual')
     const htmlCopyBtn = toolbarRoot?.querySelector('.ql-htmlcopy')
     if (emojiBtn && !emojiBtn.dataset.ready) { emojiBtn.dataset.ready = '1'; emojiBtn.innerHTML = '😊'; emojiBtn.title = '表情' }
     if (attachBtn && !attachBtn.dataset.ready) { attachBtn.dataset.ready = '1'; attachBtn.innerHTML = '📎'; attachBtn.title = '插入文件' }
-    if (htmlSourceBtn && !htmlSourceBtn.dataset.ready) { htmlSourceBtn.dataset.ready = '1'; htmlSourceBtn.textContent = '</>'; htmlSourceBtn.title = 'HTML 源码编辑（可粘贴完整页面）' }
+    if (htmlSourceBtn && !htmlSourceBtn.dataset.ready) { htmlSourceBtn.dataset.ready = '1'; htmlSourceBtn.textContent = '</>'; htmlSourceBtn.title = 'HTML 源码编辑' }
+    if (htmlVisualBtn && !htmlVisualBtn.dataset.ready) { htmlVisualBtn.dataset.ready = '1'; htmlVisualBtn.textContent = '可视化'; htmlVisualBtn.title = '切换到可视化编辑（文字与图片）' }
     if (htmlCopyBtn && !htmlCopyBtn.dataset.ready) { htmlCopyBtn.dataset.ready = '1'; htmlCopyBtn.textContent = '复制'; htmlCopyBtn.title = '复制 HTML 代码' }
   }, 0)
 
@@ -3623,9 +3714,12 @@ async function showBannerModal(editId) {
             <div><label class="block text-sm font-medium text-gray-700 mb-1">路径</label><input id="bnMiniPath" value="${escapeHtml(lc.path || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="pages/index/index"></div>
           </div>
         </div>
-        <div class="flex justify-end gap-3 pt-4">
-          <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
-          <button onclick="saveBanner('${editId || ''}')" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">${editId ? '保存' : '创建'}</button>
+        <div class="flex justify-between items-center gap-3 pt-4">
+          ${editId ? `<button type="button" onclick="deleteBanner('${editId}', true)" class="px-5 py-2.5 text-sm rounded-xl bg-red-50 text-red-600 hover:bg-red-100">删除 Banner</button>` : '<span></span>'}
+          <div class="flex gap-3">
+            <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm hover:bg-gray-50">取消</button>
+            <button onclick="saveBanner('${editId || ''}')" class="px-5 py-2.5 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl text-sm font-medium">${editId ? '保存' : '创建'}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -3762,7 +3856,7 @@ function buildBannerLinkPayload() {
     linkConfig = { article_id: linkId }
   } else if (linkType === 'event') {
     linkId = document.getElementById('bnEventId').value || null
-    linkConfig = { event_id: linkId }
+    linkConfig = { event_id: linkId ? String(linkId) : null }
   } else if (linkType === 'project') {
     linkId = document.getElementById('bnProjectId').value || null
     linkConfig = { project_id: linkId }
@@ -3827,10 +3921,21 @@ async function toggleBanner(id, active) {
   if (res.code === 200) { toast(active ? '已启用' : '已禁用'); loadBanners(); }
 }
 
-async function deleteBanner(id) {
-  if (!confirm('确定删除此Banner？')) return
-  const res = await api(`/admin/banners/${id}`, { method: 'DELETE' })
-  if (res.code === 200) { toast('已删除'); loadBanners(); }
+async function deleteBanner(id, closeModalAfter = false) {
+  if (!id) return
+  if (!confirm('确定删除此 Banner？删除后无法恢复。')) return
+  try {
+    const res = await api(`/admin/banners/${id}`, { method: 'DELETE' })
+    if (res.code === 200) {
+      toast('Banner 已删除')
+      if (closeModalAfter) closeModal()
+      loadBanners()
+    } else {
+      toast(res.msg || '删除失败', 'error')
+    }
+  } catch (error) {
+    toast(error?.message || '删除失败', 'error')
+  }
 }
 
 // ===== 积分商城 =====

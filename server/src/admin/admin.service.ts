@@ -335,10 +335,15 @@ export class AdminService {
 
   async deleteBanner(id: string) {
     try {
-      await queryExecute('DELETE FROM banners WHERE id = ?', [id])
+      const result = await queryExecute('DELETE FROM banners WHERE id = ?', [id])
+      const affected = Number((result as any)?.affectedRows ?? 0)
+      if (!affected) {
+        throw new HttpException('Banner 不存在', HttpStatus.NOT_FOUND)
+      }
       return { success: true }
     } catch (error) {
       console.error('[AdminService] deleteBanner error:', error)
+      if (error instanceof HttpException) throw error
       throw new HttpException('删除 Banner 失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
