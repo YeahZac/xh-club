@@ -157,8 +157,14 @@ export class DealApplicationsService {
     if (String(payload.ownerMemberId) === String(memberId)) {
       throw new HttpException('项目负责人不能是自己', HttpStatus.BAD_REQUEST)
     }
-    const project = await queryOne(`SELECT id, title FROM projects WHERE id = ?`, [payload.businessId])
+    const project = await queryOne(
+      `SELECT id, title, submitter_id FROM projects WHERE id = ?`,
+      [payload.businessId],
+    )
     if (!project) throw new HttpException('所选项目不存在', HttpStatus.BAD_REQUEST)
+    if (project.submitter_id && String(project.submitter_id) === String(memberId)) {
+      throw new HttpException('不能为自己发布的项目申请成交记录', HttpStatus.BAD_REQUEST)
+    }
     const owner = await queryOne(
       `SELECT id, name FROM members WHERE id = ? AND ${this.ownerMemberStatusSql}`,
       [payload.ownerMemberId],
