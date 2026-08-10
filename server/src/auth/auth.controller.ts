@@ -26,6 +26,7 @@ export class AuthController {
       phoneCode?: string
       phoneCloudId?: string
       inviteCode?: string
+      mode?: 'quick' | 'register'
     },
     @Req() req: any,
     @Headers() headers: Record<string, string>,
@@ -37,7 +38,14 @@ export class AuthController {
       || headers['X-WX-FROM-OPENID']
       || req?.headers?.['x-wx-openid']
 
-    console.log('[AuthController] wx-login openidHeader:', openidHeader ? 'yes' : 'no', 'code:', !!dto.code)
+    console.log(
+      '[AuthController] wx-login openidHeader:',
+      openidHeader ? 'yes' : 'no',
+      'code:',
+      !!dto.code,
+      'mode:',
+      dto.mode || 'register',
+    )
 
     const result = await this.authService.wxLogin({
       code: dto.code,
@@ -47,6 +55,7 @@ export class AuthController {
       phoneCode: dto.phoneCode || '',
       phoneCloudId: dto.phoneCloudId || '',
       inviteCode: dto.inviteCode || '',
+      mode: dto.mode,
     })
     return { code: 200, msg: '登录成功', data: result }
   }

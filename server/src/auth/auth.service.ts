@@ -31,6 +31,8 @@ export interface WxLoginInput {
   phoneCode?: string
   phoneCloudId?: string
   inviteCode?: string
+  /** quick=老用户一键登录（仅 openid）；register=新用户注册（需手机号） */
+  mode?: 'quick' | 'register'
 }
 
 @Injectable()
@@ -53,8 +55,36 @@ export class AuthService {
         )
       }
 
-      const safeName = String(input.nickname || '').trim() || '微信用户'
+      const mode = input.mode === 'quick' ? 'quick' : 'register'
+      const safeName = String(input.nickname || '').trim()
       const safeAvatar = String(input.avatar || '').trim()
+
+      const existing = await queryOne(
+        'SELECT id, name, avatar, phone FROM members WHERE wx_openid = ?',
+        [openid],
+      )
+
+      // 老用户一键登录：仅凭 openid 签发登录态，无需重复授权手机号/头像/昵称
+      if (existing && (mode === 'quick' || (!input.phoneCode && !input.phoneCloudId))) {
+        const memberId = (existing as any).id
+        const updates: string[] = ['updated_at = NOW()']
+        const params: any[] = []
+        if (safeName && !(existing as any).name) {
+          updates.push('name = ?')
+          params.push(safeName)
+        }
+        if (safeAvatar && !(existing as any).avatar) {
+          updates.push('avatar = ?')
+          params.push(safeAvatar)
+        }
+        if (params.length) {
+          params.push(memberId)
+          await queryExecute(`UPDATE members SET ${updates.join(', ')} WHERE id = ?`, params)
+        } else {
+          await queryExecute('UPDATE members SET updated_at = NOW() WHERE id = ?', [memberId])
+        }
+        return this.buildLoginResult(memberId, openid, { isNewMember: false, canBindInvite: false })
+      }
 
       let phone = ''
       if (input.phoneCode?.trim()) {
@@ -64,13 +94,8 @@ export class AuthService {
       }
 
       if (!phone) {
-        throw new HttpException('请授权微信手机号后再登录', HttpStatus.BAD_REQUEST)
+        throw new HttpException('新用户请授权微信手机号后再登录', HttpStatus.BAD_REQUEST)
       }
-
-      const existing = await queryOne(
-        'SELECT id, name, avatar, phone FROM members WHERE wx_openid = ?',
-        [openid],
-      )
 
       if (existing) {
         const memberId = (existing as any).id
@@ -103,7 +128,6 @@ export class AuthService {
 
         params.push(memberId)
         await queryExecute(`UPDATE members SET ${updates.join(', ')} WHERE id = ?`, params)
-        // 老用户再次登录：不允许再填/绑定推荐码
         return this.buildLoginResult(memberId, openid, { isNewMember: false, canBindInvite: false })
       }
 
@@ -118,9 +142,8 @@ export class AuthService {
         await queryExecute(
           `UPDATE members SET wx_openid = ?, name = COALESCE(NULLIF(name, ''), ?),
            avatar = COALESCE(avatar, ?), updated_at = NOW() WHERE id = ?`,
-          [openid, safeName, safeAvatar || null, memberId],
+          [openid, safeName || '微信用户', safeAvatar || null, memberId],
         )
-        // 已有会员账号合并：非首次注册，不绑定推荐码
         return this.buildLoginResult(memberId, openid, { isNewMember: false, canBindInvite: false })
       }
 
@@ -131,7 +154,7 @@ export class AuthService {
            credit_score, active_score, contribution_score, total_points, available_points,
            join_source
          ) VALUES (?, ?, ?, ?, ?, 'normal', 'unpaid', 'normal', 'active', 100, 0, 0, 0, 0, 'wechat')`,
-        [safeName, safeAvatar || null, openid, phone, 'wx_oauth_no_password'],
+        [safeName || '微信用户', safeAvatar || null, openid, phone, 'wx_oauth_no_password'],
       )
 
       const newMember = await queryOne('SELECT id, wx_openid FROM members WHERE wx_openid = ?', [openid])
@@ -150,25 +173,41 @@ export class AuthService {
     }
   }
 
-  /** 登录页预检：同一微信号是否已注册（仅首次可填推荐码） */
+  /** 登录页预检：是否已注册（老用户可一键登录；新用户需手机号注册） */
   async wxPrecheck(input: { code?: string; openidFromHeader?: string }) {
     const openid =
       (input.openidFromHeader || '').trim()
       || (input.code ? await this.exchangeCodeForOpenid(input.code) : '')
 
     if (!openid) {
-      return { registered: false, can_fill_invite: true, openid: '' }
+      return {
+        registered: false,
+        can_fill_invite: true,
+        can_quick_login: false,
+        openid: '',
+        name: '',
+        avatar: '',
+        phone_masked: '',
+      }
     }
 
     const existing = await queryOne(
-      'SELECT id, referrer_id FROM members WHERE wx_openid = ? LIMIT 1',
+      'SELECT id, name, avatar, phone, referrer_id FROM members WHERE wx_openid = ? LIMIT 1',
       [openid],
     )
     const registered = !!existing
+    const phone = String((existing as any)?.phone || '')
+    const phoneMasked = phone
+      ? `${phone.slice(0, 3)}****${phone.slice(-4)}`
+      : ''
     return {
       registered,
       can_fill_invite: !registered,
+      can_quick_login: registered,
       openid,
+      name: registered ? String((existing as any)?.name || '') : '',
+      avatar: registered ? String((existing as any)?.avatar || '') : '',
+      phone_masked: phoneMasked,
     }
   }
 
