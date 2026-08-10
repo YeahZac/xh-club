@@ -93,6 +93,37 @@ export class MessagesService {
     }
   }
 
+  /**
+   * 清理对接申请等同业务重复通知：同会员 + biz_type + biz_id + title 只保留最新一条。
+   * 解决历史双提交/重复写入导致消息列表刷屏。
+   */
+  private async purgeDuplicateBizNotifications(memberId: string): Promise<void> {
+    try {
+      await queryExecute(
+        `DELETE n FROM notifications n
+         INNER JOIN notifications keep
+           ON keep.member_id = n.member_id
+          AND keep.biz_type = n.biz_type
+          AND keep.biz_id = n.biz_id
+          AND keep.title = n.title
+          AND (
+            keep.created_at > n.created_at
+            OR (keep.created_at = n.created_at AND keep.id > n.id)
+          )
+         WHERE n.member_id = ?
+           AND n.biz_type IS NOT NULL
+           AND n.biz_type <> ''
+           AND n.biz_id IS NOT NULL
+           AND n.biz_id <> ''`,
+        [memberId],
+      )
+    } catch (error: any) {
+      // 旧表无 biz 列时忽略
+      if (error?.errno === 1054) return
+      console.warn('[MessagesService] purgeDuplicateBizNotifications failed:', error?.message || error)
+    }
+  }
+
   /** 获取通知列表 */
   async getNotifications(memberId: string, params: { type?: string; page?: number; pageSize?: number }) {
     const page = Math.max(1, Number(params.page) || 1)
@@ -100,6 +131,8 @@ export class MessagesService {
     const offset = (page - 1) * pageSize
 
     try {
+      await this.purgeDuplicateBizNotifications(memberId)
+
       const values: any[] = [memberId]
       let where = 'member_id = ?'
       if (params.type) {
