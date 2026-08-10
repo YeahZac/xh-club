@@ -15,6 +15,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['projects', 'audit_status', `VARCHAR(16) NOT NULL DEFAULT 'approved'`],
   ['projects', 'reject_reason', 'VARCHAR(500) NULL'],
   ['projects', 'submitter_id', 'INT NULL'],
+  ['projects', 'company_name', 'VARCHAR(200) NULL'],
   ['projects', 'avg_score', 'DECIMAL(4,2) NOT NULL DEFAULT 0'],
   ['projects', 'score_count', 'INT NOT NULL DEFAULT 0'],
   ['projects', 'gallery_images', 'JSON NULL'],

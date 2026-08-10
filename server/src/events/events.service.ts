@@ -567,14 +567,16 @@ export class EventsService {
     let ownerMemberId = (data as any).submitter_id || null
     let ownerName: string | null = null
     let ownerUserCategory: string | null = null
+    let companyName = String((data as any).company_name || '').trim() || null
     if (ownerMemberId) {
       const owner = await queryOne(
-        'SELECT id, name, user_category FROM members WHERE id = ?',
+        'SELECT id, name, user_category, company_name FROM members WHERE id = ?',
         [ownerMemberId],
       )
       if (owner) {
         ownerName = owner.name || null
         ownerUserCategory = normalizeUserCategory(owner.user_category)
+        if (!companyName) companyName = String(owner.company_name || '').trim() || null
       }
     }
 
@@ -593,6 +595,7 @@ export class EventsService {
       submitter_id: ownerMemberId,
       owner_member_id: ownerMemberId,
       owner_name: ownerName,
+      company_name: companyName,
       owner_user_category: ownerUserCategory,
       owner_user_category_label: ownerUserCategory ? userCategoryLabel(ownerUserCategory) : null,
       promo_coop_mode: promoMode,

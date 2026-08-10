@@ -1098,8 +1098,12 @@ export class AdminService {
     try {
       const rows = await queryRows(
         `SELECT p.*,
+                m.name AS owner_name,
+                m.company_name AS owner_company_name,
+                m.phone AS owner_phone,
                 (SELECT COUNT(*) FROM project_score_dimensions d WHERE d.project_id = p.id) AS dimension_count
          FROM projects p
+         LEFT JOIN members m ON m.id = p.submitter_id
          ORDER BY
            CASE WHEN p.audit_status = 'pending' THEN 0 ELSE 1 END,
            p.created_at DESC`,
@@ -1113,7 +1117,17 @@ export class AdminService {
 
   async getProjectById(id: string) {
     try {
-      const row = await queryOne('SELECT * FROM projects WHERE id = ?', [id])
+      const row = await queryOne(
+        `SELECT p.*,
+                m.name AS owner_name,
+                m.company_name AS owner_company_name,
+                m.phone AS owner_phone,
+                m.user_category AS owner_user_category
+         FROM projects p
+         LEFT JOIN members m ON m.id = p.submitter_id
+         WHERE p.id = ?`,
+        [id],
+      )
       if (!row) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
       const dimensions = await queryRows(
         `SELECT id, project_id, name, sort_order
@@ -1129,12 +1143,32 @@ export class AdminService {
       const fileUrls = await this.uploadService.signMediaUrls(
         parseJsonUrlList((row as any).file_urls),
       )
-      return { ...signed, gallery_images: galleryImages, file_urls: fileUrls, score_dimensions: dimensions || [] }
+      return {
+        ...signed,
+        company_name: (row as any).company_name || (row as any).owner_company_name || null,
+        gallery_images: galleryImages,
+        file_urls: fileUrls,
+        score_dimensions: dimensions || [],
+      }
     } catch (error) {
       console.error('[AdminService] getProjectById error:', error)
       if (error instanceof HttpException) throw error
       throw new HttpException('获取项目失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
+  }
+
+  private async resolveProjectOwner(submitterIdRaw: unknown) {
+    if (submitterIdRaw == null || submitterIdRaw === '') return null
+    const submitterId = Number(submitterIdRaw)
+    if (!Number.isFinite(submitterId) || submitterId <= 0) {
+      throw new HttpException('项目负责人无效', HttpStatus.BAD_REQUEST)
+    }
+    const owner = await queryOne(
+      `SELECT id, name, company_name, status FROM members WHERE id = ?`,
+      [submitterId],
+    )
+    if (!owner) throw new HttpException('项目负责人不存在', HttpStatus.BAD_REQUEST)
+    return owner
   }
 
   async createProject(dto: any) {
@@ -1147,12 +1181,17 @@ export class AdminService {
       const fileUrls = parseJsonUrlList(dto.file_urls)
         .map((url) => canonicalizeCloudStorageUrl(url))
         .filter((url) => isCloudStorageUrl(url))
+      const owner = await this.resolveProjectOwner(dto.submitter_id)
+      const companyName =
+        String(dto.company_name || '').trim()
+        || String(owner?.company_name || '').trim()
+        || null
       const result = await queryExecute(
         `INSERT INTO projects
            (title, description, cover_image, video_url, gallery_images, file_urls, industry, stage, amount_max, status,
-            audit_status, avg_score, score_count,
+            audit_status, submitter_id, company_name, avg_score, score_count,
             promo_coop_mode, promo_commission_rate, promo_amount_wan, promo_remark, promo_share_count)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 0, 0, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, 0, 0, ?, ?, ?, ?, ?)`,
         [
           dto.title,
           dto.description || null,
@@ -1164,6 +1203,8 @@ export class AdminService {
           dto.stage || 'seed',
           null,
           dto.status || 'active',
+          owner ? owner.id : null,
+          companyName,
           normalizePromoCoopMode(dto.promo_coop_mode),
           dto.promo_commission_rate != null && dto.promo_commission_rate !== ''
             ? Number(dto.promo_commission_rate)
@@ -1232,6 +1273,20 @@ export class AdminService {
       }
       if (dto.promo_share_count !== undefined) {
         assign('promo_share_count', Math.max(0, Number(dto.promo_share_count) || 0))
+      }
+      if (dto.submitter_id !== undefined) {
+        if (dto.submitter_id == null || dto.submitter_id === '') {
+          assign('submitter_id', null)
+        } else {
+          const owner = await this.resolveProjectOwner(dto.submitter_id)
+          assign('submitter_id', owner!.id)
+          if (dto.company_name === undefined && owner?.company_name) {
+            assign('company_name', String(owner.company_name).trim() || null)
+          }
+        }
+      }
+      if (dto.company_name !== undefined) {
+        assign('company_name', String(dto.company_name || '').trim() || null)
       }
       if (dto.audit_status !== undefined) {
         const audit = String(dto.audit_status)
