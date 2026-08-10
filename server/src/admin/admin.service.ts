@@ -389,6 +389,109 @@ export class AdminService {
     }
   }
 
+  /** 管理台编辑会员基本信息 / 公司信息等 */
+  async updateMember(id: string, dto: any) {
+    const existing = await queryOne('SELECT * FROM members WHERE id = ?', [id])
+    if (!existing) throw new HttpException('会员不存在', HttpStatus.NOT_FOUND)
+
+    const updates: string[] = []
+    const params: any[] = []
+    const assign = (col: string, value: unknown) => {
+      updates.push(`${col} = ?`)
+      params.push(value)
+    }
+    const trimOrNull = (value: unknown) => {
+      const text = String(value ?? '').trim()
+      return text || null
+    }
+
+    if (dto.name !== undefined) {
+      const name = String(dto.name || '').trim()
+      if (!name) throw new HttpException('姓名不能为空', HttpStatus.BAD_REQUEST)
+      assign('name', name)
+    }
+    if (dto.phone !== undefined) {
+      const phone = String(dto.phone || '').trim()
+      if (!phone) throw new HttpException('手机号不能为空', HttpStatus.BAD_REQUEST)
+      if (!/^1\d{10}$/.test(phone)) {
+        throw new HttpException('手机号格式不正确', HttpStatus.BAD_REQUEST)
+      }
+      if (phone !== String(existing.phone || '')) {
+        const dup = await queryOne(
+          'SELECT id FROM members WHERE phone = ? AND id <> ? LIMIT 1',
+          [phone, id],
+        )
+        if (dup) throw new HttpException('该手机号已被其他会员使用', HttpStatus.BAD_REQUEST)
+      }
+      assign('phone', phone)
+    }
+    if (dto.avatar !== undefined) {
+      const raw = String(dto.avatar || '').trim()
+      assign('avatar', raw ? canonicalizeCloudStorageUrl(raw) || raw : null)
+    }
+    if (dto.gender !== undefined) {
+      const gender = String(dto.gender || '').trim()
+      if (gender && !['male', 'female', 'unknown', '男', '女'].includes(gender)) {
+        throw new HttpException('性别无效', HttpStatus.BAD_REQUEST)
+      }
+      assign('gender', gender || null)
+    }
+    if (dto.birthday !== undefined) {
+      const birthday = String(dto.birthday || '').trim().slice(0, 10)
+      assign('birthday', /^\d{4}-\d{2}-\d{2}$/.test(birthday) ? birthday : null)
+    }
+    if (dto.company_name !== undefined) assign('company_name', trimOrNull(dto.company_name))
+    if (dto.company_position !== undefined) assign('company_position', trimOrNull(dto.company_position))
+    if (dto.industry_primary !== undefined) assign('industry_primary', trimOrNull(dto.industry_primary))
+    if (dto.industry_secondary !== undefined) {
+      assign('industry_secondary', trimOrNull(dto.industry_secondary))
+    }
+    if (dto.company_scale !== undefined) assign('company_scale', trimOrNull(dto.company_scale))
+    if (dto.company_founded !== undefined) {
+      const founded = String(dto.company_founded || '').trim().slice(0, 10)
+      assign('company_founded', /^\d{4}-\d{2}-\d{2}$/.test(founded) ? founded : null)
+    }
+    if (dto.company_address !== undefined) assign('company_address', trimOrNull(dto.company_address))
+    if (dto.company_website !== undefined) assign('company_website', trimOrNull(dto.company_website))
+    if (dto.business_description !== undefined) {
+      assign('business_description', trimOrNull(dto.business_description))
+    }
+    if (dto.core_advantage !== undefined) assign('core_advantage', trimOrNull(dto.core_advantage))
+    if (dto.resources_supply !== undefined) assign('resources_supply', trimOrNull(dto.resources_supply))
+    if (dto.resources_demand !== undefined) assign('resources_demand', trimOrNull(dto.resources_demand))
+    if (dto.city !== undefined) assign('city', trimOrNull(dto.city))
+    if (dto.wechat_id !== undefined) assign('wechat_id', trimOrNull(dto.wechat_id))
+    if (dto.bio !== undefined) assign('bio', trimOrNull(dto.bio))
+    if (dto.membership_level !== undefined) {
+      const level = String(dto.membership_level || '').trim() || 'normal'
+      if (!['normal', 'silver', 'gold', 'diamond'].includes(level)) {
+        throw new HttpException('会员等级无效', HttpStatus.BAD_REQUEST)
+      }
+      assign('membership_level', level)
+    }
+    if (dto.user_category !== undefined) {
+      assign('user_category', normalizeUserCategory(dto.user_category))
+    }
+    if (dto.status !== undefined) {
+      const status = String(dto.status || '').trim()
+      if (!['pending', 'active', 'approved', 'frozen', 'exited', 'rejected'].includes(status)) {
+        throw new HttpException('会员状态无效', HttpStatus.BAD_REQUEST)
+      }
+      assign('status', status === 'approved' ? 'active' : status)
+    }
+
+    if (!updates.length) {
+      throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
+    }
+
+    params.push(id)
+    await queryExecute(
+      `UPDATE members SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`,
+      params,
+    )
+    return this.getMemberById(id)
+  }
+
   async getMemberDashboard(id: string) {
     const data = await getMemberDashboardStats(id)
     if (!data) throw new HttpException('会员不存在', HttpStatus.NOT_FOUND)

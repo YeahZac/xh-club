@@ -1243,6 +1243,7 @@ document.getElementById('modalOverlay').addEventListener('click', e => {
 const uploadTasks = {}
 const LEVEL_MAP = { normal: '普通', silver: '银卡', gold: '金卡', diamond: '钻石' }
 const STATUS_MAP = { active: '已激活', approved: '已激活', pending: '待审批', frozen: '已冻结', exited: '已退出', rejected: '已拒绝' }
+const USER_CATEGORY_MAP = { normal: '普通用户', promoter: '推广员', member_unit: '会员单位' }
 const STATUS_COLORS = { active: 'bg-green-100 text-green-700', approved: 'bg-green-100 text-green-700', pending: 'bg-yellow-100 text-yellow-700', frozen: 'bg-red-100 text-red-700', exited: 'bg-gray-100 text-gray-500', rejected: 'bg-red-100 text-red-700' }
 const EVENT_TYPE_MAP = { other: '其他活动', roadshow: '项目路演', salon: '专题沙龙', annual: '年度大会', training: '培训', meeting: '定期例会' }
 const BUSINESS_CATEGORY_MAP = { roadshow: '项目路演', financing: '融资招募', resource: '资源对接' }
@@ -2206,7 +2207,8 @@ async function loadMembers() {
         ` : `
           <button onclick="viewMember('${m.id}')" class="text-brand-600 hover:text-brand-800 text-xs font-medium mr-3">查看</button>
         `}
-        <button onclick="purgeMember('${m.id}', '${escapeHtml(m.name || '')}', '${escapeHtml(m.phone || '')}')" class="text-red-600 hover:text-red-800 text-xs font-medium">彻底删除</button>
+        ${hasButtonPermission('members', 'edit') ? `<button onclick="editMember('${m.id}')" class="text-navy-700 hover:text-navy-900 text-xs font-medium mr-3">编辑</button>` : ''}
+        ${hasButtonPermission('members', 'delete') ? `<button onclick="purgeMember('${m.id}', '${escapeHtml(m.name || '')}', '${escapeHtml(m.phone || '')}')" class="text-red-600 hover:text-red-800 text-xs font-medium">彻底删除</button>` : ''}
       </td>
     </tr>
   `).join('')
@@ -2306,11 +2308,13 @@ async function viewMember(id) {
         <div class="flex"><span class="text-gray-500 w-24">行业</span><span>${INDUSTRY_MAP[m.industry_primary] || '-'} / ${m.industry_secondary || '-'}</span></div>
         <div class="flex"><span class="text-gray-500 w-24">等级</span><span>${LEVEL_MAP[m.membership_level] || '普通'}</span></div>
         <div class="flex items-center"><span class="text-gray-500 w-24">用户类型</span>
-          <select onchange="setMemberUserCategory('${m.id}', this.value)" class="px-2 py-1 border rounded-lg text-sm">
+          ${hasButtonPermission('members', 'edit')
+            ? `<select onchange="setMemberUserCategory('${m.id}', this.value)" class="px-2 py-1 border rounded-lg text-sm">
             <option value="normal" ${(!m.user_category || m.user_category==='normal')?'selected':''}>普通用户</option>
             <option value="promoter" ${m.user_category==='promoter'?'selected':''}>推广员</option>
             <option value="member_unit" ${m.user_category==='member_unit'?'selected':''}>会员单位</option>
-          </select>
+          </select>`
+            : `<span>${escapeHtml(USER_CATEGORY_MAP[m.user_category] || m.user_category_label || '普通用户')}</span>`}
         </div>
         <div class="flex"><span class="text-gray-500 w-24">可用积分</span><span>${m.available_points || 0}</span></div>
         <div class="flex"><span class="text-gray-500 w-24">可提供</span><span>${m.resources_supply || '-'}</span></div>
@@ -2319,10 +2323,163 @@ async function viewMember(id) {
       </div>
       <div class="mt-6 flex justify-end gap-3">
         <button onclick="closeModal()" class="px-4 py-2 rounded-lg border text-sm text-gray-600 hover:bg-gray-50">关闭</button>
-        <button onclick="purgeMember('${m.id}', '${escapeHtml(m.name || '')}', '${escapeHtml(m.phone || '')}')" class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm hover:bg-red-700">彻底删除</button>
+        ${hasButtonPermission('members', 'edit') ? `<button onclick="editMember('${m.id}')" class="px-4 py-2 rounded-lg bg-navy-800 text-white text-sm hover:bg-navy-900">编辑资料</button>` : ''}
+        ${hasButtonPermission('members', 'delete') ? `<button onclick="purgeMember('${m.id}', '${escapeHtml(m.name || '')}', '${escapeHtml(m.phone || '')}')" class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm hover:bg-red-700">彻底删除</button>` : ''}
       </div>
     </div>
   `, { wide: true })
+}
+
+function memberFormField(id, label, value, type = 'text', extra = '') {
+  const safe = escapeHtml(value == null ? '' : String(value))
+  if (type === 'textarea') {
+    return `<div>
+      <label class="block text-xs text-gray-500 mb-1">${label}</label>
+      <textarea id="${id}" rows="3" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" ${extra}>${safe}</textarea>
+    </div>`
+  }
+  if (type === 'select') {
+    return `<div>
+      <label class="block text-xs text-gray-500 mb-1">${label}</label>
+      <select id="${id}" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" ${extra}>${value}</select>
+    </div>`
+  }
+  return `<div>
+    <label class="block text-xs text-gray-500 mb-1">${label}</label>
+    <input id="${id}" type="${type}" value="${safe}" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-400" ${extra} />
+  </div>`
+}
+
+async function editMember(id) {
+  if (!hasButtonPermission('members', 'edit')) {
+    return toast('您没有编辑会员的权限', 'error')
+  }
+  const res = await api(`/admin/members/${id}`)
+  if (res.code !== 200) { toast(res.msg || '加载失败', 'error'); return }
+  const m = res.data || {}
+  const industryOptions = Object.entries(INDUSTRY_MAP).map(([k, v]) =>
+    `<option value="${k}" ${m.industry_primary === k ? 'selected' : ''}>${v}</option>`
+  ).join('')
+  const levelOptions = Object.entries(LEVEL_MAP).map(([k, v]) =>
+    `<option value="${k}" ${(m.membership_level || 'normal') === k ? 'selected' : ''}>${v}</option>`
+  ).join('')
+  const statusOptions = [
+    ['pending', '待审批'],
+    ['active', '已激活'],
+    ['frozen', '已冻结'],
+    ['exited', '已退出'],
+    ['rejected', '已拒绝'],
+  ].map(([k, v]) => {
+    const current = m.status === 'approved' ? 'active' : m.status
+    return `<option value="${k}" ${current === k ? 'selected' : ''}>${v}</option>`
+  }).join('')
+  const categoryOptions = Object.entries(USER_CATEGORY_MAP).map(([k, v]) =>
+    `<option value="${k}" ${(m.user_category || 'normal') === k ? 'selected' : ''}>${v}</option>`
+  ).join('')
+  const gender = String(m.gender || '')
+  const genderOptions = `
+    <option value="" ${!gender ? 'selected' : ''}>未设置</option>
+    <option value="male" ${gender === 'male' || gender === '男' ? 'selected' : ''}>男</option>
+    <option value="female" ${gender === 'female' || gender === '女' ? 'selected' : ''}>女</option>
+    <option value="unknown" ${gender === 'unknown' ? 'selected' : ''}>保密</option>
+  `
+  showModal(`
+    <div class="p-6" style="max-width:820px;max-height:88vh;overflow:auto">
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h3 class="text-lg font-bold text-navy-800">编辑会员资料</h3>
+          <p class="text-xs text-gray-400 mt-1">ID：${escapeHtml(String(m.id))} · 需「会员管理 · 编辑」权限</p>
+        </div>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+      </div>
+      <div class="space-y-5">
+        <section>
+          <h4 class="text-sm font-semibold text-navy-800 mb-3">基本信息</h4>
+          <div class="grid grid-cols-2 gap-3">
+            ${memberFormField('memEditName', '姓名', m.name || '', 'text', 'required')}
+            ${memberFormField('memEditPhone', '手机号', m.phone || '', 'text', 'required')}
+            ${memberFormField('memEditGender', '性别', genderOptions, 'select')}
+            ${memberFormField('memEditBirthday', '生日', (m.birthday || '').toString().slice(0, 10), 'date')}
+            ${memberFormField('memEditCity', '城市', m.city || '')}
+            ${memberFormField('memEditWechat', '微信号', m.wechat_id || '')}
+            ${memberFormField('memEditLevel', '会员等级', levelOptions, 'select')}
+            ${memberFormField('memEditStatus', '账号状态', statusOptions, 'select')}
+            ${memberFormField('memEditCategory', '用户类型', categoryOptions, 'select')}
+            ${memberFormField('memEditAvatar', '头像 URL（留空不改）', '', 'text', 'placeholder="填写新头像云存储地址才会更新"')}
+          </div>
+          ${m.avatar ? `<p class="text-xs text-gray-400 mt-2">当前头像：<a href="${escapeHtml(m.avatar)}" target="_blank" class="text-brand-600 hover:underline">查看</a></p>` : ''}
+          <div class="mt-3">${memberFormField('memEditBio', '个人简介', m.bio || '', 'textarea')}</div>
+        </section>
+        <section>
+          <h4 class="text-sm font-semibold text-navy-800 mb-3">公司信息</h4>
+          <div class="grid grid-cols-2 gap-3">
+            ${memberFormField('memEditCompany', '公司名称', m.company_name || '')}
+            ${memberFormField('memEditPosition', '职位', m.company_position || '')}
+            ${memberFormField('memEditIndustry', '所属行业', `<option value="">未设置</option>${industryOptions}`, 'select')}
+            ${memberFormField('memEditIndustry2', '细分行业', m.industry_secondary || '')}
+            ${memberFormField('memEditScale', '公司规模', m.company_scale || '')}
+            ${memberFormField('memEditFounded', '成立时间', (m.company_founded || '').toString().slice(0, 10), 'date')}
+            ${memberFormField('memEditAddress', '公司地址', m.company_address || '')}
+            ${memberFormField('memEditWebsite', '公司官网', m.company_website || '')}
+          </div>
+          <div class="mt-3 grid grid-cols-1 gap-3">
+            ${memberFormField('memEditBusiness', '业务描述', m.business_description || '', 'textarea')}
+            ${memberFormField('memEditAdvantage', '核心优势', m.core_advantage || '', 'textarea')}
+            ${memberFormField('memEditSupply', '可提供资源', m.resources_supply || '', 'textarea')}
+            ${memberFormField('memEditDemand', '资源需求', m.resources_demand || '', 'textarea')}
+          </div>
+        </section>
+      </div>
+      <div class="mt-6 flex justify-end gap-3">
+        <button onclick="closeModal()" class="px-4 py-2 rounded-lg border text-sm text-gray-600 hover:bg-gray-50">取消</button>
+        <button onclick="saveMemberEdit('${m.id}')" class="px-5 py-2 rounded-lg bg-gradient-to-r from-brand-400 to-brand-600 text-white text-sm font-medium">保存</button>
+      </div>
+    </div>
+  `, { wide: true })
+}
+
+async function saveMemberEdit(id) {
+  if (!hasButtonPermission('members', 'edit')) {
+    return toast('您没有编辑会员的权限', 'error')
+  }
+  const name = document.getElementById('memEditName')?.value?.trim()
+  const phone = document.getElementById('memEditPhone')?.value?.trim()
+  if (!name) return toast('请填写姓名', 'error')
+  if (!phone) return toast('请填写手机号', 'error')
+  const body = {
+    name,
+    phone,
+    gender: document.getElementById('memEditGender')?.value || null,
+    birthday: document.getElementById('memEditBirthday')?.value || null,
+    city: document.getElementById('memEditCity')?.value || null,
+    wechat_id: document.getElementById('memEditWechat')?.value || null,
+    membership_level: document.getElementById('memEditLevel')?.value || 'normal',
+    status: document.getElementById('memEditStatus')?.value || 'active',
+    user_category: document.getElementById('memEditCategory')?.value || 'normal',
+    bio: document.getElementById('memEditBio')?.value || null,
+    company_name: document.getElementById('memEditCompany')?.value || null,
+    company_position: document.getElementById('memEditPosition')?.value || null,
+    industry_primary: document.getElementById('memEditIndustry')?.value || null,
+    industry_secondary: document.getElementById('memEditIndustry2')?.value || null,
+    company_scale: document.getElementById('memEditScale')?.value || null,
+    company_founded: document.getElementById('memEditFounded')?.value || null,
+    company_address: document.getElementById('memEditAddress')?.value || null,
+    company_website: document.getElementById('memEditWebsite')?.value || null,
+    business_description: document.getElementById('memEditBusiness')?.value || null,
+    core_advantage: document.getElementById('memEditAdvantage')?.value || null,
+    resources_supply: document.getElementById('memEditSupply')?.value || null,
+    resources_demand: document.getElementById('memEditDemand')?.value || null,
+  }
+  const avatarInput = document.getElementById('memEditAvatar')?.value?.trim()
+  if (avatarInput) body.avatar = avatarInput
+  const res = await api(`/admin/members/${id}`, { method: 'PUT', body })
+  if (res.code === 200) {
+    toast('会员资料已更新')
+    closeModal()
+    loadMembers()
+  } else {
+    toast(res.msg || '保存失败', 'error')
+  }
 }
 
 async function viewMemberMetric(memberId, metric, label) {
@@ -4514,10 +4671,11 @@ async function createOrg() {
 
 
 
-const USER_CATEGORY_MAP = { normal: '普通用户', promoter: '推广员', member_unit: '会员单位' }
-
 function renderMemberCategorySelect(memberId, value) {
   const current = value || 'normal'
+  if (!hasButtonPermission('members', 'edit')) {
+    return `<span class="text-xs text-gray-500">${escapeHtml(USER_CATEGORY_MAP[current] || current)}</span>`
+  }
   return `<select onchange="setMemberUserCategory('${memberId}', this.value)" class="text-xs px-2 py-1 border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-brand-400">
     <option value="normal" ${current === 'normal' ? 'selected' : ''}>普通用户</option>
     <option value="promoter" ${current === 'promoter' ? 'selected' : ''}>推广员</option>
@@ -4616,6 +4774,11 @@ async function saveAboutUs() {
 }
 
 async function setMemberUserCategory(id, category) {
+  if (!hasButtonPermission('members', 'edit')) {
+    toast('您没有编辑会员的权限', 'error')
+    loadMembers()
+    return
+  }
   const res = await api(`/admin/members/${id}/user-category`, { method: 'PUT', body: { user_category: category } })
   if (res.code === 200) { toast('用户类型已更新'); loadMembers(); loadTalents() }
   else toast(res.msg || '更新失败', 'error')
@@ -5541,6 +5704,7 @@ const PERMISSION_PAGES = [
   { key: 'talents', name: '人才管理' },
   { key: 'business', name: '商机管理' },
   { key: 'dealApplications', name: '项目成交记录' },
+  { key: 'feedbacks', name: '用户反馈' },
   { key: 'events', name: '活动管理' },
   { key: 'projects', name: '项目管理' },
   { key: 'banners', name: 'Banner管理' },
@@ -5728,7 +5892,7 @@ function togglePagePerms(page, checked) {
 }
 
 async function updateRole(id) {
-  const pages = ['dashboard','members','talents','business','events','projects','banners','articles','mall','org','admins','roles','industries','memberLevels','invitations','memberInvitations','pointsRules','contributions','departments','config']
+  const pages = PERMISSION_PAGES.map((p) => p.key)
   const permissions = {}
   
   pages.forEach(page => {

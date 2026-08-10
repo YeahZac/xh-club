@@ -1262,7 +1262,7 @@ async function ensureSeedData(pool: NonNullable<ReturnType<typeof getPool>>): Pr
     await pool.query(
       `INSERT IGNORE INTO roles (name, display_name, description, permissions, is_system) VALUES
        ('super_admin', '超级管理员', '拥有所有权限', '["*"]', 1),
-       ('admin', '普通管理员', '基础管理权限', '{"dashboard":{"view":true},"homepage":{"view":true},"members":{"view":true},"articles":{"view":true},"banners":{"view":true}}', 1)`,
+       ('admin', '普通管理员', '基础管理权限', '{"dashboard":{"view":true},"homepage":{"view":true},"members":{"view":true,"edit":true},"articles":{"view":true},"banners":{"view":true},"feedbacks":{"view":true,"edit":true}}', 1)`,
     )
   } catch (error: any) {
     console.warn('[MySQL] 补齐默认角色失败:', error?.message || error)

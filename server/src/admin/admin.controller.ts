@@ -1140,6 +1140,25 @@ export class AdminController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Put('members/:id')
+  async updateMember(@Param('id') id: string, @Body() body: any) {
+    try {
+      const result = await this.adminService.updateMember(id, body || {})
+      return { code: 200, msg: '会员信息已更新', data: result }
+    } catch (error) {
+      if (error instanceof HttpException) {
+        const status = error.getStatus()
+        const payload = error.getResponse()
+        const msg =
+          typeof payload === 'string'
+            ? payload
+            : String((payload as any)?.message || error.message || '更新失败')
+        return { code: status, msg, data: null }
+      }
+      throw error
+    }
+  }
+
   @Get('members/:id/dashboard')
   async getMemberDashboard(@Param('id') id: string) {
     const result = await this.adminService.getMemberDashboard(id)
