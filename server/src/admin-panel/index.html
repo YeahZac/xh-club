@@ -2217,10 +2217,27 @@ async function viewMember(id) {
   const res = await api(`/admin/members/${id}`)
   if (res.code !== 200) { toast('加载失败', 'error'); return }
   const m = res.data
+  const s = m.dashboard?.summary || {}
+  const referrer = m.dashboard?.referrer
+  const referrerText = referrer
+    ? `${escapeHtml(referrer.name || '')}${referrer.phone ? ' · ' + escapeHtml(referrer.phone) : ''}`
+    : '-'
+  const metricCard = (metric, value, label, hint = '') => metric
+    ? `<button type="button" onclick="viewMemberMetric('${m.id}', '${metric}', '${escapeHtml(label)}')"
+        class="bg-gray-50 hover:bg-navy-50 rounded-xl p-3 text-center transition border border-transparent hover:border-navy-200 w-full">
+        <p class="text-xl font-bold text-navy-800">${value ?? 0}</p>
+        <p class="text-xs text-gray-500 mt-1">${label}</p>
+        <p class="text-xs text-brand-600 mt-0.5">查看明细</p>
+      </button>`
+    : `<div class="bg-gray-50 rounded-xl p-3 text-center w-full">
+        <p class="text-xl font-bold text-navy-800">${value ?? 0}</p>
+        <p class="text-xs text-gray-500 mt-1">${label}</p>
+        ${hint ? `<p class="text-xs text-gray-400 mt-0.5">${hint}</p>` : ''}
+      </div>`
   showModal(`
-    <div class="p-6">
+    <div class="p-6" style="max-width:720px;max-height:85vh;overflow:auto">
       <div class="flex items-center justify-between mb-6">
-        <h3 class="text-lg font-bold text-navy-800">会员详情</h3>
+        <h3 class="text-lg font-bold text-navy-800">会员详情 · 数据看板</h3>
         <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
       </div>
       <div class="flex items-center gap-4 mb-6">
@@ -2230,12 +2247,26 @@ async function viewMember(id) {
         <div>
           <p class="text-xl font-bold text-navy-800">${escapeHtml(m.name || '')}</p>
           <p class="text-gray-500">${escapeHtml(m.company_position || '')} @ ${escapeHtml(m.company_name || '')}</p>
+          <p class="text-xs text-gray-400 mt-1">引荐人：${referrerText}</p>
         </div>
       </div>
-      <div class="grid grid-cols-3 gap-4 mb-6">
-        <div class="bg-gray-50 rounded-xl p-4 text-center"><p class="text-2xl font-bold text-navy-800">${m.active_score || 0}</p><p class="text-xs text-gray-500">活跃值</p></div>
-        <div class="bg-gray-50 rounded-xl p-4 text-center"><p class="text-2xl font-bold text-navy-800">${m.contribution_score || 0}</p><p class="text-xs text-gray-500">贡献值</p></div>
-        <div class="bg-gray-50 rounded-xl p-4 text-center"><p class="text-2xl font-bold ${m.credit_score >= 80 ? 'text-green-600' : 'text-yellow-600'}">${m.credit_score || 60}</p><p class="text-xs text-gray-500">信用分</p></div>
+      <div class="grid grid-cols-3 gap-3 mb-4">
+        <div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-xl font-bold text-navy-800">${s.growth_value ?? m.active_score ?? 0}</p><p class="text-xs text-gray-500">成长值</p></div>
+        <div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-xl font-bold text-navy-800">${s.contribution_value ?? m.contribution_score ?? 0}</p><p class="text-xs text-gray-500">贡献值</p></div>
+        <div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-xl font-bold ${(s.credit_score ?? m.credit_score ?? 60) >= 80 ? 'text-green-600' : 'text-yellow-600'}">${s.credit_score ?? m.credit_score ?? 60}</p><p class="text-xs text-gray-500">信用分</p></div>
+      </div>
+      <h4 class="text-sm font-semibold text-navy-800 mb-2">经营数据看板</h4>
+      <p class="text-xs text-gray-400 mb-3">点击指标可查看具体明细列表</p>
+      <div class="grid grid-cols-3 gap-2 mb-6">
+        ${metricCard('', s.member_days ?? 0, '成为会员天数', '自注册/通过日起')}
+        ${metricCard('invites', s.invite_count ?? 0, '邀请人数')}
+        ${metricCard('points', s.points_earn_total ?? s.total_points ?? 0, '获得积分总数')}
+        ${metricCard('events', s.event_count ?? 0, '参加活动数')}
+        ${metricCard('projects', s.project_count ?? 0, '发布项目数')}
+        ${metricCard('demands', s.demand_count ?? 0, '发布需求数')}
+        ${metricCard('shares', s.share_count ?? 0, '分享数')}
+        ${metricCard('deals', s.deal_success_count ?? 0, '项目成交数')}
+        ${metricCard('deals', Number(s.deal_amount_wan || 0), '成交金额(万)')}
       </div>
       <div class="space-y-3 text-sm">
         <div class="flex"><span class="text-gray-500 w-24">手机号</span><span>${m.phone || '-'}</span></div>
@@ -2249,7 +2280,7 @@ async function viewMember(id) {
             <option value="member_unit" ${m.user_category==='member_unit'?'selected':''}>会员单位</option>
           </select>
         </div>
-        <div class="flex"><span class="text-gray-500 w-24">积分</span><span>${m.available_points || 0}</span></div>
+        <div class="flex"><span class="text-gray-500 w-24">可用积分</span><span>${m.available_points || 0}</span></div>
         <div class="flex"><span class="text-gray-500 w-24">可提供</span><span>${m.resources_supply || '-'}</span></div>
         <div class="flex"><span class="text-gray-500 w-24">需求</span><span>${m.resources_demand || '-'}</span></div>
         <div class="flex"><span class="text-gray-500 w-24">简介</span><span>${m.bio || '-'}</span></div>
@@ -2259,7 +2290,105 @@ async function viewMember(id) {
         <button onclick="purgeMember('${m.id}', '${escapeHtml(m.name || '')}', '${escapeHtml(m.phone || '')}')" class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm hover:bg-red-700">彻底删除</button>
       </div>
     </div>
-  `)
+  `, { wide: true })
+}
+
+async function viewMemberMetric(memberId, metric, label) {
+  if (!metric) {
+    toast('该指标暂无明细列表', 'info')
+    return
+  }
+  const res = await api(`/admin/members/${memberId}/dashboard/${metric}`)
+  if (res.code !== 200) { toast(res.msg || '加载明细失败', 'error'); return }
+  const list = Array.isArray(res.data?.list) ? res.data.list : []
+  const fmtTime = (v) => v ? new Date(v).toLocaleString('zh-CN') : '-'
+  const fmtMoney = (v) => {
+    const n = Number(v || 0)
+    if (!n) return '0'
+    return (n / 10000).toFixed(2) + '万'
+  }
+  let rowsHtml = ''
+  if (!list.length) {
+    rowsHtml = '<tr><td colspan="4" class="px-3 py-8 text-center text-gray-400">暂无明细</td></tr>'
+  } else if (metric === 'invites') {
+    rowsHtml = list.map(r => `
+      <tr class="border-t border-gray-100">
+        <td class="px-3 py-2">${escapeHtml(r.name || '-')}</td>
+        <td class="px-3 py-2">${escapeHtml(r.phone || '-')}</td>
+        <td class="px-3 py-2">${escapeHtml(r.company_name || '-')}</td>
+        <td class="px-3 py-2 text-gray-500">${fmtTime(r.created_at)}</td>
+      </tr>`).join('')
+  } else if (metric === 'events') {
+    rowsHtml = list.map(r => `
+      <tr class="border-t border-gray-100">
+        <td class="px-3 py-2">${escapeHtml(r.title || '-')}</td>
+        <td class="px-3 py-2">${r.kind === 'roadshow' ? '路演' : '活动'}</td>
+        <td class="px-3 py-2 text-gray-500" colspan="2">${fmtTime(r.created_at)}</td>
+      </tr>`).join('')
+  } else if (metric === 'projects' || metric === 'demands') {
+    rowsHtml = list.map(r => `
+      <tr class="border-t border-gray-100">
+        <td class="px-3 py-2">${escapeHtml(r.title || '-')}</td>
+        <td class="px-3 py-2">${escapeHtml(r.audit_status || r.status || '-')}</td>
+        <td class="px-3 py-2 text-gray-500" colspan="2">${fmtTime(r.created_at)}</td>
+      </tr>`).join('')
+  } else if (metric === 'shares') {
+    rowsHtml = list.map(r => `
+      <tr class="border-t border-gray-100">
+        <td class="px-3 py-2">${escapeHtml(r.title || '-')}</td>
+        <td class="px-3 py-2 text-xs text-gray-500" colspan="2">${escapeHtml((r.content || '').slice(0, 40))}</td>
+        <td class="px-3 py-2 text-gray-500">${fmtTime(r.created_at)}</td>
+      </tr>`).join('')
+  } else if (metric === 'deals') {
+    rowsHtml = list.map(r => `
+      <tr class="border-t border-gray-100">
+        <td class="px-3 py-2">${escapeHtml(r.project_name || '-')}</td>
+        <td class="px-3 py-2">${fmtMoney(r.contract_amount)}${Number(r.is_deal) === 1 ? ' · 已成交' : ''}</td>
+        <td class="px-3 py-2 text-xs">${escapeHtml(r.member_name || '-')} / ${escapeHtml(r.owner_name || '-')}</td>
+        <td class="px-3 py-2 text-gray-500">${fmtTime(r.deal_time || r.updated_at)}</td>
+      </tr>`).join('')
+  } else if (metric === 'points') {
+    rowsHtml = list.map(r => `
+      <tr class="border-t border-gray-100">
+        <td class="px-3 py-2">${r.type === 'earn' ? '+' : '-'}${Number(r.amount || 0)}</td>
+        <td class="px-3 py-2">${escapeHtml(r.description || r.source || '-')}</td>
+        <td class="px-3 py-2 text-gray-500" colspan="2">${fmtTime(r.created_at)}</td>
+      </tr>`).join('')
+  } else {
+    rowsHtml = list.map(r => `
+      <tr class="border-t border-gray-100">
+        <td class="px-3 py-2" colspan="4"><pre class="text-xs whitespace-pre-wrap">${escapeHtml(JSON.stringify(r, null, 2))}</pre></td>
+      </tr>`).join('')
+  }
+  const headers = {
+    invites: '<th class="px-3 py-2 text-left">姓名</th><th class="px-3 py-2 text-left">手机</th><th class="px-3 py-2 text-left">公司</th><th class="px-3 py-2 text-left">时间</th>',
+    events: '<th class="px-3 py-2 text-left">名称</th><th class="px-3 py-2 text-left">类型</th><th class="px-3 py-2 text-left" colspan="2">报名时间</th>',
+    projects: '<th class="px-3 py-2 text-left">项目</th><th class="px-3 py-2 text-left">状态</th><th class="px-3 py-2 text-left" colspan="2">发布时间</th>',
+    demands: '<th class="px-3 py-2 text-left">需求</th><th class="px-3 py-2 text-left">状态</th><th class="px-3 py-2 text-left" colspan="2">发布时间</th>',
+    shares: '<th class="px-3 py-2 text-left">标题</th><th class="px-3 py-2 text-left" colspan="2">内容</th><th class="px-3 py-2 text-left">时间</th>',
+    deals: '<th class="px-3 py-2 text-left">项目</th><th class="px-3 py-2 text-left">金额</th><th class="px-3 py-2 text-left">申请方/项目方</th><th class="px-3 py-2 text-left">时间</th>',
+    points: '<th class="px-3 py-2 text-left">积分</th><th class="px-3 py-2 text-left">说明</th><th class="px-3 py-2 text-left" colspan="2">时间</th>',
+  }
+  showModal(`
+    <div class="p-6" style="max-width:760px;max-height:85vh;overflow:auto">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="text-lg font-bold text-navy-800">${escapeHtml(label || '明细')} · 共 ${list.length} 条</h3>
+          <p class="text-xs text-gray-400 mt-1">会员 ID：${escapeHtml(String(memberId))}</p>
+        </div>
+        <button onclick="viewMember('${memberId}')" class="text-sm text-brand-600 hover:underline">返回看板</button>
+      </div>
+      <div class="overflow-auto border border-gray-100 rounded-xl">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 text-gray-500">${headers[metric] || '<th class="px-3 py-2 text-left">数据</th>'}</thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+      <div class="mt-4 flex justify-end">
+        <button onclick="viewMember('${memberId}')" class="px-4 py-2 rounded-lg border text-sm text-gray-600 hover:bg-gray-50">返回</button>
+      </div>
+    </div>
+  `, { wide: true })
 }
 
 // ===== 活动管理 =====

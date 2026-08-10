@@ -1140,6 +1140,21 @@ export class AdminController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Get('members/:id/dashboard')
+  async getMemberDashboard(@Param('id') id: string) {
+    const result = await this.adminService.getMemberDashboard(id)
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  @Get('members/:id/dashboard/:metric')
+  async getMemberDashboardMetric(
+    @Param('id') id: string,
+    @Param('metric') metric: string,
+  ) {
+    const result = await this.adminService.getMemberDashboardMetric(id, metric)
+    return { code: 200, msg: 'success', data: result }
+  }
+
   @Post('members/:id/approve')
   async approveMember(@Param('id') id: string, @Body() body: { approved_by: string }) {
     console.log('[AdminController] POST /api/admin/members/:id/approve')

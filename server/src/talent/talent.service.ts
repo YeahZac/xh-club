@@ -318,13 +318,18 @@ export class TalentService {
     }
 
     let dealCount = 0
+    let dealAmountWan = 0
     try {
       const dealRow = await queryOne(
-        `SELECT COUNT(*) AS cnt FROM project_deal_applications
-         WHERE member_id = ? AND audit_status = 'approved'`,
-        [row.member_id],
+        `SELECT COUNT(*) AS cnt,
+                COALESCE(SUM(contract_amount), 0) AS amount
+         FROM project_deal_applications
+         WHERE is_deal = 1 AND (member_id = ? OR owner_member_id = ?)`,
+        [row.member_id, row.member_id],
       )
       dealCount = Number(dealRow?.cnt || 0)
+      const amountYuan = Number(dealRow?.amount || 0)
+      dealAmountWan = Math.round((amountYuan / 10000) * 100) / 100
     } catch {
       try {
         const legacy = await queryOne(
@@ -356,6 +361,7 @@ export class TalentService {
       total_points: Number(row.total_points || 0),
       member_days: memberDays,
       deal_count: dealCount,
+      deal_amount_wan: dealAmountWan,
     }
   }
 

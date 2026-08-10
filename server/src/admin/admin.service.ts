@@ -26,6 +26,11 @@ import {
   normalizePromoCoopMode,
   promoCoopModeLabel,
 } from '@/common/project-promo'
+import {
+  getMemberDashboardDetails,
+  getMemberDashboardStats,
+  type MemberStatsMetric,
+} from '@/common/member-stats'
 
 type RolePermissionMap = Record<string, Record<string, boolean>>
 
@@ -370,16 +375,46 @@ export class AdminService {
       if (!row) throw new HttpException('会员不存在', HttpStatus.NOT_FOUND)
       const signed = await this.uploadService.signRowFields(row, ['avatar'])
       const category = normalizeUserCategory(signed.user_category)
+      const dashboard = await getMemberDashboardStats(id).catch(() => null)
       return {
         ...signed,
         user_category: category,
         user_category_label: userCategoryLabel(category),
+        dashboard,
       }
     } catch (error) {
       console.error('[AdminService] getMemberById error:', error)
       if (error instanceof HttpException) throw error
       throw new HttpException('获取会员详情失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
+  }
+
+  async getMemberDashboard(id: string) {
+    const data = await getMemberDashboardStats(id)
+    if (!data) throw new HttpException('会员不存在', HttpStatus.NOT_FOUND)
+    if (data.member.avatar) {
+      data.member.avatar = await this.uploadService.signMediaUrl(data.member.avatar)
+    }
+    return data
+  }
+
+  async getMemberDashboardMetric(id: string, metric: string) {
+    const allowed: MemberStatsMetric[] = [
+      'invites',
+      'events',
+      'projects',
+      'demands',
+      'shares',
+      'deals',
+      'points',
+    ]
+    if (!(allowed as string[]).includes(metric)) {
+      throw new HttpException('不支持的明细类型', HttpStatus.BAD_REQUEST)
+    }
+    const member = await queryOne('SELECT id FROM members WHERE id = ?', [id])
+    if (!member) throw new HttpException('会员不存在', HttpStatus.NOT_FOUND)
+    const list = await getMemberDashboardDetails(id, metric as MemberStatsMetric)
+    return { metric, list }
   }
 
   async getPendingMembers(query: any) {

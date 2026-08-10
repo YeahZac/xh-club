@@ -6,6 +6,7 @@ import { signAuthToken } from '@/auth/jwt'
 import { UploadService } from '@/upload/upload.service'
 import { canonicalizeCloudStorageUrl } from '@/utils/media-url'
 import { normalizeUserCategory, userCategoryLabel } from '@/common/user-category'
+import { getMemberDashboardStats } from '@/common/member-stats'
 
 @Injectable()
 export class MembersService {
@@ -169,6 +170,8 @@ export class MembersService {
       .eq('member_id', id)
 
     const referred = await this.countInvitedMembers(id)
+    const dashboard = await getMemberDashboardStats(id).catch(() => null)
+    const summary = dashboard?.summary
 
     return {
       ...this.sanitizeMember(data),
@@ -178,6 +181,13 @@ export class MembersService {
       tags: tags || [],
       organizations: orgs || [],
       referrer_count: referred,
+      match_count: Number(summary?.match_count || 0),
+      deal_success_count: Number(summary?.deal_success_count || 0),
+      deal_count: Number(summary?.deal_success_count || 0),
+      total_transaction_amount: Number(summary?.deal_amount || 0),
+      deal_amount: Number(summary?.deal_amount || 0),
+      deal_amount_wan: Number(summary?.deal_amount_wan || 0),
+      member_days: Number(summary?.member_days || 0),
     }
   }
 
