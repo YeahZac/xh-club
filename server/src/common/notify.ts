@@ -10,6 +10,29 @@ export type NotifyPayload = {
   bizId?: string | number | null
   result?: string | null
   processedAt?: Date | string | null
+  /** 同会员 + biz 未读通知先清再写，避免对接申请等重复刷屏 */
+  replaceUnreadSameBiz?: boolean
+}
+
+async function clearUnreadSameBiz(payload: NotifyPayload): Promise<void> {
+  if (!payload.replaceUnreadSameBiz) return
+  if (!payload.bizType || payload.bizId == null || payload.bizId === '') return
+  const memberId = payload.memberId
+  if (memberId == null || memberId === '') return
+  try {
+    await queryExecute(
+      `DELETE FROM notifications
+       WHERE member_id = ?
+         AND biz_type = ?
+         AND biz_id = ?
+         AND is_read = 0`,
+      [memberId, payload.bizType, String(payload.bizId)],
+    )
+  } catch (error: any) {
+    // 旧表无 biz 列时忽略
+    if (error?.errno === 1054) return
+    console.warn('[notify] 清理未读同业务通知失败:', error?.message || error)
+  }
 }
 
 /** 统一写入系统通知（审核结果 / 对接确认 / 报名成功等） */
@@ -19,6 +42,8 @@ export async function createNotification(payload: NotifyPayload): Promise<boolea
     console.warn('[notify] 跳过：缺少 memberId', payload.title)
     return false
   }
+
+  await clearUnreadSameBiz(payload)
 
   try {
     const result = await queryExecute(

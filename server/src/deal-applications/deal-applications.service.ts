@@ -23,10 +23,39 @@ const parseImages = (value: unknown): string[] => {
 
 const toMysqlDate = (value: unknown): string => {
   const raw = String(value || '').trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    throw new HttpException('成交时间格式无效', HttpStatus.BAD_REQUEST)
+  // 支持日期或到分钟的北京时间：YYYY-MM-DD / YYYY-MM-DD HH:mm / YYYY-MM-DD HH:mm:ss
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw} 00:00:00`
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}$/.test(raw)) {
+    return `${raw.replace('T', ' ')}:00`
   }
-  return raw
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(raw)) {
+    return raw.slice(0, 19).replace('T', ' ')
+  }
+  throw new HttpException('成交时间格式无效', HttpStatus.BAD_REQUEST)
+}
+
+/** 详情返回：北京时间墙钟，精确到分 */
+const formatDealTimeLabel = (value: unknown): string => {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const wall = raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})/)
+  if (wall && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(raw)) {
+    return `${wall[1]} ${wall[2]}:${wall[3]}`
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw} 00:00`
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return raw.slice(0, 16)
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || '00'
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`
 }
 
 @Injectable()
@@ -47,6 +76,8 @@ export class DealApplicationsService {
       ...row,
       image_urls: imageUrls,
       payment_proof_urls: paymentProofUrls,
+      deal_time: formatDealTimeLabel(row.deal_time) || row.deal_time,
+      deal_time_label: formatDealTimeLabel(row.deal_time) || '-',
       confirm_status: confirm,
       confirm_status_label:
         confirm === 'approved' ? '负责人已同意' : confirm === 'rejected' ? '负责人已拒绝' : '待负责人确认',
@@ -237,6 +268,7 @@ export class DealApplicationsService {
       bizType: 'deal_application',
       bizId: id,
       result: 'pending',
+      replaceUnreadSameBiz: true,
     })
     // 通知申请人提交成功
     await createNotification({
@@ -248,6 +280,7 @@ export class DealApplicationsService {
       bizType: 'deal_application',
       bizId: id,
       result: 'pending',
+      replaceUnreadSameBiz: true,
     })
     return this.getAccessibleById(id, memberId)
   }
@@ -325,6 +358,7 @@ export class DealApplicationsService {
         bizType: 'deal_application',
         bizId: id,
         result: 'pending',
+        replaceUnreadSameBiz: true,
       })
     }
     return this.getAccessibleById(id, memberId)
@@ -412,6 +446,7 @@ export class DealApplicationsService {
         bizType: 'deal_application',
         bizId: id,
         result: 'updated',
+        replaceUnreadSameBiz: true,
       })
     }
     if (!wasDeal && nextIsDeal) {
@@ -469,6 +504,7 @@ export class DealApplicationsService {
       bizType: 'deal_application',
       bizId: id,
       result: status,
+      replaceUnreadSameBiz: true,
     })
 
     return this.getAccessibleById(id, ownerId)
@@ -624,6 +660,7 @@ export class DealApplicationsService {
       bizType: 'deal_application',
       bizId: id,
       result: 'admin_updated',
+      replaceUnreadSameBiz: true,
     })
     return this.adminGetById(id)
   }
