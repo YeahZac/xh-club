@@ -311,6 +311,9 @@ export class DealApplicationsService {
     const updates: string[] = []
     const params: any[] = []
     if (dto.is_deal !== undefined || dto.deal_status !== undefined) {
+      if (!isOwner) {
+        throw new HttpException('申请人请通过「修改申请信息」更新成交状态', HttpStatus.BAD_REQUEST)
+      }
       const isDeal =
         dto.is_deal === true ||
         dto.is_deal === 1 ||
