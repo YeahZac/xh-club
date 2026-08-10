@@ -86,7 +86,7 @@ export class EventsService {
       .select('*', { count: 'exact' })
       .order('is_featured', { ascending: false })
       .order('sort_order', { ascending: true })
-      .order('updated_at', { ascending: false })
+      .order('admin_operated_at', { ascending: false })
       .order('created_at', { ascending: false })
       .range(from, to)
 
@@ -471,7 +471,8 @@ export class EventsService {
     const rows = await queryRows(
       `SELECT p.* FROM projects p
        ${whereSql}
-       ORDER BY p.is_featured DESC, p.sort_order ASC, p.updated_at DESC, p.created_at DESC
+       ORDER BY p.is_featured DESC, p.sort_order ASC,
+                COALESCE(p.admin_operated_at, p.created_at) DESC, p.created_at DESC
        LIMIT ? OFFSET ?`,
       [...values, pageSize, offset],
     )

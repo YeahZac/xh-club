@@ -8,6 +8,8 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['events', 'form_fields', 'JSON NULL'],
   ['events', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0'],
   ['events', 'sort_order', 'INT NOT NULL DEFAULT 0'],
+  // 列表排序用：仅管理端创建/编辑时更新，不受小程序浏览/报名等操作影响
+  ['events', 'admin_operated_at', 'TIMESTAMP NULL'],
   ['event_registrations', 'form_answers', 'JSON NULL'],
   ['projects', 'video_url', 'VARCHAR(500) NULL'],
   ['projects', 'industry', 'VARCHAR(64) NULL'],
@@ -20,6 +22,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['projects', 'company_name', 'VARCHAR(200) NULL'],
   ['projects', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0'],
   ['projects', 'sort_order', 'INT NOT NULL DEFAULT 0'],
+  ['projects', 'admin_operated_at', 'TIMESTAMP NULL'],
   ['projects', 'avg_score', 'DECIMAL(4,2) NOT NULL DEFAULT 0'],
   ['projects', 'score_count', 'INT NOT NULL DEFAULT 0'],
   ['projects', 'gallery_images', 'JSON NULL'],
@@ -88,6 +91,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['business_opportunities', 'contact_info', 'VARCHAR(255) NULL'],
   ['business_opportunities', 'sort_order', 'INT NOT NULL DEFAULT 0'],
   ['business_opportunities', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0'],
+  ['business_opportunities', 'admin_operated_at', 'TIMESTAMP NULL'],
   ['business_opportunities', 'view_count', 'INT NOT NULL DEFAULT 0'],
   ['business_opportunities', 'start_time', 'TIMESTAMP NULL'],
   ['business_opportunities', 'end_time', 'TIMESTAMP NULL'],
@@ -101,6 +105,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   // 人才列表 / 发现页排序
   ['talent_applications', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0'],
   ['talent_applications', 'sort_order', 'INT NOT NULL DEFAULT 0'],
+  ['talent_applications', 'admin_operated_at', 'TIMESTAMP NULL'],
   // 会员推荐码
   ['members', 'invite_code', 'VARCHAR(32) NULL'],
   // 邀请奖励：积分 / 成长值 / 收益 / 贡献值 / 图文
@@ -1109,6 +1114,32 @@ export async function ensureSchemaColumns(): Promise<void> {
         continue
       }
       console.warn(`[MySQL] 补齐列 ${table}.${column} 失败:`, error?.message || error)
+    }
+  }
+
+  // 列表排序时间回填：历史数据用 created_at，避免继续被小程序端 updated_at 干扰
+  for (const table of [
+    'events',
+    'projects',
+    'business_opportunities',
+    'talent_applications',
+  ] as const) {
+    try {
+      await pool.query(
+        `UPDATE \`${table}\`
+         SET admin_operated_at = created_at
+         WHERE admin_operated_at IS NULL AND created_at IS NOT NULL`,
+      )
+    } catch (error: any) {
+      const msg = String(error?.message || '')
+      if (
+        msg.includes('Unknown column') ||
+        msg.includes("doesn't exist") ||
+        error?.code === 'ER_NO_SUCH_TABLE'
+      ) {
+        continue
+      }
+      console.warn(`[MySQL] 回填 ${table}.admin_operated_at 失败:`, error?.message || error)
     }
   }
 

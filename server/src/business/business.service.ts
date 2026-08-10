@@ -130,7 +130,8 @@ export class BusinessService {
        LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
        LEFT JOIN members m ON m.id = b.user_id
        ${whereSql}
-       ORDER BY b.is_featured DESC, b.sort_order ASC, b.updated_at DESC, b.created_at DESC
+       ORDER BY b.is_featured DESC, b.sort_order ASC,
+                COALESCE(b.admin_operated_at, b.created_at) DESC, b.created_at DESC
        LIMIT ? OFFSET ?`,
       [...values, pageSize, offset],
     )
@@ -295,8 +296,8 @@ export class BusinessService {
       `INSERT INTO business_opportunities
         (title, category, summary, content, cover_image, industry, region, amount_min, amount_max, stage,
          contact_info, contact_phone, demand_talent_id, source, audit_status, reject_reason, user_id,
-         status, is_featured, sort_order, start_time, end_time, form_fields)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         status, is_featured, sort_order, start_time, end_time, form_fields, admin_operated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${source === 'admin' ? 'NOW()' : 'NULL'})`,
       [
         dto.title.trim(),
         dto.category,
@@ -361,7 +362,7 @@ export class BusinessService {
     }
   }
 
-  async update(id: string, dto: any) {
+  async update(id: string, dto: any, options?: { touchAdminOperatedAt?: boolean }) {
     const existing = await queryOne('SELECT * FROM business_opportunities WHERE id = ?', [id])
     if (!existing) throw new HttpException('商机不存在', HttpStatus.NOT_FOUND)
 
@@ -371,6 +372,7 @@ export class BusinessService {
       updates.push(`${col} = ?`)
       params.push(value)
     }
+    const touchAdminOperatedAt = options?.touchAdminOperatedAt === true
 
     if (dto.title !== undefined) assign('title', String(dto.title || '').trim())
     if (dto.category !== undefined) {
@@ -418,6 +420,9 @@ export class BusinessService {
     if (dto.form_fields !== undefined) {
       assign('form_fields', dto.form_fields == null ? null : JSON.stringify(dto.form_fields))
     }
+    if (touchAdminOperatedAt) {
+      updates.push('admin_operated_at = NOW()')
+    }
 
     if (!updates.length && !dto.roadshow) {
       throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
@@ -434,6 +439,12 @@ export class BusinessService {
         projects: dto.roadshow.projects,
         dimensions: dto.roadshow.dimensions,
       })
+      if (touchAdminOperatedAt && !updates.length) {
+        await queryExecute(
+          'UPDATE business_opportunities SET admin_operated_at = NOW() WHERE id = ?',
+          [id],
+        )
+      }
     }
     return this.getAdminById(id)
   }
@@ -456,7 +467,8 @@ export class BusinessService {
        SET audit_status = ?,
            reject_reason = ?,
            status = ?,
-           updated_at = NOW()
+           updated_at = NOW(),
+           admin_operated_at = NOW()
        WHERE id = ?`,
       [status, rejectReason, status === 'approved' ? 'published' : 'draft', id],
     )

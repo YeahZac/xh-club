@@ -807,8 +807,8 @@ export class AdminService {
             : JSON.stringify(dto.form_fields)
       const status = this.resolvePersistedEventStatus(dto, 0)
       const result = await queryExecute(
-        `INSERT INTO events (title, description, cover_image, video_url, event_type, status, start_time, end_time, location, address, max_participants, fee, form_fields, is_featured, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO events (title, description, cover_image, video_url, event_type, status, start_time, end_time, location, address, max_participants, fee, form_fields, is_featured, sort_order, admin_operated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [dto.title, dto.description || null, coverImage, videoUrl, dto.event_type || 'salon',
          status, toMysqlDateTime(dto.start_time), toMysqlDateTime(dto.end_time),
          dto.location || null, dto.address || null,
@@ -888,6 +888,7 @@ export class AdminService {
         throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
       }
 
+      updates.push('admin_operated_at = NOW()')
       params.push(id)
       await queryExecute(`UPDATE events SET ${updates.join(', ')} WHERE id = ?`, params)
       return await this.getEventById(id)
@@ -1192,8 +1193,8 @@ export class AdminService {
         `INSERT INTO projects
            (title, description, cover_image, video_url, gallery_images, file_urls, industry, stage, amount_max, status,
             audit_status, submitter_id, company_name, is_featured, sort_order, avg_score, score_count,
-            promo_coop_mode, promo_commission_rate, promo_amount_wan, promo_remark, promo_share_count)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`,
+            promo_coop_mode, promo_commission_rate, promo_amount_wan, promo_remark, promo_share_count, admin_operated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, NOW())`,
         [
           dto.title,
           dto.description || null,
@@ -1318,7 +1319,15 @@ export class AdminService {
 
       if (updates.length) {
         params.push(id)
-        await queryExecute(`UPDATE projects SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`, params)
+        await queryExecute(
+          `UPDATE projects SET ${updates.join(', ')}, updated_at = NOW(), admin_operated_at = NOW() WHERE id = ?`,
+          params,
+        )
+      } else if (dto.score_dimensions !== undefined) {
+        await queryExecute(
+          'UPDATE projects SET admin_operated_at = NOW(), updated_at = NOW() WHERE id = ?',
+          [id],
+        )
       }
 
       if (dto.score_dimensions !== undefined) {

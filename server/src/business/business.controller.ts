@@ -145,7 +145,7 @@ export class BusinessAdminController {
 
   @Put(':id')
   async update(@Param('id') id: string, @Body() dto: any) {
-    const result = await this.businessService.update(id, dto)
+    const result = await this.businessService.update(id, dto, { touchAdminOperatedAt: true })
     return { code: 200, msg: '更新成功', data: result }
   }
 

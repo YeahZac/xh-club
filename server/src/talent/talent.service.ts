@@ -263,7 +263,8 @@ export class TalentService {
        FROM talent_applications t
        LEFT JOIN members m ON m.id = t.member_id
        ${whereSql}
-       ORDER BY t.is_featured DESC, t.sort_order ASC, t.updated_at DESC, t.created_at DESC
+       ORDER BY t.is_featured DESC, t.sort_order ASC,
+                COALESCE(t.admin_operated_at, t.created_at) DESC, t.created_at DESC
        LIMIT ? OFFSET ?`,
       [...values, pageSize, offset],
     )
@@ -601,7 +602,8 @@ export class TalentService {
              card_image_url = ?, avatar_url = ?,
              pending_data = NULL, update_status = NULL, update_reject_reason = NULL,
              status = 'approved', reject_reason = NULL,
-             reviewed_at = NOW(), reviewed_by = ?
+             reviewed_at = NOW(), reviewed_by = ?,
+             admin_operated_at = NOW()
            WHERE id = ?`,
           [
             pendingData.real_name,
@@ -621,7 +623,8 @@ export class TalentService {
         await queryExecute(
           `UPDATE talent_applications SET
              update_status = 'rejected', update_reject_reason = ?,
-             reviewed_at = NOW(), reviewed_by = ?
+             reviewed_at = NOW(), reviewed_by = ?,
+             admin_operated_at = NOW()
            WHERE id = ?`,
           [
             String(dto.reject_reason || '').trim() || '资料修改未通过审核',
@@ -731,6 +734,7 @@ export class TalentService {
     }
 
     if (!updates.length) throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
+    updates.push('admin_operated_at = NOW()')
     params.push(id)
     await queryExecute(`UPDATE talent_applications SET ${updates.join(', ')} WHERE id = ?`, params)
     const result = await this.adminGetById(id)
