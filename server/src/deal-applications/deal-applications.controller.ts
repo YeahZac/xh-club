@@ -12,9 +12,16 @@ export class DealApplicationsController {
     return { code: 200, msg: 'success', data: await this.service.projectOptions() }
   }
 
+  @Get('projects/:id')
+  async projectPrefill(@Param('id') id: string) {
+    const data = await this.service.projectPrefill(id)
+    if (!data) return { code: 404, msg: '项目不存在或未上架', data: null }
+    return { code: 200, msg: 'success', data }
+  }
+
   @Get('members')
-  async members(@Query('keyword') keyword?: string) {
-    return { code: 200, msg: 'success', data: await this.service.memberOptions(keyword) }
+  async members(@Query('keyword') keyword?: string, @Query('id') id?: string) {
+    return { code: 200, msg: 'success', data: await this.service.memberOptions(keyword, id) }
   }
 
   @Get('mine')

@@ -43,9 +43,10 @@ export class HtmlRenderController {
     kind: string,
     key: string,
     id: string,
-  ): Promise<{ html: string; title: string }> {
+  ): Promise<{ html: string; title: string; submitterId?: string }> {
     let html = ''
     let title = '星河俱乐部'
+    let submitterId = ''
 
     if (kind === 'config') {
       const configKey = String(key || '').trim()
@@ -73,13 +74,14 @@ export class HtmlRenderController {
       title = String(row.title || title)
     } else if (kind === 'project') {
       const row = await queryOne(
-        `SELECT title, description FROM projects
+        `SELECT title, description, submitter_id FROM projects
          WHERE id = ? AND (audit_status = ? OR audit_status IS NULL OR audit_status = '')`,
         [id, 'approved'],
       )
       if (!row) throw new HttpException('not found', HttpStatus.NOT_FOUND)
       html = String(row.description || '')
       title = String(row.title || title)
+      submitterId = row.submitter_id ? String(row.submitter_id) : ''
     } else if (kind === 'business') {
       const row = await queryOne(
         `SELECT title, content FROM business_opportunities
@@ -109,7 +111,7 @@ export class HtmlRenderController {
       throw new HttpException('invalid type', HttpStatus.BAD_REQUEST)
     }
 
-    return { html, title }
+    return { html, title, submitterId }
   }
 
   /**
@@ -137,15 +139,25 @@ export class HtmlRenderController {
   ) {
     const kind = String(type || '').trim()
     try {
-      const { html, title } = await this.loadHtmlSource(kind, key, id)
+      const source = await this.loadHtmlSource(kind, key, id)
+      const { html, title, submitterId } = source
       const signed = await this.uploadService.signHtmlMedia(rewriteLegacyCloudHostUrls(html))
       let page = ensureHtmlDocument(signed, title)
+
+      let resolvedOwnerId = String(ownerId || '').trim() || String(submitterId || '').trim()
+      let resolvedOwnerName = String(ownerName || '').trim()
+      let resolvedTitle = String(titleQuery || '').trim() || title
+      if (kind === 'project' && resolvedOwnerId && !resolvedOwnerName) {
+        const owner = await queryOne('SELECT name FROM members WHERE id = ?', [resolvedOwnerId])
+        resolvedOwnerName = String(owner?.name || '').trim()
+      }
+
       const toolbarQuery: MpToolbarQuery = {
         toolbar,
         has_scored: hasScored,
-        owner_id: ownerId,
-        owner_name: ownerName,
-        title: titleQuery || title,
+        owner_id: resolvedOwnerId,
+        owner_name: resolvedOwnerName,
+        title: resolvedTitle,
         registered,
         can_register: canRegister,
         blocked,

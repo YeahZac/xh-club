@@ -119,10 +119,45 @@ export class DealApplicationsService {
   /** 可选为对接负责人的会员：注册默认 active；后台审核通过曾写成 approved */
   private readonly ownerMemberStatusSql = `status IN ('active', 'approved')`
 
-  async memberOptions(keyword?: string) {
+  /** 从项目详情带入申请表单：项目名 + 默认负责人 */
+  async projectPrefill(id: string) {
+    const project = await queryOne(
+      `SELECT id, title, submitter_id, company_name
+       FROM projects
+       WHERE id = ?
+         AND (audit_status = 'approved' OR audit_status IS NULL OR audit_status = '')
+         AND status IN ('active', 'funded', 'published')`,
+      [id],
+    )
+    if (!project) return null
+    let ownerName: string | null = null
+    let ownerCompany: string | null = null
+    const ownerId = project.submitter_id || null
+    if (ownerId) {
+      const owner = await queryOne(
+        `SELECT id, name, company_name FROM members WHERE id = ? AND ${this.ownerMemberStatusSql}`,
+        [ownerId],
+      )
+      ownerName = owner?.name || null
+      ownerCompany = owner?.company_name || null
+    }
+    return {
+      id: project.id,
+      title: project.title || '',
+      submitter_id: ownerId,
+      owner_member_id: ownerId,
+      owner_name: ownerName,
+      company_name: String(project.company_name || '').trim() || ownerCompany || null,
+    }
+  }
+
+  async memberOptions(keyword?: string, memberId?: string) {
     const values: any[] = []
     let where = this.ownerMemberStatusSql
-    if (keyword) {
+    if (memberId) {
+      where += ' AND id = ?'
+      values.push(memberId)
+    } else if (keyword) {
       where += ' AND (name LIKE ? OR phone LIKE ? OR company_name LIKE ?)'
       const like = `%${keyword}%`
       values.push(like, like, like)
