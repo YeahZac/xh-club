@@ -1,6 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
-import { queryRows } from '@/storage/database/mysql-client'
+import { queryRows, queryOne } from '@/storage/database/mysql-client'
 import * as bcrypt from 'bcryptjs'
 import { signAuthToken } from '@/auth/jwt'
 import { UploadService } from '@/upload/upload.service'
@@ -327,7 +327,7 @@ export class MembersService {
     return code
   }
 
-  /** 会员推荐页数据：推荐码 + 推荐人数 + 推荐人员列表 */
+  /** 会员推荐页数据：推荐码 + 推荐人数 + 推荐人员列表 + 累计邀请积分 */
   async getInviteDashboard(memberId: string) {
     const inviteCode = await this.ensureInviteCode(memberId)
     const referred = await this.getInvitedMembers(
@@ -348,10 +348,38 @@ export class MembersService {
       created_at: item.created_at,
     }))
 
+    // 邀请奖励累计积分：来自 invitation_rewards（points）+ invitation_records.reward_points 兜底
+    let totalRewardPoints = 0
+    try {
+      const rewardRow = await queryOne(
+        `SELECT COALESCE(SUM(reward_value), 0) AS total
+         FROM invitation_rewards
+         WHERE member_id = ? AND reward_type = 'points'`,
+        [memberId],
+      )
+      totalRewardPoints = Number((rewardRow as any)?.total || 0)
+    } catch (error) {
+      console.warn('[MembersService] getInviteDashboard reward sum failed:', (error as Error)?.message)
+    }
+    if (totalRewardPoints <= 0) {
+      try {
+        const recordRow = await queryOne(
+          `SELECT COALESCE(SUM(reward_points), 0) AS total
+           FROM invitation_records
+           WHERE inviter_id = ?`,
+          [memberId],
+        )
+        totalRewardPoints = Number((recordRow as any)?.total || 0)
+      } catch {
+        // ignore
+      }
+    }
+
     return {
       invite_code: inviteCode,
       invite_count: invitees.length,
       invitees,
+      total_reward_points: totalRewardPoints,
     }
   }
 
