@@ -263,7 +263,7 @@ export class TalentService {
        FROM talent_applications t
        LEFT JOIN members m ON m.id = t.member_id
        ${whereSql}
-       ORDER BY t.reviewed_at DESC, t.updated_at DESC
+       ORDER BY t.is_featured DESC, t.sort_order ASC, t.updated_at DESC, t.created_at DESC
        LIMIT ? OFFSET ?`,
       [...values, pageSize, offset],
     )
@@ -671,6 +671,10 @@ export class TalentService {
     } else if (dto.photo_url !== undefined && !existing.avatar_url) {
       // 后台仅改职业照时，补齐空头像字段
       assign('avatar_url', normalizeOptionalImage(dto.photo_url))
+    }
+    if (dto.is_featured !== undefined) assign('is_featured', dto.is_featured ? 1 : 0)
+    if (dto.sort_order !== undefined) {
+      assign('sort_order', Math.max(0, Number(dto.sort_order) || 0))
     }
     if (dto.status !== undefined) {
       if (!TALENT_STATUSES.includes(dto.status)) {

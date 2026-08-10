@@ -130,7 +130,7 @@ export class BusinessService {
        LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
        LEFT JOIN members m ON m.id = b.user_id
        ${whereSql}
-       ORDER BY b.sort_order ASC, b.created_at DESC
+       ORDER BY b.is_featured DESC, b.sort_order ASC, b.updated_at DESC, b.created_at DESC
        LIMIT ? OFFSET ?`,
       [...values, pageSize, offset],
     )
@@ -248,9 +248,7 @@ export class BusinessService {
        LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
        LEFT JOIN members m ON m.id = b.user_id
        ${whereSql}
-       ORDER BY
-         CASE WHEN b.audit_status = 'pending' THEN 0 ELSE 1 END,
-         b.created_at DESC`,
+       ORDER BY b.updated_at DESC, b.created_at DESC`,
       values,
     )
     const signed = await this.uploadService.signRowsFields(rows, ['cover_image'])
@@ -297,8 +295,8 @@ export class BusinessService {
       `INSERT INTO business_opportunities
         (title, category, summary, content, cover_image, industry, region, amount_min, amount_max, stage,
          contact_info, contact_phone, demand_talent_id, source, audit_status, reject_reason, user_id,
-         status, sort_order, start_time, end_time, form_fields)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         status, is_featured, sort_order, start_time, end_time, form_fields)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         dto.title.trim(),
         dto.category,
@@ -318,6 +316,7 @@ export class BusinessService {
         null,
         options?.memberId || dto.user_id || null,
         status,
+        dto.is_featured ? 1 : 0,
         dto.sort_order || 0,
         dto.start_time ? toMysqlDateTime(dto.start_time) : null,
         dto.end_time ? toMysqlDateTime(dto.end_time) : null,
@@ -412,6 +411,7 @@ export class BusinessService {
       )
     }
     if (dto.status !== undefined) assign('status', dto.status || 'published')
+    if (dto.is_featured !== undefined) assign('is_featured', dto.is_featured ? 1 : 0)
     if (dto.sort_order !== undefined) assign('sort_order', dto.sort_order || 0)
     if (dto.start_time !== undefined) assign('start_time', toMysqlDateTime(dto.start_time))
     if (dto.end_time !== undefined) assign('end_time', toMysqlDateTime(dto.end_time))

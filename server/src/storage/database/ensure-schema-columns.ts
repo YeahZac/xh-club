@@ -6,6 +6,8 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['events', 'video_url', 'VARCHAR(500) NULL'],
   ['events', 'address', 'TEXT NULL'],
   ['events', 'form_fields', 'JSON NULL'],
+  ['events', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0'],
+  ['events', 'sort_order', 'INT NOT NULL DEFAULT 0'],
   ['event_registrations', 'form_answers', 'JSON NULL'],
   ['projects', 'video_url', 'VARCHAR(500) NULL'],
   ['projects', 'industry', 'VARCHAR(64) NULL'],
@@ -16,6 +18,8 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['projects', 'reject_reason', 'VARCHAR(500) NULL'],
   ['projects', 'submitter_id', 'INT NULL'],
   ['projects', 'company_name', 'VARCHAR(200) NULL'],
+  ['projects', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0'],
+  ['projects', 'sort_order', 'INT NOT NULL DEFAULT 0'],
   ['projects', 'avg_score', 'DECIMAL(4,2) NOT NULL DEFAULT 0'],
   ['projects', 'score_count', 'INT NOT NULL DEFAULT 0'],
   ['projects', 'gallery_images', 'JSON NULL'],
@@ -83,6 +87,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['business_opportunities', 'stage', 'VARCHAR(32) NULL'],
   ['business_opportunities', 'contact_info', 'VARCHAR(255) NULL'],
   ['business_opportunities', 'sort_order', 'INT NOT NULL DEFAULT 0'],
+  ['business_opportunities', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0'],
   ['business_opportunities', 'view_count', 'INT NOT NULL DEFAULT 0'],
   ['business_opportunities', 'start_time', 'TIMESTAMP NULL'],
   ['business_opportunities', 'end_time', 'TIMESTAMP NULL'],
@@ -93,6 +98,9 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['business_opportunities', 'audit_status', `VARCHAR(16) NOT NULL DEFAULT 'approved'`],
   ['business_opportunities', 'reject_reason', 'VARCHAR(500) NULL'],
   ['business_opportunities', 'user_id', 'INT NULL'],
+  // 人才列表 / 发现页排序
+  ['talent_applications', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0'],
+  ['talent_applications', 'sort_order', 'INT NOT NULL DEFAULT 0'],
   // 会员推荐码
   ['members', 'invite_code', 'VARCHAR(32) NULL'],
   // 邀请奖励：积分 / 成长值 / 收益 / 贡献值 / 图文

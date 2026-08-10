@@ -753,7 +753,7 @@ export class AdminService {
         sql += ' WHERE status = ?'
         params.push(query.status)
       }
-      sql += ' ORDER BY created_at DESC'
+      sql += ' ORDER BY updated_at DESC, created_at DESC'
       const rows = (await queryRows(sql, params)) as any[]
       const synced: any[] = []
       for (const row of rows) {
@@ -807,14 +807,16 @@ export class AdminService {
             : JSON.stringify(dto.form_fields)
       const status = this.resolvePersistedEventStatus(dto, 0)
       const result = await queryExecute(
-        `INSERT INTO events (title, description, cover_image, video_url, event_type, status, start_time, end_time, location, address, max_participants, fee, form_fields)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO events (title, description, cover_image, video_url, event_type, status, start_time, end_time, location, address, max_participants, fee, form_fields, is_featured, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [dto.title, dto.description || null, coverImage, videoUrl, dto.event_type || 'salon',
          status, toMysqlDateTime(dto.start_time), toMysqlDateTime(dto.end_time),
          dto.location || null, dto.address || null,
          dto.max_participants == null ? 100 : Number(dto.max_participants) || 0,
          dto.fee || 0,
-         formFieldsJson]
+         formFieldsJson,
+         dto.is_featured ? 1 : 0,
+         Math.max(0, Number(dto.sort_order) || 0)]
       )
       const insertedId = result.insertId
       if (insertedId) {
@@ -857,6 +859,8 @@ export class AdminService {
         )
       }
       if (dto.fee !== undefined) assign('fee', dto.fee || 0)
+      if (dto.is_featured !== undefined) assign('is_featured', dto.is_featured ? 1 : 0)
+      if (dto.sort_order !== undefined) assign('sort_order', Math.max(0, Number(dto.sort_order) || 0))
       if (dto.form_fields !== undefined) {
         const formFieldsJson =
           dto.form_fields == null
@@ -1104,9 +1108,7 @@ export class AdminService {
                 (SELECT COUNT(*) FROM project_score_dimensions d WHERE d.project_id = p.id) AS dimension_count
          FROM projects p
          LEFT JOIN members m ON m.id = p.submitter_id
-         ORDER BY
-           CASE WHEN p.audit_status = 'pending' THEN 0 ELSE 1 END,
-           p.created_at DESC`,
+         ORDER BY p.updated_at DESC, p.created_at DESC`,
       )
       return this.uploadService.signRowsFields(rows, ['cover_image', 'video_url'])
     } catch (error) {
@@ -1189,9 +1191,9 @@ export class AdminService {
       const result = await queryExecute(
         `INSERT INTO projects
            (title, description, cover_image, video_url, gallery_images, file_urls, industry, stage, amount_max, status,
-            audit_status, submitter_id, company_name, avg_score, score_count,
+            audit_status, submitter_id, company_name, is_featured, sort_order, avg_score, score_count,
             promo_coop_mode, promo_commission_rate, promo_amount_wan, promo_remark, promo_share_count)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, 0, 0, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`,
         [
           dto.title,
           dto.description || null,
@@ -1205,6 +1207,8 @@ export class AdminService {
           dto.status || 'active',
           owner ? owner.id : null,
           companyName,
+          dto.is_featured ? 1 : 0,
+          Math.max(0, Number(dto.sort_order) || 0),
           normalizePromoCoopMode(dto.promo_coop_mode),
           dto.promo_commission_rate != null && dto.promo_commission_rate !== ''
             ? Number(dto.promo_commission_rate)
@@ -1287,6 +1291,12 @@ export class AdminService {
       }
       if (dto.company_name !== undefined) {
         assign('company_name', String(dto.company_name || '').trim() || null)
+      }
+      if (dto.is_featured !== undefined) {
+        assign('is_featured', dto.is_featured ? 1 : 0)
+      }
+      if (dto.sort_order !== undefined) {
+        assign('sort_order', Math.max(0, Number(dto.sort_order) || 0))
       }
       if (dto.audit_status !== undefined) {
         const audit = String(dto.audit_status)

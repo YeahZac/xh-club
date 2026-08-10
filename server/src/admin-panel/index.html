@@ -523,6 +523,13 @@
               <p id="pjOwnerHint" class="text-xs text-gray-400 mt-1">负责人来自会员列表，将作为成交对接的项目方</p>
             </div>
           </div>
+          <div class="grid grid-cols-2 gap-4">
+            <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input id="pjEditFeatured" type="checkbox">
+              发现页精选置顶
+            </label>
+            <div><label class="block text-sm font-medium text-gray-700 mb-1">展示排序</label><input id="pjEditSortOrder" type="number" min="0" value="0" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white"><p class="text-xs text-gray-400 mt-1">数值越小越靠前</p></div>
+          </div>
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">项目描述</label>
@@ -2499,6 +2506,13 @@ function renderEventForm(mode, event = null) {
             ${mediaSelectBtn('evVideo', { type: 'video' })}
           </div>
         </div>
+        <div class="grid grid-cols-2 gap-4 rounded-xl border border-amber-100 bg-amber-50/40 p-4">
+          <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <input id="evFeatured" type="checkbox" ${event?.is_featured ? 'checked' : ''}>
+            发现页精选置顶
+          </label>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">展示排序</label><input id="evSortOrder" type="number" min="0" value="${escapeHtml(event?.sort_order ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white"><p class="text-xs text-gray-400 mt-1">数值越小越靠前</p></div>
+        </div>
         <div class="grid grid-cols-2 gap-4">
           <div><label class="block text-sm font-medium text-gray-700 mb-1">活动分类</label><select id="evType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="other">其他活动</option><option value="roadshow">项目路演</option><option value="salon">专题沙龙</option><option value="annual">年度大会</option><option value="training">培训</option><option value="meeting">定期例会</option></select></div>
           <div>
@@ -2798,6 +2812,8 @@ function buildEventPayload(statusFallback = 'auto') {
     location: document.getElementById('evLocation').value,
     max_participants,
     fee: parseInt(document.getElementById('evFee').value) || 0,
+    is_featured: !!document.getElementById('evFeatured')?.checked,
+    sort_order: Math.max(0, Number(document.getElementById('evSortOrder')?.value || 0)),
     description: getRichEditorHtml('evDescEditor'),
     form_fields: formFields.length > 0 ? formFields : null,
   }
@@ -2961,6 +2977,8 @@ async function openProjectEditPage(id) {
   document.getElementById('pjEditIndustry').value = Object.keys(INDUSTRY_MAP)[0] || ''
   document.getElementById('pjEditCompany').value = ''
   document.getElementById('pjOwnerSearch').value = ''
+  document.getElementById('pjEditFeatured').checked = false
+  document.getElementById('pjEditSortOrder').value = 0
   document.getElementById('pjEditPromoMode').value = ''
   document.getElementById('pjEditPromoRate').value = ''
   document.getElementById('pjEditPromoShareCount').value = 0
@@ -2993,6 +3011,8 @@ async function openProjectEditPage(id) {
     document.getElementById('pjEditVideo').value = p.video_url || ''
     document.getElementById('pjEditIndustry').value = p.industry || Object.keys(INDUSTRY_MAP)[0] || ''
     document.getElementById('pjEditCompany').value = p.company_name || p.owner_company_name || ''
+    document.getElementById('pjEditFeatured').checked = !!p.is_featured
+    document.getElementById('pjEditSortOrder').value = p.sort_order ?? 0
     _pjPreferredOwnerId = p.submitter_id ? String(p.submitter_id) : ''
     document.getElementById('pjEditPromoMode').value = p.promo_coop_mode || ''
     document.getElementById('pjEditPromoRate').value = p.promo_commission_rate ?? ''
@@ -3030,6 +3050,8 @@ async function saveProjectEdit() {
     status: document.getElementById('pjEditStatus').value,
     company_name: document.getElementById('pjEditCompany').value.trim() || null,
     submitter_id: ownerId || null,
+    is_featured: !!document.getElementById('pjEditFeatured')?.checked,
+    sort_order: Math.max(0, Number(document.getElementById('pjEditSortOrder')?.value || 0)),
     score_dimensions: dimensions,
     promo_coop_mode: document.getElementById('pjEditPromoMode').value || null,
     promo_commission_rate: document.getElementById('pjEditPromoRate').value || null,
@@ -3683,6 +3705,13 @@ async function showBusinessModal(editId) {
             </select>
           </div>
         </div>
+        <div class="grid grid-cols-2 gap-4 rounded-xl border border-amber-100 bg-amber-50/40 p-4">
+          <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <input id="bizFeatured" type="checkbox" ${item?.is_featured ? 'checked' : ''}>
+            商机列表精选置顶
+          </label>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">展示排序</label><input id="bizSortOrder" type="number" min="0" value="${escapeHtml(item?.sort_order ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white"><p class="text-xs text-gray-400 mt-1">数值越小越靠前</p></div>
+        </div>
         <div id="bizExtraFields" class="${(item?.category==='financing' || item?.category==='resource') ? '' : 'hidden'} grid grid-cols-2 gap-4 border border-gray-100 rounded-2xl p-4 bg-gray-50/60">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">电话号码（选填）</label>
@@ -3767,6 +3796,8 @@ async function saveBusiness(editId) {
     cover_image: cover,
     summary: document.getElementById('bizSummary').value,
     content: getRichEditorHtml('bizContentEditor'),
+    is_featured: !!document.getElementById('bizFeatured')?.checked,
+    sort_order: Math.max(0, Number(document.getElementById('bizSortOrder')?.value || 0)),
     contact_phone: document.getElementById('bizContactPhone')?.value || null,
     demand_talent_id: document.getElementById('bizDemandTalent')?.value || null,
   }
@@ -5901,6 +5932,13 @@ async function showTalentModal(id) {
           </div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">未通过原因</label><input id="talRejectReason" value="${escapeHtml(item.reject_reason || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         </div>
+        <div class="grid grid-cols-2 gap-4 rounded-xl border border-amber-100 bg-amber-50/40 p-4">
+          <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <input id="talFeatured" type="checkbox" ${item.is_featured ? 'checked' : ''}>
+            发现页精选置顶
+          </label>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">展示排序</label><input id="talSortOrder" type="number" min="0" value="${escapeHtml(item.sort_order ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white"><p class="text-xs text-gray-400 mt-1">数值越小越靠前</p></div>
+        </div>
         <div class="rounded-xl border border-amber-100 bg-amber-50/60 p-4 space-y-3">
           <p class="text-sm font-semibold text-navy-800">缴费会员</p>
           <p class="text-xs text-gray-500">到期后会员标识与权益自动失效（访问时校验）</p>
@@ -5954,6 +5992,8 @@ async function saveTalent(id) {
     card_image_url: document.getElementById('talCard').value.trim() || null,
     status: document.getElementById('talStatus').value,
     reject_reason: document.getElementById('talRejectReason').value,
+    is_featured: !!document.getElementById('talFeatured')?.checked,
+    sort_order: Math.max(0, Number(document.getElementById('talSortOrder')?.value || 0)),
     payment_status: document.getElementById('talPayStatus')?.value || 'unpaid',
     payment_start_at: document.getElementById('talPayStart')?.value || null,
     membership_years: Number(document.getElementById('talPayYears')?.value || 0),

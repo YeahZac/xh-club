@@ -41,40 +41,64 @@ html.xh-has-mp-toolbar,body.xh-has-mp-toolbar{padding-bottom:88px !important;box
 
 const BRIDGE_SCRIPT = `
 (function(){
+  var bridgeReady = false;
+  var sdkLoading = false;
   function toast(msg){
     try{
       if(typeof wx!=='undefined' && wx.showToast){wx.showToast({title:String(msg||''),icon:'none'});return;}
     }catch(e){}
     alert(String(msg||''));
   }
+  function navigate(url, mode){
+    try{
+      var api = mode === 'redirect' && typeof wx.miniProgram.redirectTo === 'function'
+        ? wx.miniProgram.redirectTo
+        : wx.miniProgram.navigateTo;
+      if(typeof api !== 'function'){ throw new Error('navigate unavailable'); }
+      api.call(wx.miniProgram, {
+        url:url,
+        fail:function(){
+          try{
+            if(mode !== 'redirect' && typeof wx.miniProgram.redirectTo === 'function'){
+              wx.miniProgram.redirectTo({url:url});
+            }else if(typeof wx.miniProgram.navigateTo === 'function'){
+              wx.miniProgram.navigateTo({url:url});
+            }
+          }catch(e2){ toast('请升级微信后重试'); }
+        }
+      });
+    }catch(e){ toast('请在星河俱乐部小程序中打开'); }
+  }
+  function verifyBridge(done){
+    if(bridgeReady){ done(true); return; }
+    if(typeof wx==='undefined' || !wx.miniProgram || typeof wx.miniProgram.getEnv!=='function'){
+      done(false); return;
+    }
+    try{
+      wx.miniProgram.getEnv(function(res){
+        bridgeReady = !!(res && res.miniprogram);
+        done(bridgeReady);
+      });
+    }catch(e){ done(false); }
+  }
   function go(url, mode){
     if(!url){return;}
-    try{
-      if(typeof wx!=='undefined' && wx.miniProgram){
-        var api = mode === 'redirect' && typeof wx.miniProgram.redirectTo === 'function'
-          ? wx.miniProgram.redirectTo
-          : wx.miniProgram.navigateTo;
-        if(typeof api === 'function'){
-          api.call(wx.miniProgram, {
-            url:url,
-            fail:function(){
-              try{
-                if(mode !== 'redirect' && typeof wx.miniProgram.redirectTo === 'function'){
-                  wx.miniProgram.redirectTo({url:url});
-                }else if(typeof wx.miniProgram.navigateTo === 'function'){
-                  wx.miniProgram.navigateTo({url:url});
-                }
-              }catch(e2){
-                toast('请升级微信后重试');
-              }
-            }
-          });
-          return;
-        }
-      }
-    }catch(e){}
-    toast('请在星河俱乐部小程序中打开');
+    verifyBridge(function(ready){
+      if(!ready){ toast('请在星河俱乐部小程序中打开'); return; }
+      navigate(url, mode);
+    });
   }
+  function loadSdk(){
+    if((typeof wx!=='undefined' && wx.miniProgram) || sdkLoading){ return; }
+    sdkLoading = true;
+    var script=document.createElement('script');
+    script.src='https://res.wx.qq.com/open/js/jweixin-1.6.0.js';
+    script.async=true;
+    script.onload=function(){ sdkLoading=false; };
+    script.onerror=function(){ sdkLoading=false; };
+    (document.head||document.documentElement).appendChild(script);
+  }
+  loadSdk();
   window.__xhMpGo=go;
   window.__xhMpToast=toast;
   document.documentElement.classList.add('xh-has-mp-toolbar');

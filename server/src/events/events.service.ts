@@ -84,7 +84,10 @@ export class EventsService {
     let query = this.client()
       .from('events')
       .select('*', { count: 'exact' })
-      .order('start_time', { ascending: false })
+      .order('is_featured', { ascending: false })
+      .order('sort_order', { ascending: true })
+      .order('updated_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .range(from, to)
 
     if (params.event_type) query = query.eq('event_type', params.event_type)
@@ -468,7 +471,7 @@ export class EventsService {
     const rows = await queryRows(
       `SELECT p.* FROM projects p
        ${whereSql}
-       ORDER BY p.created_at DESC
+       ORDER BY p.is_featured DESC, p.sort_order ASC, p.updated_at DESC, p.created_at DESC
        LIMIT ? OFFSET ?`,
       [...values, pageSize, offset],
     )
