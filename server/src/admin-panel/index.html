@@ -2170,10 +2170,11 @@ async function loadMembers() {
       <td class="px-6 py-4 text-center">
         ${m.status === 'pending' ? `
           <button onclick="approveMember('${m.id}')" class="text-green-600 hover:text-green-800 text-xs font-medium mr-3">通过</button>
-          <button onclick="rejectMember('${m.id}')" class="text-red-600 hover:text-red-800 text-xs font-medium">拒绝</button>
+          <button onclick="rejectMember('${m.id}')" class="text-red-600 hover:text-red-800 text-xs font-medium mr-3">拒绝</button>
         ` : `
-          <button onclick="viewMember('${m.id}')" class="text-brand-600 hover:text-brand-800 text-xs font-medium">查看</button>
+          <button onclick="viewMember('${m.id}')" class="text-brand-600 hover:text-brand-800 text-xs font-medium mr-3">查看</button>
         `}
+        <button onclick="purgeMember('${m.id}', '${escapeHtml(m.name || '')}', '${escapeHtml(m.phone || '')}')" class="text-red-600 hover:text-red-800 text-xs font-medium">彻底删除</button>
       </td>
     </tr>
   `).join('')
@@ -2189,6 +2190,27 @@ async function rejectMember(id) {
   const res = await api(`/admin/members/${id}/reject`, { method: 'POST', body: { reason: '不符合条件' } })
   if (res.code === 200) { toast('已拒绝'); loadDashboard(); loadMembers(); }
   else toast(res.msg || '操作失败', 'error')
+}
+
+async function purgeMember(id, name, phone) {
+  const label = [name, phone].filter(Boolean).join(' / ') || `ID ${id}`
+  const typed = window.prompt(
+    `即将彻底删除会员「${label}」及其全部关联数据（报名、积分、成交、邀请、通知、发布内容等），不可恢复。\n\n请输入 DELETE 确认：`,
+  )
+  if (typed == null) return
+  if (String(typed).trim() !== 'DELETE') {
+    toast('已取消：需输入 DELETE 才能删除', 'error')
+    return
+  }
+  const res = await api(`/admin/members/${id}/purge`, { method: 'POST', body: { confirm: 'DELETE' } })
+  if (res.code === 200) {
+    toast('会员及相关数据已删除')
+    closeModal()
+    loadDashboard()
+    loadMembers()
+  } else {
+    toast(res.msg || '删除失败', 'error')
+  }
 }
 
 async function viewMember(id) {
@@ -2231,6 +2253,10 @@ async function viewMember(id) {
         <div class="flex"><span class="text-gray-500 w-24">可提供</span><span>${m.resources_supply || '-'}</span></div>
         <div class="flex"><span class="text-gray-500 w-24">需求</span><span>${m.resources_demand || '-'}</span></div>
         <div class="flex"><span class="text-gray-500 w-24">简介</span><span>${m.bio || '-'}</span></div>
+      </div>
+      <div class="mt-6 flex justify-end gap-3">
+        <button onclick="closeModal()" class="px-4 py-2 rounded-lg border text-sm text-gray-600 hover:bg-gray-50">关闭</button>
+        <button onclick="purgeMember('${m.id}', '${escapeHtml(m.name || '')}', '${escapeHtml(m.phone || '')}')" class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm hover:bg-red-700">彻底删除</button>
       </div>
     </div>
   `)

@@ -1,5 +1,5 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
-import { queryRows, queryOne, queryExecute, getConnectionStatus, testConnection, getPool } from '@/storage/database/mysql-client'
+import { queryRows, queryOne, queryExecute, getConnectionStatus, testConnection, getPool, withTransaction } from '@/storage/database/mysql-client'
 import { ensureSchemaColumns } from '@/storage/database/ensure-schema-columns'
 import * as bcrypt from 'bcryptjs'
 import { RowDataPacket, ResultSetHeader } from 'mysql2'
@@ -442,10 +442,186 @@ export class AdminService {
       [category, id],
     )
     return {
-      success: true,
       user_category: category,
       user_category_label: userCategoryLabel(category),
     }
+  }
+
+  /**
+   * 测试/运维：彻底删除会员及其关联数据，避免残留外键导致小程序报错。
+   * 需 body.confirm === 'DELETE' 二次确认。
+   */
+  async purgeMember(id: string, confirm?: string) {
+    if (String(confirm || '').trim() !== 'DELETE') {
+      throw new HttpException('请传 confirm=DELETE 以确认彻底删除', HttpStatus.BAD_REQUEST)
+    }
+
+    const memberId = Number(id)
+    if (!Number.isFinite(memberId) || memberId <= 0) {
+      throw new HttpException('无效的会员 ID', HttpStatus.BAD_REQUEST)
+    }
+
+    const member = await queryOne('SELECT id, name, phone, wx_openid FROM members WHERE id = ?', [memberId])
+    if (!member) throw new HttpException('会员不存在', HttpStatus.NOT_FOUND)
+
+    try {
+    const deleted: Record<string, number> = {}
+
+    const run = async (
+      connection: import('mysql2/promise').PoolConnection,
+      key: string,
+      sql: string,
+      params: any[] = [memberId],
+    ) => {
+      try {
+        const [result] = (await connection.query(sql, params)) as [ResultSetHeader, any]
+        const rows = Number(result?.affectedRows || 0)
+        if (rows > 0) deleted[key] = (deleted[key] || 0) + rows
+        return rows
+      } catch (error: any) {
+        // 1146 表不存在 / 1054 列不存在：兼容新旧库结构
+        if (error?.errno === 1146 || error?.errno === 1054) return 0
+        throw error
+      }
+    }
+
+    await withTransaction(async (connection) => {
+      // 先清理该会员发布的商机/项目的附属数据，再删主记录
+      let ownedBusinesses: RowDataPacket[] = []
+      try {
+        const [rows] = await connection.query<RowDataPacket[]>(
+          'SELECT id FROM business_opportunities WHERE user_id = ?',
+          [memberId],
+        )
+        ownedBusinesses = rows || []
+      } catch (error: any) {
+        if (error?.errno !== 1146 && error?.errno !== 1054) throw error
+      }
+      const businessIds = ownedBusinesses.map((row) => Number(row.id)).filter((n) => n > 0)
+
+      if (businessIds.length) {
+        const placeholders = businessIds.map(() => '?').join(',')
+        await run(connection, 'roadshow_scores', `DELETE FROM roadshow_scores WHERE business_id IN (${placeholders})`, businessIds)
+        await run(connection, 'roadshow_registrations', `DELETE FROM roadshow_registrations WHERE business_id IN (${placeholders})`, businessIds)
+        await run(connection, 'roadshow_score_dimensions', `DELETE FROM roadshow_score_dimensions WHERE business_id IN (${placeholders})`, businessIds)
+        await run(connection, 'roadshow_projects', `DELETE FROM roadshow_projects WHERE business_id IN (${placeholders})`, businessIds)
+        await run(connection, 'project_deal_applications', `DELETE FROM project_deal_applications WHERE business_id IN (${placeholders})`, businessIds)
+        await run(connection, 'business_opportunities', `DELETE FROM business_opportunities WHERE id IN (${placeholders})`, businessIds)
+      }
+
+      let ownedProjects: RowDataPacket[] = []
+      try {
+        const [rows] = await connection.query<RowDataPacket[]>(
+          'SELECT id FROM projects WHERE submitter_id = ?',
+          [memberId],
+        )
+        ownedProjects = rows || []
+      } catch (error: any) {
+        if (error?.errno !== 1146 && error?.errno !== 1054) throw error
+      }
+      const projectIds = ownedProjects.map((row) => Number(row.id)).filter((n) => n > 0)
+
+      if (projectIds.length) {
+        const placeholders = projectIds.map(() => '?').join(',')
+        await run(connection, 'project_scores', `DELETE FROM project_scores WHERE project_id IN (${placeholders})`, projectIds)
+        await run(connection, 'project_score_dimensions', `DELETE FROM project_score_dimensions WHERE project_id IN (${placeholders})`, projectIds)
+        await run(connection, 'roadshow_projects', `DELETE FROM roadshow_projects WHERE project_id IN (${placeholders})`, projectIds)
+        await run(connection, 'roadshow_scores', `DELETE FROM roadshow_scores WHERE project_id IN (${placeholders})`, projectIds)
+        await run(connection, 'project_deal_applications', `DELETE FROM project_deal_applications WHERE business_id IN (${placeholders})`, projectIds)
+        await run(connection, 'projects', `DELETE FROM projects WHERE id IN (${placeholders})`, projectIds)
+      }
+
+      // 会员作为参与方的业务数据
+      const directDeletes: Array<[string, string]> = [
+        ['notifications', 'DELETE FROM notifications WHERE member_id = ?'],
+        ['project_scores', 'DELETE FROM project_scores WHERE member_id = ?'],
+        ['roadshow_scores', 'DELETE FROM roadshow_scores WHERE member_id = ?'],
+        ['roadshow_registrations', 'DELETE FROM roadshow_registrations WHERE member_id = ?'],
+        ['event_registrations', 'DELETE FROM event_registrations WHERE member_id = ?'],
+        ['event_form_registrations', 'DELETE FROM event_form_registrations WHERE member_id = ?'],
+        ['comments', 'DELETE FROM comments WHERE member_id = ?'],
+        ['posts', 'DELETE FROM posts WHERE member_id = ?'],
+        ['points_records', 'DELETE FROM points_records WHERE member_id = ?'],
+        ['points_exchanges', 'DELETE FROM points_exchanges WHERE member_id = ?'],
+        ['points_grants', 'DELETE FROM points_grants WHERE member_id = ?'],
+        ['contribution_logs', 'DELETE FROM contribution_logs WHERE member_id = ?'],
+        ['member_level_logs', 'DELETE FROM member_level_logs WHERE member_id = ?'],
+        ['member_departments', 'DELETE FROM member_departments WHERE member_id = ?'],
+        ['member_organizations', 'DELETE FROM member_organizations WHERE member_id = ?'],
+        ['member_tags', 'DELETE FROM member_tags WHERE member_id = ?'],
+        ['talent_applications', 'DELETE FROM talent_applications WHERE member_id = ?'],
+        ['user_feedbacks', 'DELETE FROM user_feedbacks WHERE member_id = ?'],
+        ['mall_orders', 'DELETE FROM mall_orders WHERE member_id = ?'],
+        ['transactions', 'DELETE FROM transactions WHERE member_id = ?'],
+        ['resources', 'DELETE FROM resources WHERE member_id = ?'],
+        ['invitation_rewards', 'DELETE FROM invitation_rewards WHERE member_id = ?'],
+        ['project_deal_applications', 'DELETE FROM project_deal_applications WHERE member_id = ? OR owner_member_id = ?'],
+        ['invitation_records', 'DELETE FROM invitation_records WHERE inviter_id = ? OR invitee_id = ?'],
+        ['member_invitations', 'DELETE FROM member_invitations WHERE inviter_id = ? OR registered_member_id = ?'],
+        ['distribution_relations', 'DELETE FROM distribution_relations WHERE referrer_id = ? OR referee_id = ?'],
+        ['distribution_earnings', 'DELETE FROM distribution_earnings WHERE user_id = ?'],
+        ['distribution_earnings', 'DELETE FROM distribution_earnings WHERE member_id = ?'],
+        ['distribution_earnings', 'DELETE FROM distribution_earnings WHERE from_member_id = ?'],
+        ['messages', 'DELETE FROM messages WHERE sender_id = ? OR receiver_id = ?'],
+      ]
+
+      for (const [key, sql] of directDeletes) {
+        const needsTwoParams = sql.includes('OR')
+        await run(connection, key, sql, needsTwoParams ? [memberId, memberId] : [memberId])
+      }
+
+      // 手机号关联的匿名报名（无 member_id）
+      if (member.phone) {
+        await run(
+          connection,
+          'event_form_registrations',
+          'DELETE FROM event_form_registrations WHERE phone = ?',
+          [member.phone],
+        )
+        await run(
+          connection,
+          'member_invitations',
+          'DELETE FROM member_invitations WHERE phone = ?',
+          [member.phone],
+        )
+      }
+
+      // 断开别人指向该会员的引用，避免残留脏 ID
+      await run(connection, 'members_referrer_cleared', 'UPDATE members SET referrer_id = NULL WHERE referrer_id = ?')
+      await run(connection, 'mall_orders_referrer_cleared', 'UPDATE mall_orders SET referrer_id = NULL WHERE referrer_id = ?')
+      await run(connection, 'projects_submitter_cleared', 'UPDATE projects SET submitter_id = NULL WHERE submitter_id = ?')
+      await run(connection, 'business_user_cleared', 'UPDATE business_opportunities SET user_id = NULL WHERE user_id = ?')
+      await run(
+        connection,
+        'deal_owner_cleared',
+        'UPDATE project_deal_applications SET owner_member_id = NULL WHERE owner_member_id = ?',
+      )
+      await run(
+        connection,
+        'member_invitations_registered_cleared',
+        'UPDATE member_invitations SET registered_member_id = NULL WHERE registered_member_id = ?',
+      )
+
+      await run(connection, 'members', 'DELETE FROM members WHERE id = ?')
+    })
+
+    return {
+      success: true,
+      member: {
+        id: member.id,
+        name: member.name || '',
+        phone: member.phone || '',
+      },
+      deleted,
+    }
+  } catch (error) {
+    console.error('[AdminService] purgeMember error:', error)
+    if (error instanceof HttpException) throw error
+    throw new HttpException(
+      String((error as any)?.message || '彻底删除会员失败'),
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    )
+  }
   }
 
   /** ====== 活动管理 ====== */

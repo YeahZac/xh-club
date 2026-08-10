@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, HttpException, Param, Post, Put, Query, UseGuards } from '@nestjs/common'
 import { AdminService } from './admin.service'
 import * as bcrypt from 'bcryptjs'
 import { AdminAuthGuard } from '@/auth/auth.guard'
@@ -1161,6 +1161,30 @@ export class AdminController {
   ) {
     const result = await this.adminService.updateMemberUserCategory(id, body?.user_category)
     return { code: 200, msg: '用户类型已更新', data: result }
+  }
+
+  /** 彻底删除会员及关联数据（测试用，需 confirm=DELETE） */
+  @Post('members/:id/purge')
+  async purgeMember(
+    @Param('id') id: string,
+    @Body() body: { confirm?: string },
+  ) {
+    try {
+      const result = await this.adminService.purgeMember(id, body?.confirm)
+      return { code: 200, msg: '会员及相关数据已彻底删除', data: result }
+    } catch (error) {
+      if (error instanceof HttpException) {
+        const status = error.getStatus()
+        const payload = error.getResponse()
+        const msg =
+          typeof payload === 'string'
+            ? payload
+            : String((payload as any)?.message || error.message || '删除失败')
+        return { code: status, msg, data: null }
+      }
+      console.error('[AdminController] purgeMember error:', error)
+      return { code: 500, msg: '删除失败', data: null }
+    }
   }
 
   /** ====== 活动管理 ====== */
