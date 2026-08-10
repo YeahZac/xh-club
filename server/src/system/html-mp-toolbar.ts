@@ -6,6 +6,7 @@ export interface MpToolbarQuery {
   toolbar?: string
   has_scored?: string
   owner_id?: string
+  owner_name?: string
   title?: string
   registered?: string
   can_register?: string
@@ -109,11 +110,18 @@ const BRIDGE_SCRIPT = `
 function projectToolbarHtml(id: string, q: MpToolbarQuery): string {
   const scored = String(q.has_scored || '') === '1'
   const scoreLabel = scored ? '已评分' : '评分'
-  const title = escapeJs(String(q.title || ''))
-  const ownerId = escapeJs(String(q.owner_id || ''))
+  const title = String(q.title || '')
+  const ownerId = String(q.owner_id || '')
+  const ownerName = String(q.owner_name || '')
   const scoreUrl = `/pages/project-score/index?projectId=${encodeURIComponent(id)}`
-  const shareUrl = `/pages/project-share/index?projectId=${encodeURIComponent(id)}&title=${encodeURIComponent(String(q.title || ''))}`
-  const dealUrl = `/pages/deal-applications/form/index?project_id=${encodeURIComponent(id)}${ownerId ? `&owner_member_id=${encodeURIComponent(String(q.owner_id || ''))}` : ''}${title ? `&project_title=${encodeURIComponent(String(q.title || ''))}` : ''}`
+  const shareUrl = `/pages/project-share/index?projectId=${encodeURIComponent(id)}&title=${encodeURIComponent(title)}`
+  const dealQuery = [
+    `project_id=${encodeURIComponent(id)}`,
+    ownerId ? `owner_member_id=${encodeURIComponent(ownerId)}` : '',
+    title ? `project_title=${encodeURIComponent(title)}` : '',
+    ownerName ? `owner_name=${encodeURIComponent(ownerName)}` : '',
+  ].filter(Boolean).join('&')
+  const dealUrl = `/pages/deal-applications/form/index?${dealQuery}`
 
   return `
 <div class="xh-mp-toolbar" role="navigation" aria-label="项目操作">
