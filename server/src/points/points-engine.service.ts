@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
 import { RowDataPacket } from 'mysql2'
 import { formatPointsRuleRow } from './points-rule.util'
+import { insertPointsRecord } from './points-record.util'
 
 @Injectable()
 export class PointsEngineService {
@@ -306,21 +307,17 @@ export class PointsEngineService {
       this.logger.warn(`points_grants insert failed: ${(error as Error)?.message}`)
     }
 
-    try {
-      await queryExecute(
-        `INSERT INTO points_records (member_id, type, amount, balance, source, source_id, description)
-         VALUES (?, 'earn', ?, ?, ?, ?, ?)`,
-        [
-          memberId,
-          points,
-          after,
-          rule.action_type,
-          context?.referenceId ? String(context.referenceId) : String(rule.id),
-          desc,
-        ],
-      )
-    } catch (error) {
-      this.logger.warn(`points_records insert failed: ${(error as Error)?.message}`)
+    const recorded = await insertPointsRecord({
+      memberId,
+      type: 'earn',
+      points,
+      balanceAfter: after,
+      source: rule.action_type,
+      sourceId: context?.referenceId ? String(context.referenceId) : String(rule.id),
+      description: desc,
+    })
+    if (!recorded) {
+      this.logger.warn(`points_records insert failed for member ${memberId} rule ${rule.id}`)
     }
 
     this.logger.log(`Granted ${points} points to member ${memberId} via rule ${rule.id}`)

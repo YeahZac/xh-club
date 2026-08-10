@@ -361,6 +361,20 @@ export class MallService {
   ) {
     const attempts: Array<{ sql: string; params: any[] }> = [
       {
+        sql: `INSERT INTO points_records
+                (member_id, type, points, amount, balance, balance_after, source, source_id, description)
+              VALUES (?, 'spend', ?, ?, ?, ?, 'mall', ?, ?)`,
+        params: [
+          payload.memberId,
+          payload.points,
+          payload.points,
+          payload.balanceAfter,
+          payload.balanceAfter,
+          String(payload.orderId),
+          payload.description,
+        ],
+      },
+      {
         sql: `INSERT INTO points_records (member_id, type, amount, balance, source, source_id, description)
               VALUES (?, 'spend', ?, ?, 'mall', ?, ?)`,
         params: [

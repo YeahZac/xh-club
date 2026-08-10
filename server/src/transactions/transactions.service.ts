@@ -2,6 +2,7 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
 import { queryRows, queryOne } from '@/storage/database/mysql-client'
 import { PointsEngineService } from '@/points/points-engine.service'
+import { ensurePointsRecordsReconciled } from '@/points/points-record.util'
 
 @Injectable()
 export class TransactionsService {
@@ -166,7 +167,7 @@ export class TransactionsService {
 export class PointsService {
   private client() { return getSupabaseClient() }
 
-  /** 获取积分记录 */
+  /** 获取积分记录（含账户汇总；流水为空时自动补记历史积分） */
   async getRecords(memberId: string, params: { type?: string; page?: number; pageSize?: number }) {
     const page = Math.max(1, Number(params.page || 1) || 1)
     const pageSize = Math.min(50, Math.max(1, Number(params.pageSize || 20) || 20))
@@ -174,6 +175,16 @@ export class PointsService {
     const type = String(params.type || '').trim()
 
     try {
+      await ensurePointsRecordsReconciled(memberId)
+
+      const member = await queryOne(
+        'SELECT total_points, available_points FROM members WHERE id = ? LIMIT 1',
+        [memberId],
+      )
+      const totalPoints = Number((member as any)?.total_points || 0)
+      const availablePoints = Number((member as any)?.available_points || 0)
+      const usedPoints = Math.max(0, totalPoints - availablePoints)
+
       const where: string[] = ['member_id = ?']
       const sqlParams: any[] = [memberId]
       if (type === 'earn' || type === 'spend') {
@@ -198,28 +209,36 @@ export class PointsService {
         [...sqlParams, pageSize, offset],
       )
 
-      const list = (rows || []).map((row: any) => {
-        const amountRaw = row.amount != null ? Number(row.amount) : Number(row.points || 0)
-        const typeValue = String(row.type || '').toLowerCase()
-        const signedAmount =
-          typeValue === 'spend' || typeValue === 'consume' || typeValue === 'deduct'
-            ? -Math.abs(amountRaw || 0)
-            : Math.abs(amountRaw || 0)
-        return {
-          id: row.id,
-          member_id: row.member_id,
-          type: typeValue === 'spend' || typeValue === 'consume' || typeValue === 'deduct' ? 'spend' : 'earn',
-          amount: signedAmount,
-          points: Math.abs(amountRaw || 0),
-          balance_after: row.balance_after != null ? Number(row.balance_after) : (row.balance != null ? Number(row.balance) : null),
-          source: row.source || '',
-          source_id: row.source_id || null,
-          description: row.description || (typeValue === 'spend' ? '积分支出' : '积分收入'),
-          created_at: row.created_at,
-        }
-      })
+      const list = (rows || []).map((row: any) => this.formatRecordRow(row))
 
-      return { list, total, page, pageSize }
+      // 明细汇总优先用流水；若流水不全则回落到会员账户字段
+      const earnSumRow = await queryOne(
+        `SELECT COALESCE(SUM(ABS(COALESCE(amount, points, 0))), 0) AS total
+         FROM points_records
+         WHERE member_id = ? AND LOWER(IFNULL(type,'')) IN ('earn','income','add','grant')`,
+        [memberId],
+      ).catch(() => null)
+      const spendSumRow = await queryOne(
+        `SELECT COALESCE(SUM(ABS(COALESCE(amount, points, 0))), 0) AS total
+         FROM points_records
+         WHERE member_id = ? AND LOWER(IFNULL(type,'')) IN ('spend','consume','deduct','expense')`,
+        [memberId],
+      ).catch(() => null)
+
+      const earnFromRecords = Number((earnSumRow as any)?.total || 0)
+      const spendFromRecords = Number((spendSumRow as any)?.total || 0)
+
+      return {
+        list,
+        total,
+        page,
+        pageSize,
+        summary: {
+          total_earned: Math.max(totalPoints, earnFromRecords),
+          available_points: availablePoints,
+          used_points: Math.max(usedPoints, spendFromRecords),
+        },
+      }
     } catch (error) {
       console.error('[PointsService] getRecords error:', error)
       throw new HttpException(
@@ -227,6 +246,57 @@ export class PointsService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       )
     }
+  }
+
+  private formatRecordRow(row: any) {
+    const amountRaw = row.amount != null ? Number(row.amount) : Number(row.points || 0)
+    const typeValue = String(row.type || '').toLowerCase()
+    const isSpend = typeValue === 'spend' || typeValue === 'consume' || typeValue === 'deduct' || typeValue === 'expense'
+    const signedAmount = isSpend ? -Math.abs(amountRaw || 0) : Math.abs(amountRaw || 0)
+    const source = String(row.source || '')
+    return {
+      id: row.id,
+      member_id: row.member_id,
+      type: isSpend ? 'spend' : 'earn',
+      amount: signedAmount,
+      points: Math.abs(amountRaw || 0),
+      balance_after: row.balance_after != null
+        ? Number(row.balance_after)
+        : (row.balance != null ? Number(row.balance) : null),
+      source,
+      source_label: this.sourceLabel(source, isSpend),
+      source_id: row.source_id || null,
+      description: row.description || this.sourceLabel(source, isSpend) || (isSpend ? '积分支出' : '积分收入'),
+      created_at: row.created_at,
+    }
+  }
+
+  private sourceLabel(source: string, isSpend: boolean): string {
+    const map: Record<string, string> = {
+      daily_login: '每日登录',
+      daily_checkin: '每日签到',
+      member_days: '会员天数奖励',
+      invitee_register_login: '邀请好友注册',
+      invitee_deal: '邀请好友成交',
+      invitee_event: '邀请好友参加活动',
+      invitee_talent: '邀请好友人才入驻',
+      invitee_mall_order: '邀请好友商城消费',
+      invitee_paid_member: '邀请好友成为付费会员',
+      invite: '邀请奖励',
+      invite_friend: '邀请奖励',
+      invite_register: '邀请注册奖励',
+      mall: '商城兑换',
+      mall_exchange: '商城兑换',
+      attend_event: '参加活动',
+      attend_roadshow: '参加路演',
+      deal_complete: '项目成交',
+      publish_post: '发布动态',
+      talent_settle: '人才入驻',
+      system_reconcile: '历史积分补记',
+      admin_trigger: '后台发放',
+    }
+    if (map[source]) return map[source]
+    return isSpend ? '积分支出' : '积分收入'
   }
 
   /** 获取商城商品列表 */

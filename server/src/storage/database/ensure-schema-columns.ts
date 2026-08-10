@@ -123,7 +123,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['points_records', 'source', 'VARCHAR(32) NULL'],
   ['points_records', 'source_id', 'VARCHAR(64) NULL'],
   ['points_records', 'description', 'TEXT NULL'],
-  ['points_records', 'points', 'INT NULL'],
+  ['points_records', 'points', 'INT NULL DEFAULT 0'],
   // 积分规则：阈值与说明
   ['points_rules', 'threshold_value', 'INT NOT NULL DEFAULT 1'],
   ['points_rules', 'description', 'VARCHAR(500) NULL'],

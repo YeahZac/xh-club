@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { RowDataPacket } from 'mysql2'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
 import { UploadService } from '@/upload/upload.service'
+import { insertPointsRecord } from '@/points/points-record.util'
 import {
   formatInviteRuleRow,
   hasAnyInviteReward,
@@ -257,21 +258,17 @@ export class InvitationEngineService {
           'UPDATE members SET available_points = ?, total_points = ?, updated_at = NOW() WHERE id = ?',
           [after, total, inviterId],
         )
-        try {
-          await queryExecute(
-            `INSERT INTO points_records (member_id, type, amount, balance, source, source_id, description)
-             VALUES (?, 'earn', ?, ?, ?, ?, ?)`,
-            [
-              inviterId,
-              totalPoints,
-              after,
-              meta.source || conditionCode,
-              inviteeId,
-              `${descBase}${meta.inviteCode ? ` 推荐码 ${meta.inviteCode}` : ''}`,
-            ],
-          )
-        } catch (error) {
-          this.logger.warn(`points_records insert failed: ${(error as Error)?.message}`)
+        const recorded = await insertPointsRecord({
+          memberId: inviterId,
+          type: 'earn',
+          points: totalPoints,
+          balanceAfter: after,
+          source: meta.source || conditionCode,
+          sourceId: inviteeId,
+          description: `${descBase}${meta.inviteCode ? ` 推荐码 ${meta.inviteCode}` : ''}`,
+        })
+        if (!recorded) {
+          this.logger.warn(`points_records insert failed inviter=${inviterId} invitee=${inviteeId}`)
         }
       }
 
