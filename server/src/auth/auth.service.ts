@@ -67,23 +67,22 @@ export class AuthService {
       // 老用户一键登录：仅凭 openid 签发登录态，无需重复授权手机号/头像/昵称
       if (existing && (mode === 'quick' || (!input.phoneCode && !input.phoneCloudId))) {
         const memberId = (existing as any).id
-        const updates: string[] = ['updated_at = NOW()']
-        const params: any[] = []
+        try {
+          await queryExecute('UPDATE members SET updated_at = NOW() WHERE id = ?', [memberId])
+        } catch (error) {
+          console.warn('[AuthService] quick login touch updated_at skipped:', error)
+        }
         if (safeName && !(existing as any).name) {
-          updates.push('name = ?')
-          params.push(safeName)
+          await queryExecute('UPDATE members SET name = ? WHERE id = ?', [safeName, memberId]).catch(() => undefined)
         }
         if (safeAvatar && !(existing as any).avatar) {
-          updates.push('avatar = ?')
-          params.push(safeAvatar)
-        }
-        if (params.length) {
-          params.push(memberId)
-          await queryExecute(`UPDATE members SET ${updates.join(', ')} WHERE id = ?`, params)
-        } else {
-          await queryExecute('UPDATE members SET updated_at = NOW() WHERE id = ?', [memberId])
+          await queryExecute('UPDATE members SET avatar = ? WHERE id = ?', [safeAvatar, memberId]).catch(() => undefined)
         }
         return this.buildLoginResult(memberId, openid, { isNewMember: false, canBindInvite: false })
+      }
+
+      if (mode === 'quick' && !existing) {
+        throw new HttpException('账号未注册，请先授权手机号完成注册', HttpStatus.BAD_REQUEST)
       }
 
       let phone = ''
