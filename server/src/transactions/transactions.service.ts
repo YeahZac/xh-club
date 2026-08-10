@@ -1,5 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-compat'
+import { queryRows, queryOne } from '@/storage/database/mysql-client'
 import { PointsEngineService } from '@/points/points-engine.service'
 
 @Injectable()
@@ -167,24 +168,65 @@ export class PointsService {
 
   /** 获取积分记录 */
   async getRecords(memberId: string, params: { type?: string; page?: number; pageSize?: number }) {
-    const page = params.page || 1
-    const pageSize = params.pageSize || 20
-    const from = (page - 1) * pageSize
-    const to = from + pageSize - 1
+    const page = Math.max(1, Number(params.page || 1) || 1)
+    const pageSize = Math.min(50, Math.max(1, Number(params.pageSize || 20) || 20))
+    const offset = (page - 1) * pageSize
+    const type = String(params.type || '').trim()
 
-    let query = this.client()
-      .from('points_records')
-      .select('*', { count: 'exact' })
-      .eq('member_id', memberId)
-      .order('created_at', { ascending: false })
-      .range(from, to)
+    try {
+      const where: string[] = ['member_id = ?']
+      const sqlParams: any[] = [memberId]
+      if (type === 'earn' || type === 'spend') {
+        where.push('type = ?')
+        sqlParams.push(type)
+      }
+      const whereSql = where.join(' AND ')
 
-    if (params.type) query = query.eq('type', params.type)
+      const countRow = await queryOne(
+        `SELECT COUNT(*) AS total FROM points_records WHERE ${whereSql}`,
+        sqlParams,
+      )
+      const total = Number((countRow as any)?.total || 0)
 
-    const { data, error, count } = await query
-    if (error) throw new HttpException(`查询失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
+      const rows = await queryRows(
+        `SELECT id, member_id, type, points, amount, balance, balance_after,
+                source, source_id, description, created_at
+         FROM points_records
+         WHERE ${whereSql}
+         ORDER BY created_at DESC, id DESC
+         LIMIT ? OFFSET ?`,
+        [...sqlParams, pageSize, offset],
+      )
 
-    return { list: data || [], total: count || 0, page, pageSize }
+      const list = (rows || []).map((row: any) => {
+        const amountRaw = row.amount != null ? Number(row.amount) : Number(row.points || 0)
+        const typeValue = String(row.type || '').toLowerCase()
+        const signedAmount =
+          typeValue === 'spend' || typeValue === 'consume' || typeValue === 'deduct'
+            ? -Math.abs(amountRaw || 0)
+            : Math.abs(amountRaw || 0)
+        return {
+          id: row.id,
+          member_id: row.member_id,
+          type: typeValue === 'spend' || typeValue === 'consume' || typeValue === 'deduct' ? 'spend' : 'earn',
+          amount: signedAmount,
+          points: Math.abs(amountRaw || 0),
+          balance_after: row.balance_after != null ? Number(row.balance_after) : (row.balance != null ? Number(row.balance) : null),
+          source: row.source || '',
+          source_id: row.source_id || null,
+          description: row.description || (typeValue === 'spend' ? '积分支出' : '积分收入'),
+          created_at: row.created_at,
+        }
+      })
+
+      return { list, total, page, pageSize }
+    } catch (error) {
+      console.error('[PointsService] getRecords error:', error)
+      throw new HttpException(
+        `查询失败: ${(error as Error)?.message || 'unknown'}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      )
+    }
   }
 
   /** 获取商城商品列表 */
