@@ -29,6 +29,7 @@ export function buildWebViewHtmlPageUrl(params: {
   type: string
   key?: string
   id?: string | number
+  extra?: Record<string, string | number | boolean | undefined | null>
 }): string | null {
   const base = trimTrailingSlash(getPublicHttpsBaseUrl())
   if (!base) return null
@@ -36,6 +37,12 @@ export function buildWebViewHtmlPageUrl(params: {
   const search = new URLSearchParams({ type: String(params.type || '').trim() })
   if (params.key) search.set('key', String(params.key))
   if (params.id != null && params.id !== '') search.set('id', String(params.id))
+  if (params.extra) {
+    Object.entries(params.extra).forEach(([k, v]) => {
+      if (v == null || v === '') return
+      search.set(k, String(v))
+    })
+  }
 
   const url = `${base}/api/system/html-render?${search.toString()}`
   return isAllowedWebViewUrl(url) ? url : null

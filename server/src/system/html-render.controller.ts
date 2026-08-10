@@ -5,6 +5,7 @@ import { queryOne } from '@/storage/database/mysql-client'
 import { UploadService } from '@/upload/upload.service'
 import { rewriteLegacyCloudHostUrls } from '@/utils/public-base-url'
 import { buildWebViewHtmlPageUrl } from '@/utils/webview-url'
+import { injectMpToolbar, type MpToolbarQuery } from '@/system/html-mp-toolbar'
 
 const CONFIG_KEYS = new Set(['about_us'])
 
@@ -63,19 +64,27 @@ export class HtmlRenderController {
       html = String(row.content || '')
       title = String(row.title || title)
     } else if (kind === 'event') {
-      const row = await queryOne('SELECT title, description, content FROM events WHERE id = ?', [id])
+      const row = await queryOne(
+        'SELECT title, description, content FROM events WHERE id = ? AND status <> ?',
+        [id, 'draft'],
+      )
       if (!row) throw new HttpException('not found', HttpStatus.NOT_FOUND)
       html = String(row.description || row.content || '')
       title = String(row.title || title)
     } else if (kind === 'project') {
-      const row = await queryOne('SELECT title, description FROM projects WHERE id = ?', [id])
+      const row = await queryOne(
+        `SELECT title, description FROM projects
+         WHERE id = ? AND (audit_status = ? OR audit_status IS NULL OR audit_status = '')`,
+        [id, 'approved'],
+      )
       if (!row) throw new HttpException('not found', HttpStatus.NOT_FOUND)
       html = String(row.description || '')
       title = String(row.title || title)
     } else if (kind === 'business') {
       const row = await queryOne(
-        'SELECT title, content FROM business_opportunities WHERE id = ?',
-        [id],
+        `SELECT title, content FROM business_opportunities
+         WHERE id = ? AND status = ? AND (audit_status = ? OR audit_status IS NULL OR audit_status = '')`,
+        [id, 'published', 'approved'],
       )
       if (!row) throw new HttpException('not found', HttpStatus.NOT_FOUND)
       html = String(row.content || '')
@@ -107,6 +116,7 @@ export class HtmlRenderController {
    * 公开 HTML 渲染页：供可访问公网域名的 web-view 打开
    * GET /api/system/html-render?type=config&key=about_us
    * GET /api/system/html-render?type=event&id=1
+   * GET /api/system/html-render?type=project&id=6&toolbar=project&has_scored=0
    */
   @Public()
   @Get('html-render')
@@ -114,13 +124,32 @@ export class HtmlRenderController {
     @Query('type') type: string,
     @Query('key') key: string,
     @Query('id') id: string,
+    @Query('toolbar') toolbar: string,
+    @Query('has_scored') hasScored: string,
+    @Query('owner_id') ownerId: string,
+    @Query('title') titleQuery: string,
+    @Query('registered') registered: string,
+    @Query('can_register') canRegister: string,
+    @Query('blocked') blocked: string,
+    @Query('stock') stock: string,
     @Res() res: Response,
   ) {
     const kind = String(type || '').trim()
     try {
       const { html, title } = await this.loadHtmlSource(kind, key, id)
       const signed = await this.uploadService.signHtmlMedia(rewriteLegacyCloudHostUrls(html))
-      const page = ensureHtmlDocument(signed, title)
+      let page = ensureHtmlDocument(signed, title)
+      const toolbarQuery: MpToolbarQuery = {
+        toolbar,
+        has_scored: hasScored,
+        owner_id: ownerId,
+        title: titleQuery || title,
+        registered,
+        can_register: canRegister,
+        blocked,
+        stock,
+      }
+      page = injectMpToolbar(page, String(id || key || ''), toolbarQuery)
       res.status(200)
       res.setHeader('Content-Type', 'text/html; charset=utf-8')
       res.setHeader('Cache-Control', 'public, max-age=60')
