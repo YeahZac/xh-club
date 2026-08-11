@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="description" content="洗刷刷 × 台典酒大礼包：酱香礼赠产品线一览，面向招商合作伙伴，便于了解产品结构与咨询对接。" />
+  <title>洗刷刷 · 台典酒大礼包</title>
+  <style>
+/* Hallmark · macrostructure: Catalogue · tone: luxury · anchor hue: vermillion-gold
+ * theme: custom (台典酒礼包 · paper mid / display grotesk / warm accent)
+ * nav: N13 Inline pill index · footer: Ft6 Letter-close
+ * enrichment: product photography from source PDF · audience: B端招商
+ * use-case: 了解产品模式 · 促成咨询
+ * Hallmark · pre-emit critique: P5 H4 E5 S5 R4 V4
+ */
+
+:root {
+  --color-paper: #f7f3ec;
+  --color-surface: #ffffff;
+  --color-ink: #1a1714;
+  --color-muted: #6b635a;
+  --color-line: #e4dccf;
+  --color-brand: #0c3d42;
+  --color-brand-deep: #072a2e;
+  --color-brand-mid: #145a61;
+  --color-accent: #b8953a;
+  --color-accent-soft: #e8d5a0;
+  --color-price: #b91c1c;
+  --color-focus: #b8953a;
+
+  --font-display: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-body: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "DIN Alternate", "SF Mono", ui-monospace, monospace;
+
+  --text-display: clamp(1.5rem, 6vw, 2rem);
+  --text-display-s: clamp(1.25rem, 4.5vw, 1.625rem);
+  --text-xl: 1.25rem;
+  --text-lg: 1.125rem;
+  --text-md: 1rem;
+  --text-sm: 0.875rem;
+  --text-xs: 0.75rem;
+
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 160ms;
+  --max: 28rem;
+  --shadow-soft: 0 8px 28px rgba(7, 42, 46, 0.1);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: clip;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+}
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin: 0;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+p { margin: 0; }
+ul { margin: 0; padding: 0; list-style: none; }
+a { color: inherit; text-decoration: none; }
+
+.page {
+  width: min(100%, var(--max));
+  margin: 0 auto;
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: calc(var(--space-md) + env(safe-area-inset-top)) var(--space-lg) var(--space-md);
+  background: linear-gradient(145deg, var(--color-brand-deep), var(--color-brand));
+  color: #fff;
+  border-bottom: 2px solid var(--color-accent);
+}
+.masthead__brand {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.masthead__brand span { color: var(--color-accent-soft); }
+.masthead__tag {
+  font-size: var(--text-xs);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.hero {
+  padding: var(--space-xl) var(--space-lg) var(--space-lg);
+}
+.hero__kicker {
+  display: inline-block;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--color-brand);
+  border: 1px solid var(--color-accent);
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  margin-bottom: var(--space-md);
+  background: rgba(184, 149, 58, 0.12);
+}
+.hero__title {
+  font-size: var(--text-display);
+  line-height: 1.25;
+  color: var(--color-brand-deep);
+  margin-bottom: var(--space-sm);
+}
+.hero__title em {
+  font-style: normal;
+  color: var(--color-accent);
+}
+.hero__lede {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  margin-bottom: var(--space-lg);
+}
+.hero__img {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+}
+.hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-top: var(--space-md);
+}
+.chip {
+  font-size: var(--text-xs);
+  color: var(--color-brand);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+}
+
+.rail {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(247, 243, 236, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--color-line);
+  padding: var(--space-sm) 0;
+}
+.rail__scroll {
+  display: flex;
+  gap: var(--space-xs);
+  overflow-x: auto;
+  padding: 0 var(--space-lg);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.rail__scroll::-webkit-scrollbar { display: none; }
+.rail a {
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-brand);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.rail a:active,
+.rail a:focus-visible {
+  background: var(--color-brand);
+  color: #fff;
+  border-color: var(--color-brand);
+  outline: none;
+}
+
+.sheet {
+  padding: 0 var(--space-lg) var(--space-xl);
+}
+.sec {
+  margin-top: var(--space-xl);
+}
+.sec__head {
+  margin-bottom: var(--space-md);
+}
+.sec__label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--color-accent);
+  margin-bottom: var(--space-2xs);
+}
+.sec__title {
+  font-size: var(--text-display-s);
+  color: var(--color-brand-deep);
+  line-height: 1.3;
+}
+.sec__sub {
+  margin-top: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+.sec__body {
+  margin-top: var(--space-md);
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}
+.sec__body p + p { margin-top: var(--space-sm); }
+.sec__img {
+  margin-top: var(--space-md);
+  width: 100%;
+  box-shadow: var(--shadow-soft);
+}
+
+.band {
+  margin-top: var(--space-lg);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+}
+.band__title {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-brand);
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--color-line);
+}
+.tri {
+  display: grid;
+  gap: var(--space-sm);
+}
+.tri__item strong {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--color-brand-deep);
+  margin-bottom: 0.15rem;
+}
+.tri__item span {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+.timeline {
+  margin-top: var(--space-md);
+  display: grid;
+  gap: var(--space-sm);
+}
+.timeline__item {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  gap: var(--space-sm);
+  align-items: start;
+}
+.timeline__year {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-accent);
+  line-height: 1.4;
+}
+.timeline__text {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  line-height: 1.55;
+}
+
+.index {
+  display: grid;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+.index__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+.index__name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.index__price {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-price);
+}
+
+.sku {
+  margin-top: var(--space-xl);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-line);
+  scroll-margin-top: 3.5rem;
+}
+.sku__top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+.sku__name {
+  font-size: var(--text-xl);
+  color: var(--color-brand-deep);
+  line-height: 1.3;
+}
+.sku__price {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--color-price);
+}
+.sku__price small {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-muted);
+  margin-left: 0.25rem;
+}
+.specs {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-line);
+}
+.specs li {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: var(--space-xs);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+.specs__k { color: var(--color-muted); }
+.specs__v { color: var(--color-ink); min-width: 0; overflow-wrap: anywhere; }
+.sku__img {
+  width: 100%;
+  margin-bottom: var(--space-md);
+  box-shadow: var(--shadow-soft);
+}
+.sku__h {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-price);
+  margin: var(--space-sm) 0 var(--space-xs);
+}
+.sku__list li {
+  position: relative;
+  padding-left: 0.9rem;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  line-height: 1.65;
+  margin-bottom: 0.35rem;
+}
+.sku__list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+.note {
+  margin-top: var(--space-sm);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  line-height: 1.7;
+  padding: var(--space-md);
+  background: #f0ebe2;
+  border-radius: var(--radius-md);
+}
+.note strong {
+  display: block;
+  color: var(--color-brand-deep);
+  margin-bottom: var(--space-2xs);
+  font-size: var(--text-sm);
+}
+
+.cta {
+  margin-top: var(--space-2xl);
+  padding: var(--space-xl) var(--space-lg);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(155deg, var(--color-brand-deep), var(--color-brand-mid));
+  color: #fff;
+  text-align: center;
+  box-shadow: var(--shadow-soft);
+}
+.cta h2 {
+  font-size: var(--text-display-s);
+  margin-bottom: var(--space-sm);
+  color: #fff;
+}
+.cta p {
+  font-size: var(--text-sm);
+  opacity: 0.9;
+  margin-bottom: var(--space-lg);
+  line-height: 1.7;
+}
+.cta__btn {
+  display: inline-block;
+  min-width: 12rem;
+  padding: 0.85rem 1.25rem;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-brand-deep);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  border: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+.cta__hint {
+  margin-top: var(--space-md);
+  font-size: var(--text-xs);
+  opacity: 0.75;
+}
+
+.footer {
+  margin-top: var(--space-xl);
+  padding: var(--space-lg) 0 var(--space-md);
+  text-align: center;
+  border-top: 1px solid var(--color-line);
+}
+.footer__mark {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-brand);
+  margin-bottom: var(--space-xs);
+}
+.footer__mark span { color: var(--color-accent); }
+.footer__line {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  line-height: 1.7;
+}
+.warn {
+  margin-top: var(--space-md);
+  font-size: 0.7rem;
+  color: var(--color-muted);
+  line-height: 1.65;
+  text-align: left;
+}
+
+.dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-sm) var(--space-lg) calc(var(--space-sm) + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, transparent, rgba(247, 243, 236, 0.92) 28%, var(--color-paper));
+  pointer-events: none;
+}
+.dock a {
+  pointer-events: auto;
+  width: min(100%, var(--max));
+  text-align: center;
+  padding: 0.9rem 1rem;
+  border-radius: 999px;
+  background: var(--color-brand-deep);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  border: 1px solid var(--color-accent);
+  box-shadow: 0 10px 28px rgba(7, 42, 46, 0.28);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.dock a:active { transform: translateY(1px); }
+.dock a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="masthead">
+      <div class="masthead__brand"><span>洗刷刷</span> · 台典酒大礼包</div>
+      <div class="masthead__tag">招商产品册 · 2026</div>
+    </header>
+
+    <section class="hero" aria-labelledby="hero-title">
+      <span class="hero__kicker">B 端招商 · 礼赠产品线</span>
+      <h1 id="hero-title" class="hero__title">一杯虫草酱<br /><em>半盏岁月香</em></h1>
+      <p class="hero__lede">
+        面向区域招商与渠道伙伴：一册看清台典酱香礼包的产品结构、价格带与适用场景，便于选品铺货与合作咨询。
+      </p>
+      <img
+        class="hero__img"
+        src="https://xinghegogo.cn/images/taidian-gift-cover.jpg"
+        alt="洗刷刷台典酒大礼包封面：虫草酱香酒礼盒与酒瓶"
+        loading="eager"
+      />
+      <div class="hero__meta" aria-label="品牌要点">
+        <span class="chip">品牌 · 信任</span>
+        <span class="chip">40 年老酒厂</span>
+        <span class="chip">贵州台典酒业（集团）</span>
+      </div>
+    </section>
+
+    <nav class="rail" aria-label="产品目录">
+      <div class="rail__scroll">
+        <a href="#index">总览</a>
+        <a href="#brand">溯源</a>
+        <a href="#sku-shangpin">尚品</a>
+        <a href="#sku-zunpin">尊品</a>
+        <a href="#sku-duchunyang">杜春阳</a>
+        <a href="#sku-bronze">青铜</a>
+        <a href="#sku-white">白色</a>
+        <a href="#sku-blue">蓝色</a>
+        <a href="#sku-taidian">称台</a>
+        <a href="#consult">咨询</a>
+      </div>
+    </nav>
+
+    <main class="sheet">
+      <section class="sec" id="index">
+        <div class="sec__head">
+          <div class="sec__label">CATALOGUE</div>
+          <h2 class="sec__title">七款主力 · 扫码价一览</h2>
+          <p class="sec__sub">价格带覆盖约 298–1680 元/瓶，适配商务宴请、节日礼赠与渠道铺货。</p>
+        </div>
+        <div class="index">
+          <a class="index__row" href="#sku-shangpin"><span class="index__name">虫草尚品酱香酒</span><span class="index__price">¥1680</span></a>
+          <a class="index__row" href="#sku-zunpin"><span class="index__name">虫草尊品酱香酒</span><span class="index__price">¥888</span></a>
+          <a class="index__row" href="#sku-duchunyang"><span class="index__name">杜春阳 · 经典 1978</span><span class="index__price">¥518</span></a>
+          <a class="index__row" href="#sku-bronze"><span class="index__name">礼敬天下 · 青铜款</span><span class="index__price">¥1280</span></a>
+          <a class="index__row" href="#sku-white"><span class="index__name">礼敬天下 · 白色款</span><span class="index__price">¥888</span></a>
+          <a class="index__row" href="#sku-blue"><span class="index__name">礼敬天下 · 蓝色款</span><span class="index__price">¥498</span></a>
+          <a class="index__row" href="#sku-taidian"><span class="index__name">台典酒（称台）</span><span class="index__price">¥298</span></a>
+        </div>
+      </section>
+
+      <section class="sec" id="brand">
+        <div class="sec__head">
+          <div class="sec__label">BRAND</div>
+          <h2 class="sec__title">历史溯源与「三好」根基</h2>
+          <p class="sec__sub">从构酱酒到百年酿造积淀 · 夯实品质的自然与原料根基</p>
+        </div>
+        <div class="sec__body">
+          <p>贵州酿造源远流长。汉武帝元鼎六年（前 111 年）盛赞当地酒「甘美之」，台典酒业将这份历史记忆与现代坤沙工艺结合，面向中高端酱香市场持续升级。</p>
+          <img
+            class="sec__img"
+            src="https://xinghegogo.cn/images/taidian-gift-brand.jpg"
+            alt="台典酒业厂区与赤水河产区介绍页"
+            loading="lazy"
+          />
+          <div class="band">
+            <div class="band__title">关键节点</div>
+            <div class="timeline">
+              <div class="timeline__item"><div class="timeline__year">1947</div><div class="timeline__text">杜春阳先生随祖母集市卖酒，结缘酿造</div></div>
+              <div class="timeline__item"><div class="timeline__year">1978</div><div class="timeline__text">建立杜家酒坊，定名仁怀县冠英酒厂</div></div>
+              <div class="timeline__item"><div class="timeline__year">1990</div><div class="timeline__text">成立贵州台典酒厂</div></div>
+              <div class="timeline__item"><div class="timeline__year">2014</div><div class="timeline__text">整合组建贵州台典酒业（集团）</div></div>
+              <div class="timeline__item"><div class="timeline__year">2019</div><div class="timeline__text">入选中国酒都仁怀白酒企业百强</div></div>
+              <div class="timeline__item"><div class="timeline__year">2024</div><div class="timeline__text">获遵义市「四星特色酒庄」</div></div>
+              <div class="timeline__item"><div class="timeline__year">2025</div><div class="timeline__text">品牌升级，聚焦中高端酱香市场</div></div>
+            </div>
+          </div>
+          <div class="band">
+            <div class="band__title">台典「三好」</div>
+            <div class="tri">
+              <div class="tri__item">
+                <strong>好水源</strong>
+                <span>酿造基地地处茅台镇核心产区，气候、紫砂页岩与微生物群落构成酿造「金三角」。</span>
+              </div>
+              <div class="tri__item">
+                <strong>好环境</strong>
+                <span>赤水河经多层岩层过滤，矿物质丰富，符合高标准酿造用水要求。</span>
+              </div>
+              <div class="tri__item">
+                <strong>好原料</strong>
+                <span>本地红缨子糯高粱，产自仁怀、习水、金沙、播州等有机认证产区。</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SKU: 尚品 -->
+      <article class="sku" id="sku-shangpin">
+        <div class="sku__top">
+          <h2 class="sku__name">虫草尚品酱香酒</h2>
+          <div class="sku__price">¥1680<small>扫码价 / 瓶 · 深棕款</small></div>
+        </div>
+        <ul class="specs">
+          <li><span class="specs__k">香型</span><span class="specs__v">酱香型白酒（配制酒）</span></li>
+          <li><span class="specs__k">产地</span><span class="specs__v">贵州 · 茅台镇核心产区</span></li>
+          <li><span class="specs__k">原料</span><span class="specs__v">10 年大曲坤沙酱香酒（糯高粱、小麦、赤水河水），冬虫夏草实体（超微破壁）</span></li>
+          <li><span class="specs__k">酒精度</span><span class="specs__v">52%vol</span></li>
+          <li><span class="specs__k">净含量</span><span class="specs__v">500ml · 规格 500ml × 6 / 箱</span></li>
+        </ul>
+        <img class="sku__img" src="https://xinghegogo.cn/images/taidian-gift-shangpin.jpg" alt="虫草尚品酱香酒产品页" loading="lazy" />
+        <div class="sku__h">饮酒场景</div>
+        <ul class="sku__list">
+          <li><strong>商务宴请</strong> — 酱香风味 + 虫草价值，适配高端商务场合</li>
+          <li><strong>节日礼赠</strong> — 轻奢礼盒，送长辈、客户、亲友</li>
+          <li><strong>日常小酌</strong> — 温润不刺激，适合轻饮慢品</li>
+          <li><strong>家庭聚会</strong> — 酱香 + 草本风味，区别于传统白酒</li>
+        </ul>
+        <img class="sku__img" src="https://xinghegogo.cn/images/taidian-gift-shangpin-note.jpg" alt="虫草尚品口感香气说明" loading="lazy" />
+        <div class="note">
+          <strong>口感 · 香气 · 酒体</strong>
+          入口绵甜醇厚，柔和顺滑；酱香突出，复合虫草清香；酒体微黄透亮，挂杯明显。定位中高端养生露酒。
+        </div>
+      </article>
+
+      <!-- SKU: 尊品 -->
+      <article class="sku" id="sku-zunpin">
+        <div class="sku__top">
+          <h2 class="sku__name">虫草尊品酱香酒</h2>
+          <div class="sku__price">¥888<small>扫码价 / 瓶 · 橙色款</small></div>
+        </div>
+        <ul class="specs">
+          <li><span class="specs__k">香型</span><span class="specs__v">酱香型白酒（配制酒）</span></li>
+          <li><span class="specs__k">产地</span><span class="specs__v">贵州 · 茅台镇核心产区</span></li>
+          <li><span class="specs__k">原料</span><span class="specs__v">10 年大曲坤沙酱香酒，冬虫夏草实体（超微破壁）</span></li>
+          <li><span class="specs__k">酒精度</span><span class="specs__v">52%vol</span></li>
+          <li><span class="specs__k">净含量</span><span class="specs__v">500ml · 规格 500ml × 6 / 箱</span></li>
+        </ul>
+        <img class="sku__img" src="https://xinghegogo.cn/images/taidian-gift-zunpin.jpg" alt="虫草尊品酱香酒产品页" loading="lazy" />
+        <div class="sku__h">饮酒场景</div>
+        <ul class="sku__list">
+          <li><strong>商务宴请</strong> — 品位与档次兼顾</li>
+          <li><strong>节日礼赠</strong> — 橙色礼盒辨识度高，适合走量礼赠</li>
+          <li><strong>日常小酌 / 家庭聚会</strong> — 温润酒体，适配多元餐桌</li>
+        </ul>
+      </article>
+
+      <!-- SKU: 杜春阳 -->
+      <article class="sku" id="sku-duchunyang">
+        <div class="sku__top">
+          <h2 class="sku__name">杜春阳 · 经典 1978</h2>
+          <div class="sku__price">¥518<small>扫码价 / 瓶</small></div>
+        </div>
+        <ul class="specs">
+          <li><span class="specs__k">香型</span><span class="specs__v">酱香型白酒</span></li>
+          <li><span class="specs__k">原料</span><span class="specs__v">高粱、小麦、水</span></li>
+          <li><span class="specs__k">类型</span><span class="specs__v">固态法白酒</span></li>
+          <li><span class="specs__k">酒精度</span><span class="specs__v">53%vol</span></li>
+          <li><span class="specs__k">净含量</span><span class="specs__v">500ml · 规格 500ml × 6 / 箱</span></li>
+        </ul>
+        <img class="sku__img" src="https://xinghegogo.cn/images/taidian-gift-duchunyang.jpg" alt="杜春阳经典1978产品页" loading="lazy" />
+        <div class="sku__h">饮酒场景</div>
+        <ul class="sku__list">
+          <li><strong>商务招待</strong> — 创始人签名瓶身 + 黑金礼盒，有档次不张扬</li>
+          <li><strong>节日人情</strong> — 自带礼盒礼袋，适配传统节日与喜事赠礼</li>
+          <li><strong>家庭聚会</strong> — 53 度坤沙醇厚，烘托团圆氛围</li>
+          <li><strong>自饮收藏</strong> — 纪念建厂初心的入门收藏款</li>
+        </ul>
+        <img class="sku__img" src="https://xinghegogo.cn/images/taidian-gift-duchunyang-note.jpg" alt="杜春阳口感与产品主张说明" loading="lazy" />
+        <div class="note">
+          <strong>匠人匠品 · 纯正坤沙</strong>
+          酱香浓郁，回甘柔顺；酒体微黄晶亮。百元价格带战略大单品，用量换市场、用质赢消费者。
+        </div>
+      </article>
+
+      <!-- SKU: 青铜 -->
+      <article class="sku" id="sku-bronze">
+        <div class="sku__top">
+          <h2 class="sku__name">礼敬天下 · 青铜款</h2>
+          <div class="sku__price">¥1280<small>扫码价 / 瓶</small></div>
+        </div>
+        <ul class="specs">
+          <li><span class="specs__k">香型</span><span class="specs__v">酱香型白酒</span></li>
+          <li><span class="specs__k">产地</span><span class="specs__v">贵州 · 茅台镇核心产区</span></li>
+          <li><span class="specs__k">原料</span><span class="specs__v">糯高粱、小麦、赤水河水</span></li>
+          <li><span class="specs__k">酒精度</span><span class="specs__v">53%vol · 500ml · 6 瓶/箱</span></li>
+        </ul>
+        <img class="sku__img" src="https://xinghegogo.cn/images/taidian-gift-lijing-bronze.jpg" alt="礼敬天下青铜款产品页" loading="lazy" />
+        <div class="sku__h">饮酒场景</div>
+        <ul class="sku__list">
+          <li>重要商务签约、高端客户拜访、重大项目庆功</li>
+          <li>企业周年、品牌发布等高规格活动指定用酒或伴手礼</li>
+          <li>酱酒爱好者与资深藏家收藏级礼赠</li>
+          <li>家族大寿、祠堂活动等庄重场合</li>
+        </ul>
+      </article>
+
+      <!-- culture jade + white -->
+      <section class="sec" id="jade">
+        <div class="sec__head">
+          <div class="sec__label">CULTURE</div>
+          <h2 class="sec__title">玉以养德</h2>
+          <p class="sec__sub">礼之温润 · 敬之君子</p>
+        </div>
+        <div class="sec__body">
+          <p>以玉之品格喻酒之醇和，更喻饮者之修养。酒体柔雅细腻，瓶身青白玉釉，尽显东方美学之含蓄与高雅——宜宴嘉宾、赠挚友、贺良辰。</p>
+          <img class="sec__img" src="https://xinghegogo.cn/images/taidian-gift-jade.jpg" alt="玉以养德文化叙述页" loading="lazy" />
+        </div>
+      </section>
+
+      <article class="sku" id="sku-white">
+        <div class="sku__top">
+          <h2 class="sku__name">礼敬天下 · 白色款</h2>
+          <div class="sku__price">¥888<small>扫码价 / 瓶</small></div>
+        </div>
+        <ul class="specs">
+          <li><span class="specs__k">香型</span><span class="specs__v">酱香型白酒</span></li>
+          <li><span class="specs__k">产地</span><span class="specs__v">贵州 · 茅台镇核心产区</span></li>
+          <li><span class="specs__k">原料</span><span class="specs__v">糯高粱、小麦、赤水河水</span></li>
+          <li><span class="specs__k">酒精度</span><span class="specs__v">53%vol · 500ml · 6 瓶/箱</span></li>
+        </ul>
+        <img class="sku__img" src="https://xinghegogo.cn/images/taidian-gift-lijing-white.jpg" alt="礼敬天下白色款产品页" loading="lazy" />
+        <div class="sku__h">饮酒场景</div>
+        <ul class="sku__list">
+          <li>文化圈层聚会、文人雅集、小型私宴</li>
+          <li>纪念日、寿宴、谢师宴等有温度的场合</li>
+          <li>个人收藏与日常小酌，偏爱清雅细腻风格</li>
+          <li>伴手礼 + 文创属性，送给注重审美的朋友</li>
+        </ul>
+      </article>
+
+      <article class="sku" id="sku-blue">
+        <div class="sku__top">
+          <h2 class="sku__name">礼敬天下 · 蓝色款</h2>
+          <div class="sku__price">¥498<small>扫码价 / 瓶</small></div>
+        </div>
+        <ul class="specs">
+          <li><span class="specs__k">香型</span><span class="specs__v">酱香型白酒</span></li>
+          <li><span class="specs__k">产地</span><span class="specs__v">贵州 · 茅台镇核心产区</span></li>
+          <li><span class="specs__k">原料</span><span class="specs__v">糯高粱、小麦、赤水河水</span></li>
+          <li><span class="specs__k">酒精度</span><span class="specs__v">53%vol · 500ml · 6 瓶/箱</span></li>
+        </ul>
+        <img class="sku__img" src="https://xinghegogo.cn/images/taidian-gift-lijing-blue.jpg" alt="礼敬天下蓝色款产品页" loading="lazy" />
+        <div class="sku__h">饮酒场景</div>
+        <ul class="sku__list">
+          <li>企业商务宴请、客户答谢会</li>
+          <li>公司节日福利、员工年终答谢手礼</li>
+          <li>中秋 / 春节 / 端午通用礼赠</li>
+          <li>朋友聚会、婚礼乔迁等喜事场合</li>
+        </ul>
+      </article>
+
+      <article class="sku" id="sku-taidian">
+        <div class="sku__top">
+          <h2 class="sku__name">台典酒（称台）</h2>
+          <div class="sku__price">¥298<small>扫码价 / 瓶</small></div>
+        </div>
+        <ul class="specs">
+          <li><span class="specs__k">香型</span><span class="specs__v">酱香型白酒</span></li>
+          <li><span class="specs__k">产地</span><span class="specs__v">贵州 · 茅台镇核心产区</span></li>
+          <li><span class="specs__k">原料</span><span class="specs__v">糯高粱、小麦、赤水河水</span></li>
+          <li><span class="specs__k">酒精度</span><span class="specs__v">53%vol · 500ml · 6 瓶/箱</span></li>
+        </ul>
+        <img class="sku__img" src="https://xinghegogo.cn/images/taidian-gift-taidian.jpg" alt="台典酒称台产品页" loading="lazy" />
+        <div class="sku__h">饮酒场景</div>
+        <ul class="sku__list">
+          <li><strong>商务宴请</strong> — 红金礼盒，彰显实力与品味</li>
+          <li><strong>礼赠佳品</strong> — 适配节日、拜访、婚宴</li>
+          <li><strong>私人收藏</strong> — 正宗坤沙，越陈越香</li>
+          <li><strong>日常自饮</strong> — 口感柔顺，适合长期饮用与朋友小聚</li>
+        </ul>
+      </article>
+
+      <section class="cta" id="consult" aria-label="合作咨询">
+        <h2>想了解产品模式或拿货合作？</h2>
+        <p>
+          以上为洗刷刷 × 台典酒大礼包招商产品线。<br />
+          欢迎留下合作意向，顾问将协助您完成选品、价格带组合与渠道对接。
+        </p>
+        <div class="cta__btn">咨询合作 / 预约讲解</div>
+        <p class="cta__hint">请通过小程序客服或对接顾问联系 · 政策以双方协议为准</p>
+      </section>
+
+      <footer class="footer">
+        <p class="footer__mark"><span>洗刷刷</span> × 台典酒业</p>
+        <p class="footer__line">
+          贵州台典酒业（集团）有限公司<br />
+          品牌 · 信任 · 40 年老酒厂
+        </p>
+        <p class="warn">
+          温馨提示：虫草系列为风味露酒（配制酒），不替代药品。建议每日饮用量不宜超过 100ml；孕妇、未成年人、酒精过敏者及真菌过敏者请勿饮用。请理性饮酒，禁止酒驾。
+        </p>
+      </footer>
+    </main>
+  </div>
+
+  <div class="dock">
+    <a href="#consult">立即咨询合作</a>
+  </div>
+</body>
+</html>

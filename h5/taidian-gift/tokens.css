@@ -1,0 +1,47 @@
+/* Hallmark · macrostructure: Catalogue · tone: luxury · anchor hue: vermillion-gold
+ * theme: custom (台典酒礼包 · paper mid / display grotesk / warm accent)
+ * nav: N13 Inline pill index · footer: Ft6 Letter-close
+ * enrichment: product photography from source PDF · audience: B端招商
+ * Hallmark · pre-emit critique: P5 H4 E5 S5 R4 V4
+ */
+
+:root {
+  --color-paper: #f7f3ec;
+  --color-surface: #ffffff;
+  --color-ink: #1a1714;
+  --color-muted: #6b635a;
+  --color-line: #e4dccf;
+  --color-brand: #0c3d42;
+  --color-brand-deep: #072a2e;
+  --color-brand-mid: #145a61;
+  --color-accent: #b8953a;
+  --color-accent-soft: #e8d5a0;
+  --color-price: #b91c1c;
+  --color-focus: #b8953a;
+
+  --font-display: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-body: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "DIN Alternate", "SF Mono", ui-monospace, monospace;
+
+  --text-display: clamp(1.5rem, 6vw, 2rem);
+  --text-display-s: clamp(1.25rem, 4.5vw, 1.625rem);
+  --text-xl: 1.25rem;
+  --text-lg: 1.125rem;
+  --text-md: 1rem;
+  --text-sm: 0.875rem;
+  --text-xs: 0.75rem;
+
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 160ms;
+  --max: 28rem;
+}
