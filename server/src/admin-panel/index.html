@@ -1322,15 +1322,21 @@ function switchRichEditorToVisual(editorId, options = {}) {
   if (!host || !quill) return
   const meta = ensureRichSourceWrap(editorId, host)
   const raw = String(meta.sourceEl?.value || '').trim()
-  const toolbar = host.previousElementSibling
-  const sourceBtn = toolbar?.querySelector?.('.ql-htmlsource')
-  const visualBtn = toolbar?.querySelector?.('.ql-htmlvisual')
+
+  // 已在可视化：幂等返回
+  if (!meta.sourceMode) {
+    syncRichEditorModeButtons(editorId)
+    return
+  }
 
   if (isFullHtmlDocument(raw) && options.confirmFullHtml !== false) {
     const ok = confirm(
       '当前为完整 HTML 页面源码。切换到可视化编辑会提取正文中的文字与图片，复杂版式与样式将丢失。\n\n确定切换到可视化模式吗？'
     )
-    if (!ok) return
+    if (!ok) {
+      syncRichEditorModeButtons(editorId)
+      return
+    }
   }
 
   const fragment = extractEditableHtmlFromSource(raw)
@@ -1338,8 +1344,7 @@ function switchRichEditorToVisual(editorId, options = {}) {
   meta.sourceMode = false
   meta.sourceWrap.style.display = 'none'
   host.style.display = ''
-  if (sourceBtn) sourceBtn.classList.remove('ql-active')
-  if (visualBtn) visualBtn.classList.remove('ql-active')
+  syncRichEditorModeButtons(editorId)
   meta.sourceEl.value = fragment
   quill.setText('')
   quill.clipboard.dangerouslyPasteHTML(0, fragment || '<p><br></p>')
@@ -1425,42 +1430,60 @@ function ensureRichSourceWrap(editorId, host) {
   return meta
 }
 
+/** 同步工具栏「源码 / 可视化」按钮高亮 */
+function syncRichEditorModeButtons(editorId) {
+  const host = document.getElementById(editorId)
+  if (!host) return
+  const meta = richEditorMeta[editorId]
+  const toolbar = host.previousElementSibling?.classList?.contains('ql-toolbar')
+    ? host.previousElementSibling
+    : host.parentElement?.querySelector?.('.ql-toolbar')
+  const sourceBtn = toolbar?.querySelector?.('.ql-htmlsource')
+  const visualBtn = toolbar?.querySelector?.('.ql-htmlvisual')
+  const inSource = !!meta?.sourceMode
+  if (sourceBtn) sourceBtn.classList.toggle('ql-active', inSource)
+  if (visualBtn) visualBtn.classList.toggle('ql-active', !inSource)
+}
+
+/** 进入 HTML 源码模式（幂等：已在源码模式则只聚焦，不二次切换） */
 function setRichEditorSourceMode(editorId, enabled) {
   const host = document.getElementById(editorId)
   const quill = richEditors[editorId]
   if (!host || !quill) return
   const meta = ensureRichSourceWrap(editorId, host)
-  const toolbar = host.previousElementSibling
-  const btn = toolbar?.querySelector?.('.ql-htmlsource')
-  if (enabled) {
-    if (!meta.sourceMode) {
-      const existing = String(meta.sourceEl.value || '').trim()
-      const keepExisting =
-        (meta.rawPreferred && existing) || isFullHtmlDocument(existing)
-      if (!keepExisting) {
-        meta.sourceEl.value =
-          quill.root.innerHTML === '<p><br></p>' ? '' : (quill.root.innerHTML || '')
-      }
-    }
-    meta.sourceMode = true
-    host.style.display = 'none'
-    meta.sourceWrap.style.display = 'block'
-    if (btn) btn.classList.add('ql-active')
-    const visualBtn = toolbar?.querySelector?.('.ql-htmlvisual')
-    if (visualBtn) visualBtn.classList.remove('ql-active')
-  } else {
-    if (!meta.sourceMode) return
-    const raw = String(meta.sourceEl.value || '').trim()
-    if (!raw) {
-      meta.sourceMode = false
-      meta.rawPreferred = false
-      meta.sourceWrap.style.display = 'none'
-      host.style.display = ''
-      if (btn) btn.classList.remove('ql-active')
-      return
-    }
-    switchRichEditorToVisual(editorId, { confirmFullHtml: isFullHtmlDocument(raw) })
+
+  if (!enabled) {
+    switchRichEditorToVisual(editorId, {
+      confirmFullHtml: isFullHtmlDocument(meta.sourceEl?.value || ''),
+    })
+    return
   }
+
+  // 已在源码模式：只聚焦，避免「再点 </> 反而切回可视化」
+  if (meta.sourceMode) {
+    syncRichEditorModeButtons(editorId)
+    try { meta.sourceEl.focus() } catch (_) { /* ignore */ }
+    return
+  }
+
+  const existing = String(meta.sourceEl.value || '').trim()
+  const keepExisting =
+    (meta.rawPreferred && existing) || isFullHtmlDocument(existing)
+  if (!keepExisting) {
+    const fromQuill = quill.root.innerHTML || ''
+    meta.sourceEl.value = fromQuill === '<p><br></p>' ? '' : fromQuill
+  }
+  meta.sourceMode = true
+  host.style.display = 'none'
+  meta.sourceWrap.style.display = 'block'
+  syncRichEditorModeButtons(editorId)
+  try {
+    meta.sourceEl.focus()
+    // 光标移到末尾，方便继续粘贴
+    const len = meta.sourceEl.value.length
+    meta.sourceEl.setSelectionRange(len, len)
+  } catch (_) { /* ignore */ }
+  toast('已切换到源码模式', 'success')
 }
 
 function uploadEditorAsset(file, kind) {
@@ -1571,14 +1594,8 @@ function initRichEditor(editorId, html) {
             })
           },
           htmlsource() {
-            const meta = ensureRichSourceWrap(editorId, host)
-            if (meta.sourceMode) {
-              switchRichEditorToVisual(editorId, {
-                confirmFullHtml: isFullHtmlDocument(meta.sourceEl?.value || ''),
-              })
-            } else {
-              setRichEditorSourceMode(editorId, true)
-            }
+            // </> 只负责进入源码，不再做成开关（避免连点误切可视化）
+            setRichEditorSourceMode(editorId, true)
           },
           htmlvisual() {
             switchRichEditorToVisual(editorId, { confirmFullHtml: true })
@@ -1600,20 +1617,76 @@ function initRichEditor(editorId, html) {
     }
   })
 
-  // 自定义 toolbar 图标文案
-  setTimeout(() => {
-    const toolbarRoot = host.previousElementSibling
-    const emojiBtn = toolbarRoot?.querySelector('.ql-emoji')
-    const attachBtn = toolbarRoot?.querySelector('.ql-attachment')
-    const htmlSourceBtn = toolbarRoot?.querySelector('.ql-htmlsource')
-    const htmlVisualBtn = toolbarRoot?.querySelector('.ql-htmlvisual')
-    const htmlCopyBtn = toolbarRoot?.querySelector('.ql-htmlcopy')
-    if (emojiBtn && !emojiBtn.dataset.ready) { emojiBtn.dataset.ready = '1'; emojiBtn.innerHTML = '😊'; emojiBtn.title = '表情' }
-    if (attachBtn && !attachBtn.dataset.ready) { attachBtn.dataset.ready = '1'; attachBtn.innerHTML = '📎'; attachBtn.title = '插入文件' }
-    if (htmlSourceBtn && !htmlSourceBtn.dataset.ready) { htmlSourceBtn.dataset.ready = '1'; htmlSourceBtn.textContent = '</>'; htmlSourceBtn.title = 'HTML 源码编辑' }
-    if (htmlVisualBtn && !htmlVisualBtn.dataset.ready) { htmlVisualBtn.dataset.ready = '1'; htmlVisualBtn.textContent = '可视化'; htmlVisualBtn.title = '切换到可视化编辑（文字与图片）' }
-    if (htmlCopyBtn && !htmlCopyBtn.dataset.ready) { htmlCopyBtn.dataset.ready = '1'; htmlCopyBtn.textContent = '复制'; htmlCopyBtn.title = '复制 HTML 代码' }
-  }, 0)
+  /** Quill 自定义按钮偶发点不中：用原生捕获点击兜底，保证一次切换成功 */
+  function bindRichModeToolbarButtons() {
+    const toolbarRoot = host.previousElementSibling?.classList?.contains('ql-toolbar')
+      ? host.previousElementSibling
+      : null
+    if (!toolbarRoot) return
+    const htmlSourceBtn = toolbarRoot.querySelector('.ql-htmlsource')
+    const htmlVisualBtn = toolbarRoot.querySelector('.ql-htmlvisual')
+    const htmlCopyBtn = toolbarRoot.querySelector('.ql-htmlcopy')
+    const emojiBtn = toolbarRoot.querySelector('.ql-emoji')
+    const attachBtn = toolbarRoot.querySelector('.ql-attachment')
+
+    if (emojiBtn && !emojiBtn.dataset.ready) {
+      emojiBtn.dataset.ready = '1'
+      emojiBtn.innerHTML = '😊'
+      emojiBtn.title = '表情'
+    }
+    if (attachBtn && !attachBtn.dataset.ready) {
+      attachBtn.dataset.ready = '1'
+      attachBtn.innerHTML = '📎'
+      attachBtn.title = '插入文件'
+    }
+    if (htmlSourceBtn && !htmlSourceBtn.dataset.ready) {
+      htmlSourceBtn.dataset.ready = '1'
+      htmlSourceBtn.type = 'button'
+      htmlSourceBtn.textContent = '</>'
+      htmlSourceBtn.title = '切换到 HTML 源码编辑'
+      htmlSourceBtn.addEventListener('click', (ev) => {
+        ev.preventDefault()
+        ev.stopPropagation()
+        setRichEditorSourceMode(editorId, true)
+      }, true)
+    }
+    if (htmlVisualBtn && !htmlVisualBtn.dataset.ready) {
+      htmlVisualBtn.dataset.ready = '1'
+      htmlVisualBtn.type = 'button'
+      htmlVisualBtn.textContent = '可视化'
+      htmlVisualBtn.title = '切换到可视化编辑（文字与图片）'
+      htmlVisualBtn.addEventListener('click', (ev) => {
+        ev.preventDefault()
+        ev.stopPropagation()
+        switchRichEditorToVisual(editorId, { confirmFullHtml: true })
+      }, true)
+    }
+    if (htmlCopyBtn && !htmlCopyBtn.dataset.ready) {
+      htmlCopyBtn.dataset.ready = '1'
+      htmlCopyBtn.type = 'button'
+      htmlCopyBtn.textContent = '复制'
+      htmlCopyBtn.title = '复制 HTML 代码'
+      htmlCopyBtn.addEventListener('click', (ev) => {
+        ev.preventDefault()
+        ev.stopPropagation()
+        const html = getRichEditorHtml(editorId)
+        const done = () => toast('HTML 已复制到剪贴板')
+        const fail = () => toast('复制失败，请手动复制', 'error')
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(html).then(done).catch(() => {
+            copyHtmlFallback(html) ? done() : fail()
+          })
+        } else {
+          copyHtmlFallback(html) ? done() : fail()
+        }
+      }, true)
+    }
+    syncRichEditorModeButtons(editorId)
+  }
+
+  // 立即绑定 + 下一帧再绑一次（防止 Quill 重建 toolbar DOM）
+  bindRichModeToolbarButtons()
+  setTimeout(bindRichModeToolbarButtons, 0)
 
   richEditors[editorId] = quill
   ensureRichSourceWrap(editorId, host)
@@ -1631,14 +1704,13 @@ function initRichEditor(editorId, html) {
         0,
         '<p>【已保存完整 HTML 源码】请继续用「&lt;/&gt; 源码」编辑，勿在可视化中改写。</p>',
       )
-      setTimeout(() => {
-        const toolbarRoot = host.previousElementSibling
-        const htmlSourceBtn = toolbarRoot?.querySelector?.('.ql-htmlsource')
-        if (htmlSourceBtn) htmlSourceBtn.classList.add('ql-active')
-      }, 0)
+      setTimeout(() => syncRichEditorModeButtons(editorId), 0)
     } else {
       quill.root.innerHTML = html
+      setTimeout(() => syncRichEditorModeButtons(editorId), 0)
     }
+  } else {
+    syncRichEditorModeButtons(editorId)
   }
 
   // 源码区粘贴完整 H5 时自动标记，防止误切可视化丢内容
