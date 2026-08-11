@@ -49,6 +49,7 @@ export type HtmlRenderType =
   | 'business'
   | 'product'
   | 'invitation'
+  | 'talent'
 
 /** 构造可供 web-view 打开的 HTML 渲染地址 */
 export const buildHtmlRenderUrl = buildWebViewHtmlPageUrl

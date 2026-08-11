@@ -107,6 +107,15 @@ export class HtmlRenderController {
       if (!row) throw new HttpException('not found', HttpStatus.NOT_FOUND)
       html = String(row.content || '')
       title = String(row.title || '邀请规则')
+    } else if (kind === 'talent') {
+      const row = await queryOne(
+        `SELECT real_name, experience FROM talent_applications
+         WHERE id = ? AND status = 'approved'`,
+        [id],
+      )
+      if (!row) throw new HttpException('not found', HttpStatus.NOT_FOUND)
+      html = String(row.experience || '')
+      title = String(row.real_name || '人才详情')
     } else {
       throw new HttpException('invalid type', HttpStatus.BAD_REQUEST)
     }

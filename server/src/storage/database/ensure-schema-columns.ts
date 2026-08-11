@@ -1198,6 +1198,7 @@ export async function ensureSchemaColumns(): Promise<void> {
     ['projects', 'description'],
     ['business_opportunities', 'content'],
     ['invitation_reward_rules', 'content'],
+    ['talent_applications', 'experience'],
   ] as const) {
     try {
       await pool.query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` LONGTEXT NULL`)

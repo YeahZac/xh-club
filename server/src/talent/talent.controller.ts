@@ -92,6 +92,15 @@ export class TalentAdminController {
     return { code: 200, msg: 'success', data }
   }
 
+  @Post()
+  async create(@Body() dto: any, @Req() request: any) {
+    const data = await this.talentService.adminCreate({
+      ...dto,
+      reviewed_by: request.user?.sub || dto.reviewed_by,
+    })
+    return { code: 200, msg: '创建成功', data }
+  }
+
   @Get(':id')
   async detail(@Param('id') id: string) {
     const data = await this.talentService.adminGetById(id)

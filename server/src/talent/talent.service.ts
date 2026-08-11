@@ -582,6 +582,124 @@ export class TalentService {
     return this.signTalent(this.applyPendingView(row))
   }
 
+  /** 后台直接新增人才（须绑定尚未入驻的会员） */
+  async adminCreate(dto: any) {
+    const memberId = Number(dto?.member_id)
+    if (!Number.isInteger(memberId) || memberId <= 0) {
+      throw new HttpException('请选择关联会员', HttpStatus.BAD_REQUEST)
+    }
+    const member = await queryOne(
+      'SELECT id, name, phone, avatar FROM members WHERE id = ?',
+      [memberId],
+    )
+    if (!member) throw new HttpException('关联会员不存在', HttpStatus.NOT_FOUND)
+
+    const existing = await queryOne(
+      'SELECT id FROM talent_applications WHERE member_id = ?',
+      [memberId],
+    )
+    if (existing) {
+      throw new HttpException('该会员已有人才记录，请直接编辑', HttpStatus.BAD_REQUEST)
+    }
+
+    const payload = this.validateApplicationPayload(
+      {
+        real_name: dto.real_name || member.name,
+        contact: dto.contact || member.phone,
+        company_name: dto.company_name,
+        job_title: dto.job_title,
+        industry_tags: dto.industry_tags,
+        experience: dto.experience,
+        photo_url: dto.photo_url,
+        card_image_url: dto.card_image_url,
+        avatar_url: dto.avatar_url || member.avatar,
+      },
+      false,
+    )
+    if (!payload.photo_url) {
+      throw new HttpException('请上传职业照片', HttpStatus.BAD_REQUEST)
+    }
+
+    const status: TalentStatus = TALENT_STATUSES.includes(dto.status) ? dto.status : 'approved'
+    if (status === 'rejected' && !String(dto.reject_reason || '').trim()) {
+      throw new HttpException('未通过时请填写原因', HttpStatus.BAD_REQUEST)
+    }
+
+    const avatarUrl = payload.avatar_url || payload.photo_url || null
+    const isFeatured = dto.is_featured ? 1 : 0
+    const sortOrder = Math.max(0, Number(dto.sort_order) || 0)
+    const rejectReason = status === 'rejected' ? String(dto.reject_reason || '').trim() : null
+    const reviewedBy = status === 'pending' ? null : dto.reviewed_by || null
+
+    const result = await queryExecute(
+      `INSERT INTO talent_applications
+        (member_id, real_name, contact, company_name, job_title, photo_url, industry_tags, experience,
+         card_image_url, avatar_url, status, reject_reason, is_featured, sort_order,
+         reviewed_at, reviewed_by, admin_operated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${status === 'pending' ? 'NULL' : 'NOW()'}, ?, NOW())`,
+      [
+        memberId,
+        payload.real_name,
+        payload.contact,
+        payload.company_name,
+        payload.job_title,
+        payload.photo_url,
+        JSON.stringify(payload.industry_tags),
+        payload.experience || null,
+        payload.card_image_url || null,
+        avatarUrl,
+        status,
+        rejectReason,
+        isFeatured,
+        sortOrder,
+        reviewedBy,
+      ],
+    )
+
+    const id = String(result.insertId)
+
+    // 缴费信息复用 update 逻辑
+    if (
+      dto.payment_status !== undefined
+      || dto.payment_start_at !== undefined
+      || dto.membership_years !== undefined
+    ) {
+      await this.adminUpdate(id, {
+        payment_status: dto.payment_status,
+        payment_start_at: dto.payment_start_at,
+        membership_years: dto.membership_years,
+      })
+    }
+
+    if (status === 'approved') {
+      void this.pointsEngine
+        .evaluate(String(memberId), 'talent_settle', {
+          referenceType: 'talent',
+          referenceId: id,
+          description: '完成人才入驻奖励积分',
+        })
+        .catch((err) => console.warn('[TalentService] points evaluate failed', err))
+      void this.invitationEngine
+        .grantConditionRewards(String(memberId), 'invitee_talent', {
+          description: '推荐会员完成人才入驻',
+          referenceId: id,
+        })
+        .catch((err) => console.warn('[TalentService] invite reward failed', err))
+      await createNotification({
+        memberId: String(memberId),
+        type: 'approval',
+        title: '人才入驻审核通过',
+        content: `您的人才资料「${payload.real_name}」已由管理员录入并通过`,
+        link: '/pages/talent-settle/index',
+        bizType: 'talent_audit',
+        bizId: id,
+        result: 'approved',
+      })
+    }
+
+    return this.adminGetById(id)
+  }
+
   async adminUpdate(id: string, dto: any) {
     const existing = await queryOne('SELECT * FROM talent_applications WHERE id = ?', [id])
     if (!existing) throw new HttpException('人才申请不存在', HttpStatus.NOT_FOUND)
