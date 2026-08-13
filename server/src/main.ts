@@ -8,6 +8,10 @@ import * as express from 'express';
 import { HttpStatusInterceptor } from '@/interceptors/http-status.interceptor';
 import { initMySQL } from '@/storage/database/mysql-client';
 import { WECHAT_DOMAIN_VERIFY_FILES } from '@/wechat-domain-verify';
+import { UploadService } from '@/upload/upload.service';
+
+/** 允许通过域名反代的 COS 前缀（对象存储路径） */
+const COS_PUBLIC_PROXY_PREFIXES = ['carlife/'] as const;
 
 // 兼容从 server/ 或仓库根目录启动：优先加载项目根 .env
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
@@ -83,6 +87,7 @@ async function bootstrap() {
 
   const publicDirs = resolvePublicDirs()
   const expressApp = app.getHttpAdapter().getInstance() as express.Express
+  const uploadService = app.get(UploadService)
 
   // 必须挂在 Nest 路由之前：微信业务域名校验要求根路径 /xxx.txt 返回纯文本
   expressApp.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -114,6 +119,49 @@ async function bootstrap() {
       readDomainVerifyBody('7NSG7VLDwr.txt', publicDirs) ? 'ready' : 'missing'
     }`,
   )
+
+  // 域名反代 COS（挂在 Nest 路由之前，避免被 /api 404 吞掉）
+  // https://xinghegogo.cn/carlife/onlinemall.html -> 对象存储 key: carlife/onlinemall.html
+  expressApp.use(async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      next()
+      return
+    }
+    const requestPath = String(req.path || '').replace(/^\/+/, '')
+    const matched = COS_PUBLIC_PROXY_PREFIXES.some(
+      (prefix) => requestPath === prefix.replace(/\/$/, '') || requestPath.startsWith(prefix),
+    )
+    if (!matched) {
+      next()
+      return
+    }
+    if (!requestPath || requestPath.includes('..') || requestPath.endsWith('/')) {
+      res.status(404).type('text').send('Not Found')
+      return
+    }
+
+    try {
+      const object = await uploadService.getObjectByKey(requestPath)
+      res.status(200)
+      res.setHeader('Content-Type', object.contentType)
+      res.setHeader('Cache-Control', 'public, max-age=300')
+      if (object.etag) res.setHeader('ETag', object.etag)
+      if (req.method === 'HEAD') {
+        res.end()
+        return
+      }
+      res.send(object.body)
+    } catch (error: any) {
+      const statusCode = Number(error?.statusCode || error?.status || 0)
+      if (statusCode === 404 || String(error?.code || '').includes('NoSuchKey')) {
+        res.status(404).type('text').send('Not Found')
+        return
+      }
+      console.error('[COS proxy] failed', requestPath, error?.message || error)
+      res.status(502).type('text').send('Bad Gateway')
+    }
+  })
+  console.log(`[启动] COS 域名反代前缀: ${COS_PUBLIC_PROXY_PREFIXES.join(', ')}`)
 
   // CORS 配置
   app.enableCors({

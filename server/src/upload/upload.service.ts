@@ -9,6 +9,8 @@ import {
 } from '@/utils/media-url';
 
 const DEFAULT_SIGNED_URL_EXPIRES = 7200;
+/** STS 临时密钥下签名 URL 不宜过长：密钥一过期，即使 q-sign-time 未到也会 403 */
+const STS_SIGNED_URL_MAX_EXPIRES = 30 * 60;
 export const IMAGE_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
 export const DOCUMENT_UPLOAD_MAX_BYTES = 30 * 1024 * 1024;
 export const DOCUMENT_ADMIN_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
@@ -47,7 +49,26 @@ export class UploadService {
   private getSignedUrlExpires(): number {
     const raw = Number(process.env.COS_SIGNED_URL_EXPIRES || DEFAULT_SIGNED_URL_EXPIRES);
     if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_SIGNED_URL_EXPIRES;
-    return Math.floor(raw);
+    const expires = Math.floor(raw);
+    // 临时密钥场景强制缩短，避免缓存里残留“看起来未过期但已 403”的 URL
+    if (!this.usingPermanentKeys) {
+      return Math.min(expires, STS_SIGNED_URL_MAX_EXPIRES);
+    }
+    return expires;
+  }
+
+  /** 解析微信 getauth / STS 返回的过期时间（秒或毫秒） */
+  private parseCredentialExpireAtMs(raw: unknown, fallbackSec = 43200): number {
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value <= 0) {
+      return Date.now() + fallbackSec * 1000;
+    }
+    // 13 位及以上视为毫秒时间戳
+    if (value > 1e12) return value;
+    // 10 位左右视为秒级时间戳
+    if (value > 1e9) return value * 1000;
+    // 相对剩余秒数
+    return Date.now() + value * 1000;
   }
 
   private getExtension(fileName: string, mimeType?: string): string {
@@ -213,7 +234,10 @@ export class UploadService {
         this.region = Region;
       }
 
-      this.credentialsExpireAt = (ExpiredTime || Math.floor(Date.now() / 1000) + 43200) * 1000;
+      this.credentialsExpireAt = this.parseCredentialExpireAtMs(
+        ExpiredTime,
+        43200,
+      );
 
       // 初始化 COS SDK
       this.cos = new COS({
@@ -236,10 +260,22 @@ export class UploadService {
     }
     // STS 模式下签名时长不得超过密钥剩余寿命，否则微信侧会提前 403
     let effectiveExpires = Math.max(60, Math.floor(expires));
-    if (!this.usingPermanentKeys && this.credentialsExpireAt > Date.now()) {
-      const remainingSec = Math.floor((this.credentialsExpireAt - Date.now()) / 1000) - 60;
-      if (remainingSec > 0) {
-        effectiveExpires = Math.min(effectiveExpires, remainingSec);
+    if (!this.usingPermanentKeys) {
+      effectiveExpires = Math.min(effectiveExpires, STS_SIGNED_URL_MAX_EXPIRES);
+      if (this.credentialsExpireAt > Date.now()) {
+        const remainingSec = Math.floor((this.credentialsExpireAt - Date.now()) / 1000) - 90;
+        if (remainingSec > 0) {
+          effectiveExpires = Math.min(effectiveExpires, remainingSec);
+        } else {
+          // 密钥已临期：强制刷新后再签
+          this.credentialsExpireAt = 0;
+          await this.ensureCOSInitialized();
+          const retryRemaining = Math.floor((this.credentialsExpireAt - Date.now()) / 1000) - 90;
+          effectiveExpires = Math.min(
+            STS_SIGNED_URL_MAX_EXPIRES,
+            Math.max(60, retryRemaining > 0 ? retryRemaining : 60),
+          );
+        }
       }
     }
     return await new Promise<string>((resolve, reject) => {
@@ -273,7 +309,12 @@ export class UploadService {
       return canonical || input.trim();
     }
 
-    const expires = maxAge && maxAge > 0 ? Math.floor(maxAge) : this.getSignedUrlExpires();
+    // 先初始化以便正确区分永久密钥 / STS，避免错误的过期策略
+    await this.ensureCOSInitialized();
+
+    const expires = maxAge && maxAge > 0
+      ? Math.min(Math.floor(maxAge), this.usingPermanentKeys ? maxAge : STS_SIGNED_URL_MAX_EXPIRES)
+      : this.getSignedUrlExpires();
     const bucket = info.bucket || this.bucket;
     const region = info.region || this.region;
     if (!bucket) {
@@ -292,7 +333,7 @@ export class UploadService {
       // 缓存有效期必须取「签名时长」与「密钥剩余寿命」的较小值
       const credentialCap = this.usingPermanentKeys
         ? Number.MAX_SAFE_INTEGER
-        : this.credentialsExpireAt - 60_000;
+        : this.credentialsExpireAt - 90_000;
       const expireAt = Math.min(Date.now() + expires * 1000, credentialCap);
       this.signedUrlCache.set(cacheKey, { url, expireAt });
       return url;
@@ -817,6 +858,65 @@ export class UploadService {
   }
 
   /**
+   * 按对象 Key 读取私有桶文件（供域名反代静态页使用）
+   */
+  async getObjectByKey(objectKey: string): Promise<{
+    body: Buffer;
+    contentType: string;
+    etag?: string;
+  }> {
+    const key = String(objectKey || '')
+      .replace(/^\/+/, '')
+      .replace(/\\/g, '/')
+      .trim();
+    if (!key || key.includes('..') || key.includes('\0')) {
+      throw new Error('非法对象路径');
+    }
+    // 反代白名单：仅允许约定前缀，防止任意读桶
+    if (!key.startsWith('carlife/')) {
+      throw new Error('对象路径不在允许的反代范围');
+    }
+
+    await this.ensureCOSInitialized();
+    if (!this.cos || !this.bucket) {
+      throw new Error('云存储未初始化');
+    }
+
+    const bucket = this.bucket;
+    const region = this.region;
+
+    return await new Promise((resolve, reject) => {
+      this.cos!.getObject(
+        {
+          Bucket: bucket,
+          Region: region,
+          Key: key,
+        },
+        (err, data) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          const raw = (data as any)?.Body;
+          const body = Buffer.isBuffer(raw)
+            ? raw
+            : Buffer.from(raw || '');
+          const headerType = String(
+            (data as any)?.headers?.['content-type']
+            || (data as any)?.headers?.['Content-Type']
+            || '',
+          ).trim();
+          resolve({
+            body,
+            contentType: headerType || guessContentType(key),
+            etag: (data as any)?.ETag || (data as any)?.headers?.etag,
+          });
+        },
+      );
+    });
+  }
+
+  /**
    * 检查云存储是否可用
    */
   isAvailable(): boolean {
@@ -834,4 +934,31 @@ export class UploadService {
       signedUrlExpires: this.getSignedUrlExpires(),
     };
   }
+}
+
+function guessContentType(key: string): string {
+  const ext = key.split('.').pop()?.toLowerCase() || '';
+  const map: Record<string, string> = {
+    html: 'text/html; charset=utf-8',
+    htm: 'text/html; charset=utf-8',
+    css: 'text/css; charset=utf-8',
+    js: 'application/javascript; charset=utf-8',
+    mjs: 'application/javascript; charset=utf-8',
+    json: 'application/json; charset=utf-8',
+    svg: 'image/svg+xml',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    ico: 'image/x-icon',
+    woff: 'font/woff',
+    woff2: 'font/woff2',
+    ttf: 'font/ttf',
+    txt: 'text/plain; charset=utf-8',
+    pdf: 'application/pdf',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+  };
+  return map[ext] || 'application/octet-stream';
 }
