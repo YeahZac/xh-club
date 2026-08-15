@@ -511,14 +511,16 @@
         <div class="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 space-y-4">
           <div>
             <p class="text-sm font-semibold text-navy-800">关联公司与负责人</p>
-            <p class="text-xs text-gray-400 mt-1">先选公司可筛选负责人；直接选负责人也会自动带出公司</p>
+            <p class="text-xs text-gray-400 mt-1">公司与负责人一一对应：先选公司再选负责人，或选负责人后自动带出其所属公司</p>
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">关联公司</label>
-              <input id="pjEditCompany" list="pjCompanyOptions" oninput="onProjectCompanyInput()" onchange="onProjectCompanyInput()"
-                class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white" placeholder="输入或选择公司名称">
-              <datalist id="pjCompanyOptions"></datalist>
+              <select id="pjEditCompany" onchange="onProjectCompanyChange()"
+                class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white">
+                <option value="">请选择公司</option>
+              </select>
+              <p class="text-xs text-gray-400 mt-1">来自会员 / 项目 / 人才库中已维护的公司名称</p>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">项目负责人</label>
@@ -528,7 +530,7 @@
                   <option value="">请选择负责人</option>
                 </select>
               </div>
-              <p id="pjOwnerHint" class="text-xs text-gray-400 mt-1">负责人来自会员列表，将作为成交对接的项目方</p>
+              <p id="pjOwnerHint" class="text-xs text-gray-400 mt-1">仅展示所属公司匹配的会员；将作为成交对接的项目方</p>
             </div>
           </div>
           <div class="grid grid-cols-2 gap-4">
@@ -3090,7 +3092,17 @@ async function submitUpdateEvent(id) {
 // ===== 项目管理 =====
 let _pjScoreDimensions = []
 let _pjOwnerMembers = []
+let _pjCompanyNames = []
 let _pjPreferredOwnerId = ''
+let _pjPreferredCompany = ''
+
+function normalizeCompanyName(value) {
+  return String(value || '').trim()
+}
+
+function companyKey(value) {
+  return normalizeCompanyName(value).toLowerCase()
+}
 
 function populateProjectEditSelects() {
   const stageSel = document.getElementById('pjEditStage')
@@ -3103,6 +3115,39 @@ function populateProjectEditSelects() {
   }
   const hint = document.getElementById('pjEditCoverHint')
   if (hint) hint.textContent = mediaHint('project')
+}
+
+function collectCompanyNames(extraNames = []) {
+  const names = new Set()
+  const push = (value) => {
+    const name = normalizeCompanyName(value)
+    if (name) names.add(name)
+  }
+  ;(extraNames || []).forEach(push)
+  _pjOwnerMembers.forEach((m) => push(m.company_name))
+  _pjCompanyNames = Array.from(names).sort((a, b) => a.localeCompare(b, 'zh-CN'))
+  return _pjCompanyNames
+}
+
+function renderProjectCompanyOptions(selected = '') {
+  const select = document.getElementById('pjEditCompany')
+  if (!select) return
+  const current = normalizeCompanyName(selected || _pjPreferredCompany || select.value)
+  if (current && !_pjCompanyNames.some((name) => companyKey(name) === companyKey(current))) {
+    _pjCompanyNames = [..._pjCompanyNames, current].sort((a, b) => a.localeCompare(b, 'zh-CN'))
+  }
+  const options = ['<option value="">请选择公司</option>']
+  _pjCompanyNames.forEach((name) => {
+    options.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
+  })
+  select.innerHTML = options.join('')
+  if (current) {
+    const hit = _pjCompanyNames.find((name) => companyKey(name) === companyKey(current))
+    select.value = hit || current
+  } else {
+    select.value = ''
+  }
+  _pjPreferredCompany = normalizeCompanyName(select.value)
 }
 
 function renderProjectScoreDimensions() {
@@ -3128,32 +3173,42 @@ function addProjectScoreDimension() {
 }
 
 async function ensureProjectOwnerOptions() {
-  if (_pjOwnerMembers.length) return _pjOwnerMembers
-  const res = await api('/admin/members')
-  if (res.code !== 200) throw new Error(res.msg || '加载会员失败')
-  const list = Array.isArray(res.data) ? res.data : (res.data?.list || [])
-  _pjOwnerMembers = (list || []).filter((m) => m && m.id != null)
-  const companies = Array.from(new Set(
-    _pjOwnerMembers
-      .map((m) => String(m.company_name || '').trim())
-      .filter(Boolean),
-  )).sort((a, b) => a.localeCompare(b, 'zh-CN'))
-  const datalist = document.getElementById('pjCompanyOptions')
-  if (datalist) {
-    datalist.innerHTML = companies.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('')
+  if (_pjOwnerMembers.length) {
+    renderProjectCompanyOptions(_pjPreferredCompany)
+    return _pjOwnerMembers
   }
+  const [membersRes, projectsRes, talentsRes] = await Promise.all([
+    api('/admin/members'),
+    api('/admin/projects').catch(() => ({ code: 0, data: [] })),
+    api('/admin/talents').catch(() => ({ code: 0, data: [] })),
+  ])
+  if (membersRes.code !== 200) throw new Error(membersRes.msg || '加载会员失败')
+  const list = Array.isArray(membersRes.data) ? membersRes.data : (membersRes.data?.list || [])
+  _pjOwnerMembers = (list || []).filter((m) => m && m.id != null)
+
+  const projectList = Array.isArray(projectsRes.data) ? projectsRes.data : (projectsRes.data?.list || [])
+  const talentList = Array.isArray(talentsRes.data) ? talentsRes.data : (talentsRes.data?.list || [])
+  const extras = [
+    ...((projectList || []).map((p) => p.company_name || p.owner_company_name)),
+    ...((talentList || []).map((t) => t.company_name)),
+  ]
+  collectCompanyNames(extras)
+  renderProjectCompanyOptions(_pjPreferredCompany)
   return _pjOwnerMembers
 }
 
 function filterProjectOwnerOptions() {
-  const company = String(document.getElementById('pjEditCompany')?.value || '').trim().toLowerCase()
+  const company = normalizeCompanyName(document.getElementById('pjEditCompany')?.value)
   const keyword = String(document.getElementById('pjOwnerSearch')?.value || '').trim().toLowerCase()
   const select = document.getElementById('pjEditOwner')
   if (!select) return
   const current = String(select.value || _pjPreferredOwnerId || '')
   let list = _pjOwnerMembers.slice()
   if (company) {
-    list = list.filter((m) => String(m.company_name || '').trim().toLowerCase() === company)
+    list = list.filter((m) => companyKey(m.company_name) === companyKey(company))
+  } else {
+    // 未选公司时，仅展示已维护公司名称的会员，便于选负责人后自动关联公司
+    list = list.filter((m) => normalizeCompanyName(m.company_name))
   }
   if (keyword) {
     list = list.filter((m) => {
@@ -3166,44 +3221,68 @@ function filterProjectOwnerOptions() {
     const label = `${m.name || '未命名'}${m.company_name ? ' · ' + m.company_name : ''}${m.phone ? ' · ' + m.phone : ''}`
     options.push(`<option value="${escapeHtml(String(m.id))}">${escapeHtml(label)}</option>`)
   })
-  // 当前已选负责人若不在筛选结果中，仍保留选项避免丢失
-  if (current && !list.some((m) => String(m.id) === current)) {
-    const hit = _pjOwnerMembers.find((m) => String(m.id) === current)
-    if (hit) {
-      const label = `${hit.name || '未命名'}${hit.company_name ? ' · ' + hit.company_name : ''}${hit.phone ? ' · ' + hit.phone : ''}`
-      options.splice(1, 0, `<option value="${escapeHtml(String(hit.id))}">${escapeHtml(label)}</option>`)
-    }
-  }
   select.innerHTML = options.join('')
-  select.value = current
+  if (current && list.some((m) => String(m.id) === current)) {
+    select.value = current
+    _pjPreferredOwnerId = current
+  } else {
+    select.value = ''
+    if (current) _pjPreferredOwnerId = ''
+  }
   const hint = document.getElementById('pjOwnerHint')
   if (hint) {
     hint.textContent = company
-      ? `已按公司「${document.getElementById('pjEditCompany').value.trim()}」筛选，共 ${list.length} 人`
-      : `负责人来自会员列表，将作为成交对接的项目方（当前 ${list.length} 人）`
+      ? `已按公司「${company}」筛选，共 ${list.length} 人（仅显示该公司会员）`
+      : `请先选择公司，或从已维护公司的会员中选择负责人（当前可选项 ${list.length} 人）`
   }
 }
 
-function onProjectCompanyInput() {
+function onProjectCompanyChange() {
+  const company = normalizeCompanyName(document.getElementById('pjEditCompany')?.value)
+  _pjPreferredCompany = company
+  const currentOwnerId = String(document.getElementById('pjEditOwner')?.value || _pjPreferredOwnerId || '')
+  if (currentOwnerId) {
+    const hit = _pjOwnerMembers.find((m) => String(m.id) === currentOwnerId)
+    if (!hit || !company || companyKey(hit.company_name) !== companyKey(company)) {
+      _pjPreferredOwnerId = ''
+      const ownerSelect = document.getElementById('pjEditOwner')
+      if (ownerSelect) ownerSelect.value = ''
+    }
+  }
   filterProjectOwnerOptions()
 }
 
 function onProjectOwnerChange() {
   const select = document.getElementById('pjEditOwner')
-  const companyInput = document.getElementById('pjEditCompany')
-  if (!select || !companyInput) return
+  const companySelect = document.getElementById('pjEditCompany')
+  if (!select || !companySelect) return
   _pjPreferredOwnerId = String(select.value || '')
   const hit = _pjOwnerMembers.find((m) => String(m.id) === _pjPreferredOwnerId)
-  if (hit && hit.company_name && !String(companyInput.value || '').trim()) {
-    companyInput.value = String(hit.company_name)
+  if (!hit) return
+  const ownerCompany = normalizeCompanyName(hit.company_name)
+  if (!ownerCompany) {
+    toast('该会员未填写公司，请先在「会员管理」中完善公司名称', 'error')
+    select.value = ''
+    _pjPreferredOwnerId = ''
     filterProjectOwnerOptions()
+    return
   }
+  _pjPreferredCompany = ownerCompany
+  if (!_pjCompanyNames.some((name) => companyKey(name) === companyKey(ownerCompany))) {
+    collectCompanyNames([ownerCompany])
+  }
+  renderProjectCompanyOptions(ownerCompany)
+  filterProjectOwnerOptions()
+  select.value = _pjPreferredOwnerId
 }
 
 async function openProjectEditPage(id) {
   _editingProjectId = id || null
   _pjScoreDimensions = []
   _pjPreferredOwnerId = ''
+  _pjPreferredCompany = ''
+  _pjOwnerMembers = []
+  _pjCompanyNames = []
   populateProjectEditSelects()
   document.getElementById('projectEditTitle').textContent = id ? '编辑项目' : '创建项目'
   document.getElementById('pjEditTitle').value = ''
@@ -3212,7 +3291,6 @@ async function openProjectEditPage(id) {
   document.getElementById('pjEditCover').value = ''
   document.getElementById('pjEditVideo').value = ''
   document.getElementById('pjEditIndustry').value = Object.keys(INDUSTRY_MAP)[0] || ''
-  document.getElementById('pjEditCompany').value = ''
   document.getElementById('pjOwnerSearch').value = ''
   document.getElementById('pjEditFeatured').checked = false
   document.getElementById('pjEditSortOrder').value = 0
@@ -3223,10 +3301,10 @@ async function openProjectEditPage(id) {
   document.getElementById('pjEditAuditStatus').value = 'approved'
   document.getElementById('pjEditRejectReason').value = ''
   document.getElementById('pjAuditBox').classList.add('hidden')
+  renderProjectCompanyOptions('')
   renderProjectScoreDimensions()
   switchPage('project-edit')
   try {
-    _pjOwnerMembers = []
     await ensureProjectOwnerOptions()
   } catch (error) {
     toast(error.message || '加载会员失败', 'error')
@@ -3247,7 +3325,8 @@ async function openProjectEditPage(id) {
     document.getElementById('pjEditCover').value = p.cover_image || ''
     document.getElementById('pjEditVideo').value = p.video_url || ''
     document.getElementById('pjEditIndustry').value = p.industry || Object.keys(INDUSTRY_MAP)[0] || ''
-    document.getElementById('pjEditCompany').value = p.company_name || p.owner_company_name || ''
+    _pjPreferredCompany = normalizeCompanyName(p.company_name || p.owner_company_name || '')
+    renderProjectCompanyOptions(_pjPreferredCompany)
     document.getElementById('pjEditFeatured').checked = !!p.is_featured
     document.getElementById('pjEditSortOrder').value = p.sort_order ?? 0
     _pjPreferredOwnerId = p.submitter_id ? String(p.submitter_id) : ''
@@ -3277,6 +3356,8 @@ async function saveProjectEdit() {
     .map((item, index) => ({ id: item.id, name: String(item.name || '').trim(), sort_order: index }))
     .filter((item) => item.name)
   const ownerId = String(document.getElementById('pjEditOwner')?.value || '').trim()
+  const companyName = normalizeCompanyName(document.getElementById('pjEditCompany')?.value)
+  const owner = _pjOwnerMembers.find((m) => String(m.id) === ownerId)
   const body = {
     title: document.getElementById('pjEditTitle').value,
     cover_image: document.getElementById('pjEditCover').value,
@@ -3285,7 +3366,7 @@ async function saveProjectEdit() {
     stage: document.getElementById('pjEditStage').value,
     description: getRichEditorHtml('pjEditDescEditor'),
     status: document.getElementById('pjEditStatus').value,
-    company_name: document.getElementById('pjEditCompany').value.trim() || null,
+    company_name: companyName || null,
     submitter_id: ownerId || null,
     is_featured: !!document.getElementById('pjEditFeatured')?.checked,
     sort_order: Math.max(0, Number(document.getElementById('pjEditSortOrder')?.value || 0)),
@@ -3306,7 +3387,15 @@ async function saveProjectEdit() {
   }
   if (!body.title.trim()) return toast('请输入项目名称', 'error')
   if (!body.cover_image.trim()) return toast('项目封面图片为必填项', 'error')
+  if (!companyName) return toast('请选择关联公司', 'error')
   if (!body.submitter_id) return toast('请选择项目负责人', 'error')
+  if (!owner) return toast('项目负责人无效，请重新选择', 'error')
+  const ownerCompany = normalizeCompanyName(owner.company_name)
+  if (!ownerCompany) return toast('该负责人会员资料未填写公司，请先在会员管理完善', 'error')
+  if (companyKey(ownerCompany) !== companyKey(companyName)) {
+    return toast('项目负责人与所选公司不匹配，请重新选择', 'error')
+  }
+  body.company_name = ownerCompany
   const url = _editingProjectId ? `/admin/projects/${_editingProjectId}` : '/admin/projects'
   const method = _editingProjectId ? 'PUT' : 'POST'
   const res = await api(url, { method, body })
@@ -3314,6 +3403,7 @@ async function saveProjectEdit() {
     toast(_editingProjectId ? '项目已更新' : '项目创建成功')
     _editingProjectId = res.data?.id || _editingProjectId
     switchPage('projects')
+    loadProjects()
   } else {
     toast(res.msg || '保存失败', 'error')
   }

@@ -1277,6 +1277,22 @@ export class AdminService {
     return owner
   }
 
+  /** 项目公司以负责人会员资料为准；若两边都有值则必须一致 */
+  private resolveLinkedCompanyName(
+    owner: { company_name?: string | null } | null | undefined,
+    dtoCompanyRaw: unknown,
+  ) {
+    const ownerCompany = String(owner?.company_name || '').trim()
+    const dtoCompany = String(dtoCompanyRaw || '').trim()
+    if (ownerCompany && dtoCompany && ownerCompany.toLowerCase() !== dtoCompany.toLowerCase()) {
+      throw new HttpException('项目负责人所属公司与所选公司不一致', HttpStatus.BAD_REQUEST)
+    }
+    if (owner && !ownerCompany) {
+      throw new HttpException('项目负责人会员资料未填写公司名称', HttpStatus.BAD_REQUEST)
+    }
+    return ownerCompany || dtoCompany || null
+  }
+
   async createProject(dto: any) {
     try {
       const coverImage = assertCloudStorageImageUrl(dto.cover_image)
@@ -1288,10 +1304,8 @@ export class AdminService {
         .map((url) => canonicalizeCloudStorageUrl(url))
         .filter((url) => isCloudStorageUrl(url))
       const owner = await this.resolveProjectOwner(dto.submitter_id)
-      const companyName =
-        String(dto.company_name || '').trim()
-        || String(owner?.company_name || '').trim()
-        || null
+      if (!owner) throw new HttpException('请选择项目负责人', HttpStatus.BAD_REQUEST)
+      const companyName = this.resolveLinkedCompanyName(owner, dto.company_name)
       const result = await queryExecute(
         `INSERT INTO projects
            (title, description, cover_image, video_url, gallery_images, file_urls, industry, stage, amount_max, status,
@@ -1382,19 +1396,25 @@ export class AdminService {
       if (dto.promo_share_count !== undefined) {
         assign('promo_share_count', Math.max(0, Number(dto.promo_share_count) || 0))
       }
-      if (dto.submitter_id !== undefined) {
-        if (dto.submitter_id == null || dto.submitter_id === '') {
-          assign('submitter_id', null)
-        } else {
-          const owner = await this.resolveProjectOwner(dto.submitter_id)
-          assign('submitter_id', owner!.id)
-          if (dto.company_name === undefined && owner?.company_name) {
-            assign('company_name', String(owner.company_name).trim() || null)
+      if (dto.submitter_id !== undefined || dto.company_name !== undefined) {
+        const nextSubmitterId =
+          dto.submitter_id !== undefined
+            ? dto.submitter_id
+            : existing.submitter_id
+        if (nextSubmitterId == null || nextSubmitterId === '') {
+          if (dto.submitter_id !== undefined) assign('submitter_id', null)
+          if (dto.company_name !== undefined) {
+            assign('company_name', String(dto.company_name || '').trim() || null)
           }
+        } else {
+          const owner = await this.resolveProjectOwner(nextSubmitterId)
+          if (dto.submitter_id !== undefined) assign('submitter_id', owner!.id)
+          const companySource =
+            dto.company_name !== undefined
+              ? dto.company_name
+              : existing.company_name
+          assign('company_name', this.resolveLinkedCompanyName(owner, companySource))
         }
-      }
-      if (dto.company_name !== undefined) {
-        assign('company_name', String(dto.company_name || '').trim() || null)
       }
       if (dto.is_featured !== undefined) {
         assign('is_featured', dto.is_featured ? 1 : 0)
