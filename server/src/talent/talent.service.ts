@@ -423,6 +423,40 @@ export class TalentService {
     return this.signTalent(this.applyPendingView(row))
   }
 
+  /**
+   * 人才公司/职位同步到会员资料，供项目管理「公司→负责人」关联使用。
+   * 会员表 company_name 为 VARCHAR(100)，超出截断。
+   */
+  private async syncMemberProfileFromTalent(
+    memberId: string | number | null | undefined,
+    opts: { company_name?: string | null; job_title?: string | null },
+  ) {
+    if (memberId == null || memberId === '') return
+    const company = String(opts.company_name || '').trim().slice(0, 100)
+    const jobTitle = String(opts.job_title || '').trim().slice(0, 128)
+    if (!company && !jobTitle) return
+
+    const sets: string[] = []
+    const params: any[] = []
+    if (company) {
+      sets.push('company_name = ?')
+      params.push(company)
+    }
+    if (jobTitle) {
+      sets.push('company_position = ?')
+      params.push(jobTitle)
+    }
+    params.push(memberId)
+    try {
+      await queryExecute(
+        `UPDATE members SET ${sets.join(', ')}, updated_at = NOW() WHERE id = ?`,
+        params,
+      )
+    } catch (error) {
+      console.warn('[TalentService] sync member company from talent failed:', error)
+    }
+  }
+
   private validateApplicationPayload(dto: any, partial = false) {
     const realName = dto.real_name !== undefined ? String(dto.real_name || '').trim() : undefined
     const contact = dto.contact !== undefined ? String(dto.contact || '').trim() : undefined
@@ -485,6 +519,10 @@ export class TalentService {
         avatarUrl,
       ],
     )
+    await this.syncMemberProfileFromTalent(memberId, {
+      company_name: payload.company_name,
+      job_title: payload.job_title,
+    })
     return this.getMine(memberId)
   }
 
@@ -547,6 +585,10 @@ export class TalentService {
         memberId,
       ],
     )
+    await this.syncMemberProfileFromTalent(memberId, {
+      company_name: payload.company_name,
+      job_title: payload.job_title,
+    })
     return this.getMine(memberId)
   }
 
@@ -673,6 +715,11 @@ export class TalentService {
 
     const id = String(result.insertId)
 
+    await this.syncMemberProfileFromTalent(memberId, {
+      company_name: payload.company_name,
+      job_title: payload.job_title,
+    })
+
     // 缴费信息复用 update 逻辑
     if (
       dto.payment_status !== undefined
@@ -752,6 +799,10 @@ export class TalentService {
             id,
           ],
         )
+        await this.syncMemberProfileFromTalent(memberId, {
+          company_name: pendingData.company_name,
+          job_title: pendingData.job_title,
+        })
       } else {
         await queryExecute(
           `UPDATE talent_applications SET
@@ -872,6 +923,19 @@ export class TalentService {
     await queryExecute(`UPDATE talent_applications SET ${updates.join(', ')} WHERE id = ?`, params)
     const result = await this.adminGetById(id)
     const memberId = (result as any)?.member_id
+    if (
+      memberId
+      && (
+        dto.company_name !== undefined
+        || dto.job_title !== undefined
+        || dto.status === 'approved'
+      )
+    ) {
+      await this.syncMemberProfileFromTalent(memberId, {
+        company_name: (result as any).company_name,
+        job_title: (result as any).job_title,
+      })
+    }
     if (
       memberId
       && dto.status

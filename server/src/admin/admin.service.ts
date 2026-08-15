@@ -1207,7 +1207,16 @@ export class AdminService {
       const rows = await queryRows(
         `SELECT p.*,
                 m.name AS owner_name,
-                m.company_name AS owner_company_name,
+                COALESCE(
+                  NULLIF(TRIM(m.company_name), ''),
+                  (
+                    SELECT NULLIF(TRIM(t.company_name), '')
+                    FROM talent_applications t
+                    WHERE t.member_id = m.id AND t.status = 'approved'
+                    ORDER BY t.id DESC
+                    LIMIT 1
+                  )
+                ) AS owner_company_name,
                 m.phone AS owner_phone,
                 (SELECT COUNT(*) FROM project_score_dimensions d WHERE d.project_id = p.id) AS dimension_count
          FROM projects p
@@ -1226,7 +1235,16 @@ export class AdminService {
       const row = await queryOne(
         `SELECT p.*,
                 m.name AS owner_name,
-                m.company_name AS owner_company_name,
+                COALESCE(
+                  NULLIF(TRIM(m.company_name), ''),
+                  (
+                    SELECT NULLIF(TRIM(t.company_name), '')
+                    FROM talent_applications t
+                    WHERE t.member_id = m.id AND t.status = 'approved'
+                    ORDER BY t.id DESC
+                    LIMIT 1
+                  )
+                ) AS owner_company_name,
                 m.phone AS owner_phone,
                 m.user_category AS owner_user_category
          FROM projects p
@@ -1270,24 +1288,65 @@ export class AdminService {
       throw new HttpException('项目负责人无效', HttpStatus.BAD_REQUEST)
     }
     const owner = await queryOne(
-      `SELECT id, name, company_name, status FROM members WHERE id = ?`,
+      `SELECT m.id, m.name, m.company_name, m.status,
+              (
+                SELECT t.company_name
+                FROM talent_applications t
+                WHERE t.member_id = m.id AND t.status = 'approved'
+                ORDER BY t.id DESC
+                LIMIT 1
+              ) AS talent_company_name,
+              (
+                SELECT t.job_title
+                FROM talent_applications t
+                WHERE t.member_id = m.id AND t.status = 'approved'
+                ORDER BY t.id DESC
+                LIMIT 1
+              ) AS talent_job_title
+       FROM members m
+       WHERE m.id = ?`,
       [submitterId],
     )
     if (!owner) throw new HttpException('项目负责人不存在', HttpStatus.BAD_REQUEST)
     return owner
   }
 
-  /** 项目公司以负责人会员资料为准；若两边都有值则必须一致 */
+  /** 项目公司：会员公司优先，人才入驻公司兜底；两边都有值则必须一致 */
   private resolveLinkedCompanyName(owner: any, dtoCompanyRaw: unknown) {
-    const ownerCompany = String(owner?.company_name || '').trim()
+    const ownerCompany = String(owner?.company_name || owner?.talent_company_name || '').trim()
     const dtoCompany = String(dtoCompanyRaw || '').trim()
     if (ownerCompany && dtoCompany && ownerCompany.toLowerCase() !== dtoCompany.toLowerCase()) {
       throw new HttpException('项目负责人所属公司与所选公司不一致', HttpStatus.BAD_REQUEST)
     }
     if (owner && !ownerCompany) {
-      throw new HttpException('项目负责人会员资料未填写公司名称', HttpStatus.BAD_REQUEST)
+      throw new HttpException('项目负责人未填写公司名称（请先在人才/会员资料中完善）', HttpStatus.BAD_REQUEST)
     }
     return ownerCompany || dtoCompany || null
+  }
+
+  /** 将人才公司回写到会员，保证后续项目管理可按公司筛选负责人 */
+  private async ensureMemberCompanyFromOwner(owner: any, companyName: string | null) {
+    if (!owner?.id || !companyName) return
+    const memberCompany = String(owner.company_name || '').trim()
+    if (memberCompany) return
+    try {
+      const jobTitle = String(owner.talent_job_title || '').trim().slice(0, 128) || null
+      if (jobTitle) {
+        await queryExecute(
+          `UPDATE members
+           SET company_name = ?, company_position = COALESCE(NULLIF(company_position, ''), ?), updated_at = NOW()
+           WHERE id = ?`,
+          [String(companyName).slice(0, 100), jobTitle, owner.id],
+        )
+      } else {
+        await queryExecute(
+          `UPDATE members SET company_name = ?, updated_at = NOW() WHERE id = ?`,
+          [String(companyName).slice(0, 100), owner.id],
+        )
+      }
+    } catch (error) {
+      console.warn('[AdminService] sync member company from project owner failed:', error)
+    }
   }
 
   async createProject(dto: any) {
@@ -1303,6 +1362,7 @@ export class AdminService {
       const owner = await this.resolveProjectOwner(dto.submitter_id)
       if (!owner) throw new HttpException('请选择项目负责人', HttpStatus.BAD_REQUEST)
       const companyName = this.resolveLinkedCompanyName(owner, dto.company_name)
+      await this.ensureMemberCompanyFromOwner(owner, companyName)
       const result = await queryExecute(
         `INSERT INTO projects
            (title, description, cover_image, video_url, gallery_images, file_urls, industry, stage, amount_max, status,
@@ -1410,7 +1470,9 @@ export class AdminService {
             dto.company_name !== undefined
               ? dto.company_name
               : existing.company_name
-          assign('company_name', this.resolveLinkedCompanyName(owner, companySource))
+          const linkedCompany = this.resolveLinkedCompanyName(owner, companySource)
+          assign('company_name', linkedCompany)
+          await this.ensureMemberCompanyFromOwner(owner, linkedCompany)
         }
       }
       if (dto.is_featured !== undefined) {

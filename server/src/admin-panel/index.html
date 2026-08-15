@@ -539,7 +539,7 @@
         <div class="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 space-y-4">
           <div>
             <p class="text-sm font-semibold text-navy-800">关联公司与负责人</p>
-            <p class="text-xs text-gray-400 mt-1">公司与负责人一一对应：先选公司再选负责人，或选负责人后自动带出其所属公司</p>
+            <p class="text-xs text-gray-400 mt-1">公司与负责人一一对应：先选公司再选负责人；人才入驻填写的公司会自动参与匹配</p>
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
@@ -558,7 +558,7 @@
                   <option value="">请选择负责人</option>
                 </select>
               </div>
-              <p id="pjOwnerHint" class="text-xs text-gray-400 mt-1">仅展示所属公司匹配的会员；将作为成交对接的项目方</p>
+              <p id="pjOwnerHint" class="text-xs text-gray-400 mt-1">仅展示所属公司匹配的会员/人才；将作为成交对接的项目方</p>
             </div>
           </div>
           <div class="grid grid-cols-2 gap-4">
@@ -3253,10 +3253,41 @@ async function ensureProjectOwnerOptions() {
   ])
   if (membersRes.code !== 200) throw new Error(membersRes.msg || '加载会员失败')
   const list = Array.isArray(membersRes.data) ? membersRes.data : (membersRes.data?.list || [])
-  _pjOwnerMembers = (list || []).filter((m) => m && m.id != null)
 
   const projectList = Array.isArray(projectsRes.data) ? projectsRes.data : (projectsRes.data?.list || [])
   const talentList = Array.isArray(talentsRes.data) ? talentsRes.data : (talentsRes.data?.list || [])
+
+  // 人才公司写在 talent_applications，需合并到会员侧，才能按公司筛出负责人
+  const talentByMember = new Map()
+  ;(talentList || []).forEach((t) => {
+    if (!t || t.member_id == null) return
+    const key = String(t.member_id)
+    const company = normalizeCompanyName(t.company_name)
+    if (!company && !t.real_name && !t.job_title) return
+    const prev = talentByMember.get(key)
+    // 已通过优先；同状态取较新一条
+    const score = String(t.status) === 'approved' ? 2 : 1
+    const prevScore = prev ? (String(prev.status) === 'approved' ? 2 : 1) : 0
+    if (!prev || score > prevScore) {
+      talentByMember.set(key, t)
+    }
+  })
+
+  _pjOwnerMembers = (list || [])
+    .filter((m) => m && m.id != null)
+    .map((m) => {
+      const talent = talentByMember.get(String(m.id))
+      const memberCompany = normalizeCompanyName(m.company_name)
+      const talentCompany = normalizeCompanyName(talent?.company_name)
+      return {
+        ...m,
+        name: m.name || talent?.real_name || m.name,
+        company_name: memberCompany || talentCompany || '',
+        company_position: m.company_position || talent?.job_title || '',
+        _talent_company: talentCompany || '',
+      }
+    })
+
   const extras = [
     ...((projectList || []).map((p) => p.company_name || p.owner_company_name)),
     ...((talentList || []).map((t) => t.company_name)),
@@ -3301,8 +3332,8 @@ function filterProjectOwnerOptions() {
   const hint = document.getElementById('pjOwnerHint')
   if (hint) {
     hint.textContent = company
-      ? `已按公司「${company}」筛选，共 ${list.length} 人（仅显示该公司会员）`
-      : `请先选择公司，或从已维护公司的会员中选择负责人（当前可选项 ${list.length} 人）`
+      ? `已按公司「${company}」筛选，共 ${list.length} 人（含会员公司与人才入驻公司）`
+      : `请先选择公司，或从已维护公司的会员/人才中选择负责人（当前可选项 ${list.length} 人）`
   }
 }
 
@@ -3330,7 +3361,7 @@ function onProjectOwnerChange() {
   if (!hit) return
   const ownerCompany = normalizeCompanyName(hit.company_name)
   if (!ownerCompany) {
-    toast('该会员未填写公司，请先在「会员管理」中完善公司名称', 'error')
+    toast('该负责人未填写公司，请先在「人才管理」或「会员管理」中完善公司名称', 'error')
     select.value = ''
     _pjPreferredOwnerId = ''
     filterProjectOwnerOptions()
@@ -3460,7 +3491,7 @@ async function saveProjectEdit() {
   if (!body.submitter_id) return toast('请选择项目负责人', 'error')
   if (!owner) return toast('项目负责人无效，请重新选择', 'error')
   const ownerCompany = normalizeCompanyName(owner.company_name)
-  if (!ownerCompany) return toast('该负责人会员资料未填写公司，请先在会员管理完善', 'error')
+  if (!ownerCompany) return toast('该负责人未填写公司，请先在人才/会员资料中完善', 'error')
   if (companyKey(ownerCompany) !== companyKey(companyName)) {
     return toast('项目负责人与所选公司不匹配，请重新选择', 'error')
   }
