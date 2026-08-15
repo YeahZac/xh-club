@@ -117,6 +117,11 @@ export class HomepageService {
 
   async getConfig(admin = false) {
     await this.ensureHomepageSchema()
+    return this.readConfig(admin)
+  }
+
+  /** 热路径读取配置：不每次 ensure schema，表不存在再兜底初始化 */
+  private async readConfig(admin = false) {
     try {
       const sections = await queryRows<any>(
         `SELECT section, display_name, is_enabled, item_limit, sort_order, sort_mode
@@ -150,14 +155,18 @@ export class HomepageService {
       }
     } catch (error: any) {
       if (error?.code === 'ER_NO_SUCH_TABLE') {
-        return { configured: false, sort_mode: 'custom', sections: [] }
+        return { configured: false, sort_mode: 'custom' as HomepageSortMode, sections: [] as any[] }
       }
       throw error
     }
   }
 
   async getFeed() {
-    const config = await this.getConfig(false)
+    let config = await this.readConfig(false)
+    if (!config.configured) {
+      await this.ensureHomepageSchema()
+      config = await this.readConfig(false)
+    }
     if (!config.configured) {
       return { configured: false, sort_mode: 'custom', list: [] as HomepageFeedItem[] }
     }
@@ -167,10 +176,8 @@ export class HomepageService {
       if (!section.is_enabled) continue
       const limit = Math.max(1, Math.min(50, Number(section.item_limit) || 8))
       const sectionItems = (section.items || []).slice(0, limit)
-      for (const item of sectionItems) {
-        const enriched = await this.enrichItem(section.section as HomepageSection, String(item.item_id), item)
-        if (enriched) cards.push(enriched)
-      }
+      const enriched = await this.enrichItemsBatch(section.section as HomepageSection, sectionItems)
+      cards.push(...enriched)
     }
 
     const sortMode = assertSortMode(config.sort_mode || 'custom')
@@ -195,78 +202,96 @@ export class HomepageService {
     return next
   }
 
+  private async enrichItemsBatch(
+    section: HomepageSection,
+    homepageItems: Array<{ id: number | string; item_id: string | number; sort_order: number }>,
+  ): Promise<HomepageFeedItem[]> {
+    if (!homepageItems.length) return []
+    const meta = SECTION_META[section]
+    const ids = homepageItems.map((item) => String(item.item_id))
+    const placeholders = ids.map(() => '?').join(', ')
+    let rows: any[] = []
+
+    if (section === 'events') {
+      rows = await queryRows(
+        `SELECT id, title, cover_image, event_type, IFNULL(view_count, 0) AS view_count, created_at
+         FROM events WHERE id IN (${placeholders})`,
+        ids,
+      )
+    } else if (section === 'products') {
+      rows = await queryRows(
+        `SELECT id, name AS title, image_url AS cover_image, IFNULL(view_count, 0) AS view_count, created_at
+         FROM mall_products WHERE id IN (${placeholders})`,
+        ids,
+      )
+    } else if (section === 'projects') {
+      rows = await queryRows(
+        `SELECT id, title, cover_image, IFNULL(view_count, 0) AS view_count, created_at
+         FROM projects WHERE id IN (${placeholders})`,
+        ids,
+      )
+    } else if (section === 'articles') {
+      rows = await queryRows(
+        `SELECT id, title, cover_image, category, IFNULL(view_count, 0) AS view_count, created_at
+         FROM articles WHERE id IN (${placeholders})`,
+        ids,
+      )
+    } else if (section === 'financing' || section === 'roadshow' || section === 'resource') {
+      rows = await queryRows(
+        `SELECT id, title, cover_image, IFNULL(view_count, 0) AS view_count, created_at, category
+         FROM business_opportunities WHERE id IN (${placeholders}) AND category = ?`,
+        [...ids, section],
+      )
+    }
+
+    const byId = new Map((rows || []).map((row: any) => [String(row.id), row]))
+    const result: HomepageFeedItem[] = []
+    for (const homepageItem of homepageItems) {
+      const row = byId.get(String(homepageItem.item_id))
+      if (!row) continue
+      const typeLabel =
+        section === 'events'
+          ? this.eventTypeLabel(row.event_type) || meta.content_type_label
+          : section === 'articles'
+            ? this.articleCategoryLabel(row.category) || meta.content_type_label
+            : meta.content_type_label
+      const detailType =
+        section === 'events'
+          ? 'event'
+          : section === 'products'
+            ? 'product'
+            : section === 'projects'
+              ? 'project'
+              : section === 'articles'
+                ? 'article'
+                : 'business'
+      result.push({
+        id: homepageItem.id,
+        section,
+        item_id: String(row.id),
+        sort_order: Number(homepageItem.sort_order) || 0,
+        title: row.title || '',
+        cover_image: row.cover_image || null,
+        view_count: Number(row.view_count) || 0,
+        content_type: meta.content_type,
+        content_type_label: typeLabel,
+        created_at: row.created_at || null,
+        detail_type: detailType,
+        detail_id: String(row.id),
+      })
+    }
+    return result
+  }
+
   private async enrichItem(
     section: HomepageSection,
     itemId: string,
     homepageItem: { id: number | string; sort_order: number },
   ): Promise<HomepageFeedItem | null> {
-    const meta = SECTION_META[section]
-    let row: any = null
-
-    if (section === 'events') {
-      row = await queryOne(
-        'SELECT id, title, cover_image, event_type, IFNULL(view_count, 0) AS view_count, created_at FROM events WHERE id = ?',
-        [itemId],
-      )
-    } else if (section === 'products') {
-      row = await queryOne(
-        `SELECT id, name AS title, image_url AS cover_image, IFNULL(view_count, 0) AS view_count, created_at
-         FROM mall_products WHERE id = ?`,
-        [itemId],
-      )
-    } else if (section === 'projects') {
-      row = await queryOne(
-        'SELECT id, title, cover_image, IFNULL(view_count, 0) AS view_count, created_at FROM projects WHERE id = ?',
-        [itemId],
-      )
-    } else if (section === 'articles') {
-      row = await queryOne(
-        `SELECT id, title, cover_image, category, IFNULL(view_count, 0) AS view_count, created_at
-         FROM articles WHERE id = ?`,
-        [itemId],
-      )
-    } else if (section === 'financing' || section === 'roadshow' || section === 'resource') {
-      row = await queryOne(
-        `SELECT id, title, cover_image, IFNULL(view_count, 0) AS view_count, created_at, category
-         FROM business_opportunities WHERE id = ? AND category = ?`,
-        [itemId, section],
-      )
-    }
-
-    if (!row) return null
-
-    const typeLabel =
-      section === 'events'
-        ? this.eventTypeLabel(row.event_type) || meta.content_type_label
-        : section === 'articles'
-          ? this.articleCategoryLabel(row.category) || meta.content_type_label
-          : meta.content_type_label
-
-    const detailType =
-      section === 'events'
-        ? 'event'
-        : section === 'products'
-          ? 'product'
-          : section === 'projects'
-            ? 'project'
-            : section === 'articles'
-              ? 'article'
-              : 'business'
-
-    return {
-      id: homepageItem.id,
-      section,
-      item_id: String(row.id),
-      sort_order: Number(homepageItem.sort_order) || 0,
-      title: row.title || '',
-      cover_image: row.cover_image || null,
-      view_count: Number(row.view_count) || 0,
-      content_type: meta.content_type,
-      content_type_label: typeLabel,
-      created_at: row.created_at || null,
-      detail_type: detailType,
-      detail_id: String(row.id),
-    }
+    const [item] = await this.enrichItemsBatch(section, [
+      { id: homepageItem.id, item_id: itemId, sort_order: homepageItem.sort_order },
+    ])
+    return item || null
   }
 
   private eventTypeLabel(type?: string) {

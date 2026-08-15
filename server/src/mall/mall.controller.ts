@@ -32,8 +32,8 @@ export class MallController {
 
   @Get('products')
   @HttpCode(HttpStatus.OK)
-  async getProducts(@Query('category') category?: string) {
-    return this.mallService.getProducts(category);
+  async getProducts(@Query() query: any) {
+    return this.mallService.getProducts(query?.category, query);
   }
 
   @Get('products/:id')

@@ -7,7 +7,7 @@ import { canonicalizeCloudStorageUrl, isCloudStorageUrl } from '@/utils/media-ur
 import { UploadService } from '@/upload/upload.service';
 import { PointsEngineService } from '@/points/points-engine.service';
 import { InvitationEngineService } from '@/invitation/invitation-engine.service';
-
+import { wantsListFields } from '@/common/list-fields';
 export interface ProductRow extends RowDataPacket {
   id: string;
   name: string;
@@ -55,27 +55,33 @@ export class MallService {
 
   // ==================== 商品管理 ====================
 
-  async getProducts(category?: string) {
+  async getProducts(category?: string, query?: Record<string, unknown>) {
     try {
+      const listFields = wantsListFields(query)
+      const selectSql = listFields
+        ? `SELECT id, name, image_url, points_price, cash_price, stock, status, category, sort_order, sales_count
+           FROM mall_products`
+        : 'SELECT * FROM mall_products'
+      const signFields = listFields ? ['image_url'] : ['image_url', 'video_url']
       if (category && category !== 'all') {
         const rows = await queryRows<ProductRow>(
-          'SELECT * FROM mall_products WHERE status = ? AND category = ? ORDER BY sort_order DESC',
+          `${selectSql} WHERE status = ? AND category = ? ORDER BY sort_order DESC`,
           ['active', category]
         );
         return {
           code: 200,
           msg: 'success',
-          data: await this.uploadService.signRowsFields(rows, ['image_url', 'video_url']),
+          data: await this.uploadService.signRowsFields(rows, signFields),
         };
       }
       const rows = await queryRows<ProductRow>(
-        'SELECT * FROM mall_products WHERE status = ? ORDER BY sort_order DESC',
+        `${selectSql} WHERE status = ? ORDER BY sort_order DESC`,
         ['active']
       );
       return {
         code: 200,
         msg: 'success',
-        data: await this.uploadService.signRowsFields(rows, ['image_url', 'video_url']),
+        data: await this.uploadService.signRowsFields(rows, signFields),
       };
     } catch (error) {
       this.logger.error('获取商品列表失败', error);

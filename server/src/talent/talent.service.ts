@@ -6,6 +6,7 @@ import { PointsEngineService } from '@/points/points-engine.service'
 import { InvitationEngineService } from '@/invitation/invitation-engine.service'
 import { createNotification } from '@/common/notify'
 import { normalizeUserCategory, userCategoryLabel } from '@/common/user-category'
+import { wantsListFields } from '@/common/list-fields'
 
 export const TALENT_STATUSES = ['pending', 'approved', 'rejected'] as const
 export type TalentStatus = (typeof TALENT_STATUSES)[number]
@@ -183,15 +184,13 @@ export class TalentService {
     return row
   }
 
-  private async signTalent(row: any, options?: { maskContact?: boolean }) {
+  private async signTalent(row: any, options?: { maskContact?: boolean; list?: boolean }) {
     if (!row) return null
     const synced = await this.syncExpiredPayment(row)
-    const signed = await this.uploadService.signRowFields(synced, [
-      'photo_url',
-      'card_image_url',
-      'avatar_url',
-      'member_avatar',
-    ])
+    const mediaFields = options?.list
+      ? (['photo_url', 'avatar_url', 'member_avatar'] as const)
+      : (['photo_url', 'card_image_url', 'avatar_url', 'member_avatar'] as const)
+    const signed = await this.uploadService.signRowFields(synced, [...mediaFields])
     return {
       ...signed,
       contact: options?.maskContact ? maskPublicContact(signed.contact) : signed.contact,
@@ -202,7 +201,7 @@ export class TalentService {
     }
   }
 
-  private async signTalents(rows: any[], options?: { maskContact?: boolean }) {
+  private async signTalents(rows: any[], options?: { maskContact?: boolean; list?: boolean }) {
     const list = await Promise.all(rows.map((row) => this.signTalent(row, options)))
     return list.filter(Boolean)
   }
@@ -236,10 +235,18 @@ export class TalentService {
     }
   }
 
-  async listApproved(params: { industry?: string; keyword?: string; page?: number; pageSize?: number } = {}) {
+  async listApproved(params: {
+    industry?: string
+    keyword?: string
+    page?: number
+    pageSize?: number
+    fields?: string
+    slim?: string
+  } = {}) {
     const page = Math.max(1, Number(params.page) || 1)
     const pageSize = Math.max(1, Math.min(100, Number(params.pageSize) || 20))
     const offset = (page - 1) * pageSize
+    const listFields = wantsListFields(params as any)
     const where = [`t.status = 'approved'`]
     const values: any[] = []
 
@@ -258,10 +265,18 @@ export class TalentService {
       `SELECT COUNT(*) AS total FROM talent_applications t ${whereSql}`,
       values,
     )
+    const selectSql = listFields
+      ? `SELECT t.id, t.member_id, t.real_name, t.contact, t.photo_url, t.avatar_url,
+                t.industry_tags, t.status, t.is_featured, t.sort_order, t.reviewed_at,
+                t.updated_at, t.created_at, t.admin_operated_at, t.payment_expire_at,
+                t.payment_start_at, t.payment_status, m.avatar AS member_avatar, m.name AS member_name, m.user_category
+         FROM talent_applications t
+         LEFT JOIN members m ON m.id = t.member_id`
+      : `SELECT t.*, m.avatar AS member_avatar, m.name AS member_name, m.user_category
+         FROM talent_applications t
+         LEFT JOIN members m ON m.id = t.member_id`
     const rows = await queryRows(
-      `SELECT t.*, m.avatar AS member_avatar, m.name AS member_name, m.user_category
-       FROM talent_applications t
-       LEFT JOIN members m ON m.id = t.member_id
+      `${selectSql}
        ${whereSql}
        ORDER BY t.is_featured DESC, t.sort_order ASC,
                 COALESCE(t.admin_operated_at, t.created_at) DESC, t.created_at DESC
@@ -269,7 +284,7 @@ export class TalentService {
       [...values, pageSize, offset],
     )
     return {
-      list: await this.signTalents(rows, { maskContact: true }),
+      list: await this.signTalents(rows, { maskContact: true, list: listFields }),
       total: Number(countRow?.total || 0),
       page,
       pageSize,

@@ -19,6 +19,7 @@ import {
   promoCoopModeLabel,
 } from '@/common/project-promo'
 import { userCategoryLabel, normalizeUserCategory } from '@/common/user-category'
+import { wantsListFields } from '@/common/list-fields'
 
 function normalizeProjectUrlList(value: unknown): string[] {
   return parseJsonUrlList(value)
@@ -73,17 +74,30 @@ export class EventsService {
 
   /** 获取活动列表 */
   async getEvents(
-    params: { event_type?: string; status?: string; page?: number; pageSize?: number; limit?: number },
+    params: {
+      event_type?: string
+      status?: string
+      page?: number
+      pageSize?: number
+      limit?: number
+      fields?: string
+      slim?: string
+    },
     memberId?: string | number,
   ) {
     const page = Math.max(1, Number(params.page) || 1)
     const pageSize = Math.max(1, Math.min(200, Number(params.pageSize || params.limit) || 10))
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
+    const listFields = wantsListFields(params as any)
+    // fields=list：仅卡片字段，默认 * 保持旧客户端兼容
+    const selectFields = listFields
+      ? 'id, title, cover_image, event_type, start_time, end_time, location, max_participants, current_participants, fee, status, is_featured, sort_order, updated_at, created_at, admin_operated_at, view_count'
+      : '*'
 
     let query = this.client()
       .from('events')
-      .select('*', { count: 'exact' })
+      .select(selectFields, { count: 'exact' })
       .order('is_featured', { ascending: false })
       .order('sort_order', { ascending: true })
       .order('admin_operated_at', { ascending: false })
@@ -100,7 +114,8 @@ export class EventsService {
     const { data, error, count } = await query
     if (error) throw new HttpException(`查询失败: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR)
 
-    let list = await this.uploadService.signRowsFields(data || [], ['cover_image', 'video_url'])
+    const signFields = listFields ? ['cover_image'] : ['cover_image', 'video_url']
+    let list = await this.uploadService.signRowsFields(data || [], signFields)
     list = await Promise.all(list.map((item: any) => this.syncEventRuntimeStatus(item)))
     if (params.status) {
       list = list.filter((item: any) => String(item.status) === String(params.status))
@@ -439,10 +454,13 @@ export class EventsService {
     keyword?: string
     page?: number
     pageSize?: number
+    fields?: string
+    slim?: string
   }) {
     const page = Math.max(1, Number(params.page) || 1)
     const pageSize = Math.max(1, Math.min(100, Number(params.pageSize) || 20))
     const offset = (page - 1) * pageSize
+    const listFields = wantsListFields(params as any)
     const where = [`(p.audit_status = 'approved' OR p.audit_status IS NULL OR p.audit_status = '')`]
     const values: any[] = []
 
@@ -468,15 +486,22 @@ export class EventsService {
 
     const whereSql = `WHERE ${where.join(' AND ')}`
     const countRow = await queryOne(`SELECT COUNT(*) AS total FROM projects p ${whereSql}`, values)
+    const selectSql = listFields
+      ? `SELECT p.id, p.title, p.cover_image, p.industry, p.stage, p.status,
+                p.avg_score, p.score_count, p.is_featured, p.sort_order,
+                p.view_count, p.created_at, p.updated_at, p.admin_operated_at
+         FROM projects p`
+      : `SELECT p.* FROM projects p`
     const rows = await queryRows(
-      `SELECT p.* FROM projects p
+      `${selectSql}
        ${whereSql}
        ORDER BY p.is_featured DESC, p.sort_order ASC,
                 COALESCE(p.admin_operated_at, p.created_at) DESC, p.created_at DESC
        LIMIT ? OFFSET ?`,
       [...values, pageSize, offset],
     )
-    const list = await this.uploadService.signRowsFields(rows || [], ['cover_image', 'video_url'])
+    const signFields = listFields ? ['cover_image'] : ['cover_image', 'video_url']
+    const list = await this.uploadService.signRowsFields(rows || [], signFields)
     return {
       list: (list || []).map((item: any) => ({
         ...item,
@@ -695,25 +720,21 @@ export class EventsService {
     return { success: true }
   }
 
-  /** 获取可接收项目分享的已入驻人才 */
+  /** 获取可接收项目分享的已入驻人才（与后台人才管理审核通过名单一致，不拉经历富文本） */
   async getShareableTalents(projectId: string, fromMemberId: string | number) {
     const project = await queryOne('SELECT id, title FROM projects WHERE id = ?', [projectId])
     if (!project) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
 
-    const fromId = String(fromMemberId || '').trim()
-    const { list } = await this.talentService.listApproved({ pageSize: 200 })
+    const talents = await this.talentService.listApprovedShareRecipients({
+      excludeMemberId: fromMemberId,
+    })
 
-    return (Array.isArray(list) ? list : [])
-      .filter((talent: any) => {
-        const memberId = String(talent?.member_id || '').trim()
-        return memberId && memberId !== fromId
-      })
-      .map((talent: any) => ({
-        member_id: String(talent.member_id),
-        name: talent.real_name || talent.member_name || '未命名人才',
-        company_name: talent.company_name || '',
-        job_title: talent.job_title || '',
-      }))
+    return (talents || []).map((talent: any) => ({
+      member_id: String(talent.member_id),
+      name: talent.real_name || '未命名人才',
+      company_name: talent.company_name || '',
+      job_title: talent.job_title || '',
+    }))
   }
 
   /** 分享项目给指定已入驻人才（每人一条可直达详情的通知） */
@@ -733,8 +754,14 @@ export class EventsService {
       throw new HttpException('请至少选择一位入驻人才', HttpStatus.BAD_REQUEST)
     }
 
-    const shareable = await this.getShareableTalents(projectId, fromMemberId)
-    const talents = shareable.filter((talent) => selectedIds.includes(talent.member_id))
+    const rows = await this.talentService.listApprovedShareRecipients({
+      excludeMemberId: fromMemberId,
+      memberIds: selectedIds,
+    })
+    const talents = (rows || []).map((talent: any) => ({
+      member_id: String(talent.member_id),
+      name: talent.real_name || '未命名人才',
+    }))
     if (!talents.length) {
       throw new HttpException('所选人才不可接收分享', HttpStatus.BAD_REQUEST)
     }

@@ -2,6 +2,7 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { queryRows, queryOne, queryExecute } from '@/storage/database/mysql-client'
 import { UploadService } from '@/upload/upload.service'
 import { assertCloudStorageImageUrl } from '@/utils/media-validators'
+import { wantsListFields } from '@/common/list-fields'
 import { RoadshowService } from './roadshow.service'
 import { createNotification } from '@/common/notify'
 
@@ -96,12 +97,20 @@ export class BusinessService {
   }
 
   async list(
-    params: { category?: string; status?: string; page?: number; pageSize?: number },
+    params: {
+      category?: string
+      status?: string
+      page?: number
+      pageSize?: number
+      fields?: string
+      slim?: string
+    },
     memberId?: string | number,
   ) {
     const page = Math.max(1, Number(params.page) || 1)
     const pageSize = Math.max(1, Math.min(100, Number(params.pageSize) || 20))
     const offset = (page - 1) * pageSize
+    const listFields = wantsListFields(params as any)
     const where: string[] = []
     const values: any[] = []
 
@@ -123,12 +132,22 @@ export class BusinessService {
       `SELECT COUNT(*) AS total FROM business_opportunities b ${whereSql}`,
       values,
     )
-    const rows = await queryRows(
-      `SELECT b.*,
+    const selectSql = listFields
+      ? `SELECT b.id, b.title, b.summary, b.cover_image, b.category, b.industry, b.region,
+                b.amount_min, b.amount_max, b.stage, b.view_count, b.status, b.is_featured,
+                b.sort_order, b.start_time, b.end_time, b.updated_at, b.created_at,
+                b.admin_operated_at, b.audit_status, b.source, b.user_id, b.demand_talent_id,
+                COALESCE(NULLIF(t.real_name, ''), NULLIF(m.name, '')) AS demand_talent_name
+         FROM business_opportunities b
+         LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
+         LEFT JOIN members m ON m.id = b.user_id`
+      : `SELECT b.*,
               COALESCE(NULLIF(t.real_name, ''), NULLIF(m.name, '')) AS demand_talent_name
-       FROM business_opportunities b
-       LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
-       LEFT JOIN members m ON m.id = b.user_id
+         FROM business_opportunities b
+         LEFT JOIN talent_applications t ON t.id = b.demand_talent_id
+         LEFT JOIN members m ON m.id = b.user_id`
+    const rows = await queryRows(
+      `${selectSql}
        ${whereSql}
        ORDER BY b.is_featured DESC, b.sort_order ASC,
                 COALESCE(b.admin_operated_at, b.created_at) DESC, b.created_at DESC
