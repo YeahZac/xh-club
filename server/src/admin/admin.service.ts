@@ -1278,10 +1278,7 @@ export class AdminService {
   }
 
   /** 项目公司以负责人会员资料为准；若两边都有值则必须一致 */
-  private resolveLinkedCompanyName(
-    owner: { company_name?: string | null } | null | undefined,
-    dtoCompanyRaw: unknown,
-  ) {
+  private resolveLinkedCompanyName(owner: any, dtoCompanyRaw: unknown) {
     const ownerCompany = String(owner?.company_name || '').trim()
     const dtoCompany = String(dtoCompanyRaw || '').trim()
     if (ownerCompany && dtoCompany && ownerCompany.toLowerCase() !== dtoCompany.toLowerCase()) {
