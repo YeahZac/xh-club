@@ -49,7 +49,34 @@
     .ql-container.ql-snow { border-radius: 0 0 12px 12px; border-color: #e5e7eb; min-height: 220px; font-size: 14px; }
     .ql-editor { min-height: 220px; }
     .ql-editor img { max-width: 100%; border-radius: 8px; }
-    .ql-htmlsource.ql-active { background: #1b2a4a !important; color: #e8d5a8 !important; border-radius: 4px; }
+    /* 模式切换独立工具条，避免塞进 Quill 图标按钮导致中文竖排挤压 */
+    .rich-mode-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+      padding: 8px 12px; border: 1px solid #e5e7eb; border-top: 0; background: #f8fafc;
+    }
+    .rich-mode-toggle {
+      display: inline-flex; align-items: center; padding: 3px; gap: 2px;
+      border-radius: 10px; background: #eef2f7; border: 1px solid #e2e8f0;
+    }
+    .rich-mode-btn {
+      appearance: none; border: 0; cursor: pointer; white-space: nowrap;
+      padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      line-height: 1.2; color: #64748b; background: transparent; transition: all .15s ease;
+    }
+    .rich-mode-btn:hover { color: #1b2a4a; }
+    .rich-mode-btn.is-active[data-mode="visual"] {
+      background: #fff; color: #166534; box-shadow: 0 1px 2px rgba(15, 23, 42, .08);
+    }
+    .rich-mode-btn.is-active[data-mode="source"] {
+      background: #1b2a4a; color: #e8d5a8; box-shadow: 0 1px 2px rgba(15, 23, 42, .18);
+    }
+    .rich-mode-copy {
+      appearance: none; cursor: pointer; white-space: nowrap;
+      padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      line-height: 1.2; color: #334155; background: #fff;
+      border: 1px solid #dbe3ef;
+    }
+    .rich-mode-copy:hover { background: #f1f5f9; border-color: #cbd5e1; }
     .rich-source-wrap { border: 1px solid #e5e7eb; border-top: 0; border-radius: 0 0 12px 12px; background: #0f172a; }
     .rich-source-wrap textarea {
       width: 100%; min-height: 320px; padding: 14px 16px; border: 0; outline: none; resize: vertical;
@@ -60,10 +87,11 @@
     .rich-source-actions { padding: 8px 14px; border-top: 1px solid #1e293b; display: flex; gap: 8px; flex-wrap: wrap; }
     .rich-source-visual-btn {
       padding: 6px 12px; border-radius: 8px; border: 1px solid #334155;
-      background: #1e3a5f; color: #e2e8f0; font-size: 12px; cursor: pointer;
+      background: #1e3a5f; color: #e2e8f0; font-size: 12px; cursor: pointer; white-space: nowrap;
     }
     .rich-source-visual-btn:hover { background: #274b7a; }
-    .ql-htmlvisual.ql-active { background: #2d6a4f !important; color: #d8f3dc !important; border-radius: 4px; }
+    /* 源码模式下圆角接到 mode-bar */
+    .ql-container.ql-snow.rich-host-hidden { display: none !important; }
     .emoji-popover { position: absolute; z-index: 80; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 8px; width: 280px; max-height: 180px; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,.12); display: none; }
     .emoji-popover button { font-size: 18px; width: 32px; height: 32px; border-radius: 8px; }
     .emoji-popover button:hover { background: #f3f4f6; }
@@ -868,7 +896,7 @@
 
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mt-6">
         <h3 class="font-bold text-navy-800 mb-2">关于我们</h3>
-        <p class="text-xs text-gray-400 mb-4">小程序首页入口展示。支持「&lt;/&gt;」源码模式粘贴完整 H5；完成后点「可视化」可切回文字与图片编辑。</p>
+        <p class="text-xs text-gray-400 mb-4">小程序首页入口展示。可用下方「HTML 源码」粘贴完整 H5；需要改文字图片时再切回「可视化」。</p>
         <div id="aboutUsEditor"></div>
         <div class="mt-6 flex justify-end">
           <button onclick="saveAboutUs()" class="px-8 py-3 bg-gradient-to-r from-brand-400 to-brand-600 text-white rounded-xl font-medium hover:shadow-lg transition">保存关于我们</button>
@@ -1269,12 +1297,39 @@ const richEditors = {}
 const richEditorMeta = {}
 const EMOJI_LIST = ['😀','😁','😂','🤣','😊','😍','😘','😎','🤔','👍','👏','🙏','🔥','✨','🎉','❤️','💯','✅','📌','📎','📄','🖼️','💼','🚀','⭐','💡']
 
+function richModeStorageKey(editorId) {
+  return `xh-admin-rich-mode:${editorId}`
+}
+
+function rememberRichEditorMode(editorId, mode) {
+  try {
+    sessionStorage.setItem(richModeStorageKey(editorId), mode === 'source' ? 'source' : 'visual')
+  } catch (_) { /* ignore */ }
+}
+
+function recalledRichEditorMode(editorId) {
+  try {
+    return sessionStorage.getItem(richModeStorageKey(editorId)) || ''
+  } catch (_) {
+    return ''
+  }
+}
+
 function isFullHtmlDocument(html) {
   const v = String(html || '').trim()
   if (!v) return false
   if (/<!DOCTYPE\s+html/i.test(v) || /<html[\s>]/i.test(v)) return true
   if (/<style[\s>]/i.test(v) && /<\/style>/i.test(v) && v.length > 600) return true
   return false
+}
+
+/** 完整页 / 复杂 HTML / 上次停在源码：打开时优先进源码，避免保存后再打开退回可视化 */
+function shouldOpenRichEditorInSource(editorId, html) {
+  const raw = String(html || '').trim()
+  if (isFullHtmlDocument(raw)) return true
+  if (/<\/?(style|script|section|header|footer|nav|main|article|link|meta)[\s>]/i.test(raw)) return true
+  if (raw.length > 800 && (raw.match(/<[a-z][a-z0-9]*\b/gi) || []).length >= 12) return true
+  return recalledRichEditorMode(editorId) === 'source'
 }
 
 /** 从完整 HTML 或源码中提取可供 Quill 可视化的正文（保留文字、图片、基础排版） */
@@ -1345,17 +1400,20 @@ function switchRichEditorToVisual(editorId, options = {}) {
   meta.rawPreferred = false
   meta.sourceMode = false
   meta.sourceWrap.style.display = 'none'
+  host.classList.remove('rich-host-hidden')
   host.style.display = ''
+  rememberRichEditorMode(editorId, 'visual')
   syncRichEditorModeButtons(editorId)
   meta.sourceEl.value = fragment
   quill.setText('')
   quill.clipboard.dangerouslyPasteHTML(0, fragment || '<p><br></p>')
-  toast('已切换到可视化编辑（文字与图片）', 'success')
+  if (!options.silent) toast('已切换到可视化编辑（文字与图片）', 'success')
 }
 
 function destroyRichEditor(editorId) {
   const host = document.getElementById(editorId)
   const meta = richEditorMeta[editorId]
+  if (meta?.modeBar) meta.modeBar.remove()
   if (meta?.sourceWrap) meta.sourceWrap.remove()
   delete richEditorMeta[editorId]
   if (!host) {
@@ -1364,7 +1422,7 @@ function destroyRichEditor(editorId) {
   }
   // Quill 会在 host 前插入 .ql-toolbar，仅清空 innerHTML 会残留多条工具栏
   let prev = host.previousElementSibling
-  while (prev && prev.classList.contains('ql-toolbar')) {
+  while (prev && (prev.classList.contains('ql-toolbar') || prev.classList.contains('rich-mode-bar'))) {
     const remove = prev
     prev = prev.previousElementSibling
     remove.remove()
@@ -1401,6 +1459,19 @@ function getRichEditorHtml(editorId) {
   return html === '<p><br></p>' ? '' : html
 }
 
+function copyRichEditorHtml(editorId) {
+  const html = getRichEditorHtml(editorId)
+  const done = () => toast('HTML 已复制到剪贴板')
+  const fail = () => toast('复制失败，请手动复制', 'error')
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(html).then(done).catch(() => {
+      copyHtmlFallback(html) ? done() : fail()
+    })
+  } else {
+    copyHtmlFallback(html) ? done() : fail()
+  }
+}
+
 function ensureRichSourceWrap(editorId, host) {
   let meta = richEditorMeta[editorId]
   if (meta?.sourceWrap && meta.sourceEl) return meta
@@ -1412,7 +1483,7 @@ function ensureRichSourceWrap(editorId, host) {
   ta.placeholder = '在此粘贴或编辑 HTML 源码（支持完整 H5 页面）。小程序将按代码渲染展示。'
   const hint = document.createElement('div')
   hint.className = 'rich-source-hint'
-  hint.textContent = '源码模式：可粘贴完整 H5。完成后点「可视化」或下方按钮，切回文字与图片编辑。'
+  hint.textContent = '当前为 HTML 源码模式。保存后再次打开会自动回到源码模式；需要改文字/图片时点上方「可视化」。'
   const actions = document.createElement('div')
   actions.className = 'rich-source-actions'
   const visualBtn = document.createElement('button')
@@ -1427,28 +1498,68 @@ function ensureRichSourceWrap(editorId, host) {
   wrap.appendChild(actions)
   wrap.appendChild(hint)
   host.insertAdjacentElement('afterend', wrap)
-  meta = { sourceMode: false, sourceWrap: wrap, sourceEl: ta, rawPreferred: false }
+  meta = {
+    sourceMode: false,
+    sourceWrap: wrap,
+    sourceEl: ta,
+    rawPreferred: false,
+    modeBar: meta?.modeBar || null,
+  }
   richEditorMeta[editorId] = meta
   return meta
 }
 
-/** 同步工具栏「源码 / 可视化」按钮高亮 */
-function syncRichEditorModeButtons(editorId) {
-  const host = document.getElementById(editorId)
-  if (!host) return
-  const meta = richEditorMeta[editorId]
+function ensureRichModeBar(editorId, host) {
+  let meta = richEditorMeta[editorId] || (richEditorMeta[editorId] = {})
+  if (meta.modeBar && document.body.contains(meta.modeBar)) return meta.modeBar
+
+  const bar = document.createElement('div')
+  bar.className = 'rich-mode-bar'
+  bar.innerHTML = `
+    <div class="rich-mode-toggle" role="tablist" aria-label="编辑模式">
+      <button type="button" class="rich-mode-btn" data-mode="visual">可视化</button>
+      <button type="button" class="rich-mode-btn" data-mode="source">HTML 源码</button>
+    </div>
+    <button type="button" class="rich-mode-copy">复制 HTML</button>
+  `
+  bar.querySelector('[data-mode="visual"]').addEventListener('click', (ev) => {
+    ev.preventDefault()
+    switchRichEditorToVisual(editorId, { confirmFullHtml: true })
+  })
+  bar.querySelector('[data-mode="source"]').addEventListener('click', (ev) => {
+    ev.preventDefault()
+    setRichEditorSourceMode(editorId, true)
+  })
+  bar.querySelector('.rich-mode-copy').addEventListener('click', (ev) => {
+    ev.preventDefault()
+    copyRichEditorHtml(editorId)
+  })
+
   const toolbar = host.previousElementSibling?.classList?.contains('ql-toolbar')
     ? host.previousElementSibling
-    : host.parentElement?.querySelector?.('.ql-toolbar')
-  const sourceBtn = toolbar?.querySelector?.('.ql-htmlsource')
-  const visualBtn = toolbar?.querySelector?.('.ql-htmlvisual')
+    : null
+  if (toolbar) toolbar.insertAdjacentElement('afterend', bar)
+  else host.insertAdjacentElement('beforebegin', bar)
+
+  meta.modeBar = bar
+  richEditorMeta[editorId] = meta
+  return bar
+}
+
+/** 同步模式切换按钮高亮 */
+function syncRichEditorModeButtons(editorId) {
+  const meta = richEditorMeta[editorId]
   const inSource = !!meta?.sourceMode
-  if (sourceBtn) sourceBtn.classList.toggle('ql-active', inSource)
-  if (visualBtn) visualBtn.classList.toggle('ql-active', !inSource)
+  const bar = meta?.modeBar
+  if (!bar) return
+  bar.querySelectorAll('.rich-mode-btn').forEach((btn) => {
+    const mode = btn.getAttribute('data-mode')
+    btn.classList.toggle('is-active', inSource ? mode === 'source' : mode === 'visual')
+  })
 }
 
 /** 进入 HTML 源码模式（幂等：已在源码模式则只聚焦，不二次切换） */
-function setRichEditorSourceMode(editorId, enabled) {
+function setRichEditorSourceMode(editorId, enabled, options = {}) {
   const host = document.getElementById(editorId)
   const quill = richEditors[editorId]
   if (!host || !quill) return
@@ -1457,11 +1568,12 @@ function setRichEditorSourceMode(editorId, enabled) {
   if (!enabled) {
     switchRichEditorToVisual(editorId, {
       confirmFullHtml: isFullHtmlDocument(meta.sourceEl?.value || ''),
+      silent: !!options.silent,
     })
     return
   }
 
-  // 已在源码模式：只聚焦，避免「再点 </> 反而切回可视化」
+  // 已在源码模式：只聚焦，避免重复切换
   if (meta.sourceMode) {
     syncRichEditorModeButtons(editorId)
     try { meta.sourceEl.focus() } catch (_) { /* ignore */ }
@@ -1473,19 +1585,24 @@ function setRichEditorSourceMode(editorId, enabled) {
     (meta.rawPreferred && existing) || isFullHtmlDocument(existing)
   if (!keepExisting) {
     const fromQuill = quill.root.innerHTML || ''
-    meta.sourceEl.value = fromQuill === '<p><br></p>' ? '' : fromQuill
+    // 避免把占位提示写进源码区
+    meta.sourceEl.value = fromQuill.includes('【已保存完整 HTML 源码】')
+      ? existing
+      : (fromQuill === '<p><br></p>' ? '' : fromQuill)
   }
   meta.sourceMode = true
+  if (isFullHtmlDocument(meta.sourceEl.value)) meta.rawPreferred = true
+  host.classList.add('rich-host-hidden')
   host.style.display = 'none'
   meta.sourceWrap.style.display = 'block'
+  rememberRichEditorMode(editorId, 'source')
   syncRichEditorModeButtons(editorId)
   try {
     meta.sourceEl.focus()
-    // 光标移到末尾，方便继续粘贴
     const len = meta.sourceEl.value.length
     meta.sourceEl.setSelectionRange(len, len)
   } catch (_) { /* ignore */ }
-  toast('已切换到源码模式', 'success')
+  if (!options.silent) toast('已切换到 HTML 源码模式', 'success')
 }
 
 function uploadEditorAsset(file, kind) {
@@ -1529,14 +1646,14 @@ function initRichEditor(editorId, html) {
           [{ color: [] }],
           [{ list: 'ordered' }, { list: 'bullet' }],
           [{ align: [] }],
-          ['link', 'image', 'emoji', 'attachment', 'htmlsource', 'htmlvisual', 'htmlcopy'],
+          ['link', 'image', 'emoji', 'attachment'],
           ['clean']
         ],
         handlers: {
           image() {
             const meta = richEditorMeta[editorId]
             if (meta?.sourceMode) {
-              toast('请先退出源码模式，或在源码中手动写入 <img> 标签', 'error')
+              toast('请先切回可视化，或在源码中手动写入 <img> 标签', 'error')
               return
             }
             openMediaLibrary({
@@ -1555,7 +1672,9 @@ function initRichEditor(editorId, html) {
               toast('源码模式请直接输入表情字符', 'error')
               return
             }
-            const toolbar = host.previousElementSibling
+            const toolbar = host.previousElementSibling?.classList?.contains('ql-toolbar')
+              ? host.previousElementSibling
+              : host.parentElement?.querySelector?.('.ql-toolbar')
             let pop = document.getElementById('emojiPopover_' + editorId)
             if (!pop) {
               pop = document.createElement('div')
@@ -1580,7 +1699,7 @@ function initRichEditor(editorId, html) {
           attachment() {
             const meta = richEditorMeta[editorId]
             if (meta?.sourceMode) {
-              toast('请先退出源码模式，或在源码中手动写入链接', 'error')
+              toast('请先切回可视化，或在源码中手动写入链接', 'error')
               return
             }
             openMediaLibrary({
@@ -1595,42 +1714,23 @@ function initRichEditor(editorId, html) {
               },
             })
           },
-          htmlsource() {
-            // </> 只负责进入源码，不再做成开关（避免连点误切可视化）
-            setRichEditorSourceMode(editorId, true)
-          },
-          htmlvisual() {
-            switchRichEditorToVisual(editorId, { confirmFullHtml: true })
-          },
-          htmlcopy() {
-            const html = getRichEditorHtml(editorId)
-            const done = () => toast('HTML 已复制到剪贴板')
-            const fail = () => toast('复制失败，请手动复制', 'error')
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              navigator.clipboard.writeText(html).then(done).catch(() => {
-                copyHtmlFallback(html) ? done() : fail()
-              })
-            } else {
-              copyHtmlFallback(html) ? done() : fail()
-            }
-          }
         }
       }
     }
   })
 
-  /** Quill 自定义按钮偶发点不中：用原生捕获点击兜底，保证一次切换成功 */
-  function bindRichModeToolbarButtons() {
-    const toolbarRoot = host.previousElementSibling?.classList?.contains('ql-toolbar')
-      ? host.previousElementSibling
-      : null
+  function decorateToolbarExtras() {
+    const toolbarRoot = (() => {
+      let node = host.previousElementSibling
+      while (node) {
+        if (node.classList.contains('ql-toolbar')) return node
+        node = node.previousElementSibling
+      }
+      return host.parentElement?.querySelector?.('.ql-toolbar') || null
+    })()
     if (!toolbarRoot) return
-    const htmlSourceBtn = toolbarRoot.querySelector('.ql-htmlsource')
-    const htmlVisualBtn = toolbarRoot.querySelector('.ql-htmlvisual')
-    const htmlCopyBtn = toolbarRoot.querySelector('.ql-htmlcopy')
     const emojiBtn = toolbarRoot.querySelector('.ql-emoji')
     const attachBtn = toolbarRoot.querySelector('.ql-attachment')
-
     if (emojiBtn && !emojiBtn.dataset.ready) {
       emojiBtn.dataset.ready = '1'
       emojiBtn.innerHTML = '😊'
@@ -1641,79 +1741,45 @@ function initRichEditor(editorId, html) {
       attachBtn.innerHTML = '📎'
       attachBtn.title = '插入文件'
     }
-    if (htmlSourceBtn && !htmlSourceBtn.dataset.ready) {
-      htmlSourceBtn.dataset.ready = '1'
-      htmlSourceBtn.type = 'button'
-      htmlSourceBtn.textContent = '</>'
-      htmlSourceBtn.title = '切换到 HTML 源码编辑'
-      htmlSourceBtn.addEventListener('click', (ev) => {
-        ev.preventDefault()
-        ev.stopPropagation()
-        setRichEditorSourceMode(editorId, true)
-      }, true)
-    }
-    if (htmlVisualBtn && !htmlVisualBtn.dataset.ready) {
-      htmlVisualBtn.dataset.ready = '1'
-      htmlVisualBtn.type = 'button'
-      htmlVisualBtn.textContent = '可视化'
-      htmlVisualBtn.title = '切换到可视化编辑（文字与图片）'
-      htmlVisualBtn.addEventListener('click', (ev) => {
-        ev.preventDefault()
-        ev.stopPropagation()
-        switchRichEditorToVisual(editorId, { confirmFullHtml: true })
-      }, true)
-    }
-    if (htmlCopyBtn && !htmlCopyBtn.dataset.ready) {
-      htmlCopyBtn.dataset.ready = '1'
-      htmlCopyBtn.type = 'button'
-      htmlCopyBtn.textContent = '复制'
-      htmlCopyBtn.title = '复制 HTML 代码'
-      htmlCopyBtn.addEventListener('click', (ev) => {
-        ev.preventDefault()
-        ev.stopPropagation()
-        const html = getRichEditorHtml(editorId)
-        const done = () => toast('HTML 已复制到剪贴板')
-        const fail = () => toast('复制失败，请手动复制', 'error')
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(html).then(done).catch(() => {
-            copyHtmlFallback(html) ? done() : fail()
-          })
-        } else {
-          copyHtmlFallback(html) ? done() : fail()
-        }
-      }, true)
-    }
-    syncRichEditorModeButtons(editorId)
   }
 
-  // 立即绑定 + 下一帧再绑一次（防止 Quill 重建 toolbar DOM）
-  bindRichModeToolbarButtons()
-  setTimeout(bindRichModeToolbarButtons, 0)
+  decorateToolbarExtras()
+  setTimeout(decorateToolbarExtras, 0)
 
   richEditors[editorId] = quill
   ensureRichSourceWrap(editorId, host)
+  ensureRichModeBar(editorId, host)
 
-  if (html) {
-    if (isFullHtmlDocument(html)) {
-      const meta = richEditorMeta[editorId]
-      meta.sourceEl.value = html
-      meta.rawPreferred = true
+  const initialHtml = String(html || '')
+  const openSource = shouldOpenRichEditorInSource(editorId, initialHtml)
+  if (initialHtml) {
+    const meta = richEditorMeta[editorId]
+    if (openSource) {
+      meta.sourceEl.value = initialHtml
+      meta.rawPreferred = isFullHtmlDocument(initialHtml)
       meta.sourceMode = true
+      host.classList.add('rich-host-hidden')
       host.style.display = 'none'
       meta.sourceWrap.style.display = 'block'
+      rememberRichEditorMode(editorId, 'source')
       quill.setText('')
       quill.clipboard.dangerouslyPasteHTML(
         0,
-        '<p>【已保存完整 HTML 源码】请继续用「&lt;/&gt; 源码」编辑，勿在可视化中改写。</p>',
+        '<p>【已保存完整 HTML 源码】请继续用「HTML 源码」编辑；勿在可视化中改写整页。</p>',
       )
-      setTimeout(() => syncRichEditorModeButtons(editorId), 0)
     } else {
-      quill.root.innerHTML = html
-      setTimeout(() => syncRichEditorModeButtons(editorId), 0)
+      quill.root.innerHTML = initialHtml
+      meta.sourceEl.value = initialHtml
+      meta.sourceMode = false
+      rememberRichEditorMode(editorId, 'visual')
     }
   } else {
-    syncRichEditorModeButtons(editorId)
+    rememberRichEditorMode(editorId, recalledRichEditorMode(editorId) === 'source' ? 'source' : 'visual')
+    if (recalledRichEditorMode(editorId) === 'source') {
+      setRichEditorSourceMode(editorId, true, { silent: true })
+    }
   }
+  syncRichEditorModeButtons(editorId)
 
   // 源码区粘贴完整 H5 时自动标记，防止误切可视化丢内容
   const metaForPaste = richEditorMeta[editorId]
@@ -1721,7 +1787,10 @@ function initRichEditor(editorId, html) {
     metaForPaste._pasteBound = true
     metaForPaste.sourceEl.addEventListener('input', () => {
       const raw = String(metaForPaste.sourceEl.value || '').trim()
-      if (isFullHtmlDocument(raw)) metaForPaste.rawPreferred = true
+      if (isFullHtmlDocument(raw)) {
+        metaForPaste.rawPreferred = true
+        rememberRichEditorMode(editorId, 'source')
+      }
     })
   }
   return quill
@@ -3079,7 +3148,7 @@ async function submitUpdateEvent(id) {
   if (!body.cover_image.trim()) return toast('活动封面图片为必填项', 'error')
   const sourceLen = String(richEditorMeta.evDescEditor?.sourceEl?.value || '').trim().length
   if (!body.description && sourceLen > 0) {
-    return toast('活动详情源码未写入，请保持「</> 源码」模式后再保存', 'error')
+    return toast('活动详情源码未写入，请保持「HTML 源码」模式后再保存', 'error')
   }
   if (body.description && body.description.length > 12_000_000) {
     return toast('活动详情 HTML 过大，请压缩内嵌图片后重试', 'error')
@@ -4938,6 +5007,9 @@ async function deleteFeedback(id) {
 
 async function saveAboutUs() {
   const html = getRichEditorHtml('aboutUsEditor')
+  if (richEditorMeta.aboutUsEditor?.sourceMode || isFullHtmlDocument(html)) {
+    rememberRichEditorMode('aboutUsEditor', 'source')
+  }
   const res = await api('/admin/configs', { method: 'PUT', body: { key: 'about_us', value: html } })
   if (res.code === 200) toast('关于我们已保存')
   else toast(res.msg || '保存失败', 'error')
@@ -6231,7 +6303,7 @@ function buildTalentFormFields(item, options = {}) {
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">过往经历 / 详细介绍</label>
-          <p class="text-xs text-gray-400 mb-2">支持可视化编辑，也可切换源码模式粘贴完整 HTML / H5 单文件后保存</p>
+          <p class="text-xs text-gray-400 mb-2">可用「可视化」编辑文字图片，或切到「HTML 源码」粘贴完整 H5 单文件后保存</p>
           <div id="talExperienceEditor"></div>
         </div>
         <div class="grid grid-cols-1 gap-3">
