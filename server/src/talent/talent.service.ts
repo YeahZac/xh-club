@@ -382,8 +382,9 @@ export class TalentService {
   }
 
   /**
-   * 项目分享收件人：直接使用后台「人才管理」中的审核通过记录。
-   * 资料修改待审期间主记录仍为 approved，因此继续显示旧审核资料。
+   * 项目分享收件人：与后台「人才管理」审核通过名单对齐。
+   * - 不按会员 status / 缴费状态过滤（避免 approved 会员、未缴费人才被漏掉）
+   * - 默认不排除本人，由前端标记 is_self 禁用勾选；提交时再过滤
    */
   async listApprovedShareRecipients(options?: {
     excludeMemberId?: string | number
@@ -391,15 +392,15 @@ export class TalentService {
   }) {
     const where = [`t.status = 'approved'`, 't.member_id IS NOT NULL']
     const values: Array<string | number> = []
-    if (options?.excludeMemberId) {
-      where.push('t.member_id != ?')
-      values.push(options.excludeMemberId)
+    if (options?.excludeMemberId != null && options.excludeMemberId !== '') {
+      where.push('CAST(t.member_id AS CHAR) != ?')
+      values.push(String(options.excludeMemberId))
     }
     const memberIds = [...new Set(
       (options?.memberIds || []).map((id) => String(id || '').trim()).filter(Boolean),
     )]
     if (memberIds.length) {
-      where.push(`t.member_id IN (${memberIds.map(() => '?').join(', ')})`)
+      where.push(`CAST(t.member_id AS CHAR) IN (${memberIds.map(() => '?').join(', ')})`)
       values.push(...memberIds)
     }
 

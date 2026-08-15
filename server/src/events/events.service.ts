@@ -720,21 +720,25 @@ export class EventsService {
     return { success: true }
   }
 
-  /** 获取可接收项目分享的已入驻人才（与后台人才管理审核通过名单一致，不拉经历富文本） */
+  /** 获取可接收项目分享的已入驻人才（与后台人才管理审核通过名单一致） */
   async getShareableTalents(projectId: string, fromMemberId: string | number) {
     const project = await queryOne('SELECT id, title FROM projects WHERE id = ?', [projectId])
     if (!project) throw new HttpException('项目不存在', HttpStatus.NOT_FOUND)
 
-    const talents = await this.talentService.listApprovedShareRecipients({
-      excludeMemberId: fromMemberId,
-    })
+    const selfId = String(fromMemberId || '').trim()
+    // 不再在查询层排除本人，避免「后台 3 人、分享只见 2 人」的错觉；本人用 is_self 标记
+    const talents = await this.talentService.listApprovedShareRecipients()
 
-    return (talents || []).map((talent: any) => ({
-      member_id: String(talent.member_id),
-      name: talent.real_name || '未命名人才',
-      company_name: talent.company_name || '',
-      job_title: talent.job_title || '',
-    }))
+    return (talents || []).map((talent: any) => {
+      const memberId = String(talent.member_id || '').trim()
+      return {
+        member_id: memberId,
+        name: talent.real_name || '未命名人才',
+        company_name: talent.company_name || '',
+        job_title: talent.job_title || '',
+        is_self: !!selfId && memberId === selfId,
+      }
+    }).filter((item) => item.member_id)
   }
 
   /** 分享项目给指定已入驻人才（每人一条可直达详情的通知） */
@@ -755,13 +759,14 @@ export class EventsService {
     }
 
     const rows = await this.talentService.listApprovedShareRecipients({
-      excludeMemberId: fromMemberId,
       memberIds: selectedIds,
     })
-    const talents = (rows || []).map((talent: any) => ({
-      member_id: String(talent.member_id),
-      name: talent.real_name || '未命名人才',
-    }))
+    const talents = (rows || [])
+      .map((talent: any) => ({
+        member_id: String(talent.member_id),
+        name: talent.real_name || '未命名人才',
+      }))
+      .filter((talent) => talent.member_id && talent.member_id !== String(fromMemberId))
     if (!talents.length) {
       throw new HttpException('所选人才不可接收分享', HttpStatus.BAD_REQUEST)
     }
