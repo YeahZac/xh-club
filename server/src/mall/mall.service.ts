@@ -197,6 +197,18 @@ export class MallService {
 
   async deleteProduct(id: string) {
     try {
+      const existing = await queryOne<ProductRow>('SELECT * FROM mall_products WHERE id = ?', [id]);
+      if (!existing) {
+        return { code: 404, msg: '商品不存在', data: null };
+      }
+      const orderRow = await queryOne('SELECT id FROM mall_orders WHERE product_id = ? LIMIT 1', [id]);
+      if (orderRow) {
+        await queryExecute(
+          `UPDATE mall_products SET status = 'inactive', updated_at = NOW() WHERE id = ?`,
+          [id],
+        );
+        return { code: 200, msg: '该商品已有订单，已下架而非彻底删除', data: { soft_deleted: true } };
+      }
       await queryExecute('DELETE FROM mall_products WHERE id = ?', [id]);
       return { code: 200, msg: '删除成功', data: null };
     } catch (error) {

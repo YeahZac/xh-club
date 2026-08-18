@@ -1350,7 +1350,12 @@ export class AdminController {
   async deleteMallProduct(@Param('id') id: string) {
     console.log('[AdminController] DELETE /api/admin/mall-products/:id')
     const result = await this.adminService.deleteMallProduct(id)
-    return { code: 200, msg: '删除成功', data: result }
+    const soft = Boolean((result as any)?.soft_deleted)
+    return {
+      code: 200,
+      msg: soft ? ((result as any)?.message || '商品已下架') : '删除成功',
+      data: result,
+    }
   }
 
   /** ====== 成交管理 ====== */

@@ -1825,10 +1825,43 @@ export class AdminService {
 
   async deleteMallProduct(id: string) {
     try {
+      const existing = await queryOne('SELECT id, name FROM mall_products WHERE id = ?', [id])
+      if (!existing) throw new HttpException('商品不存在', HttpStatus.NOT_FOUND)
+
+      // 有历史订单时改为下架，避免订单详情丢商品关联；无订单则物理删除
+      const orderRow = await queryOne(
+        'SELECT id FROM mall_orders WHERE product_id = ? LIMIT 1',
+        [id],
+      )
+      if (orderRow) {
+        await queryExecute(
+          `UPDATE mall_products SET status = 'inactive', updated_at = NOW() WHERE id = ?`,
+          [id],
+        )
+        try {
+          await queryExecute(
+            `DELETE FROM homepage_items WHERE section = 'products' AND item_id = ?`,
+            [String(id)],
+          )
+        } catch {
+          // homepage_items 可能不存在
+        }
+        return { success: true, soft_deleted: true, message: '该商品已有订单，已下架而非彻底删除' }
+      }
+
       await queryExecute('DELETE FROM mall_products WHERE id = ?', [id])
-      return { success: true }
+      try {
+        await queryExecute(
+          `DELETE FROM homepage_items WHERE section = 'products' AND item_id = ?`,
+          [String(id)],
+        )
+      } catch {
+        // ignore
+      }
+      return { success: true, soft_deleted: false }
     } catch (error) {
       console.error('[AdminService] deleteMallProduct error:', error)
+      if (error instanceof HttpException) throw error
       throw new HttpException('删除商品失败', HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
