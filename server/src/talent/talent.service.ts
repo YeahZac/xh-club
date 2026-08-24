@@ -561,6 +561,12 @@ export class TalentService {
 
   /** 推广员/会员单位升级申请（含缴费字段，与普通人才入驻分离） */
   async memberApply(memberId: string, dto: any) {
+    const member = await queryOne('SELECT user_category FROM members WHERE id = ?', [memberId])
+    const category = normalizeUserCategory((member as any)?.user_category)
+    if (category === 'promoter' || category === 'member_unit') {
+      throw new HttpException('您已是推广员或会员单位，无需重复申请', HttpStatus.BAD_REQUEST)
+    }
+
     const applyType = this.normalizeApplyType(dto.apply_type)
     if (!applyType) {
       throw new HttpException('请选择申请类型', HttpStatus.BAD_REQUEST)

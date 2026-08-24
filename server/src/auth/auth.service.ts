@@ -143,6 +143,10 @@ export class AuthService {
            avatar = COALESCE(avatar, ?), updated_at = NOW() WHERE id = ?`,
           [openid, safeName || '微信用户', safeAvatar || null, memberId],
         )
+        const merged = await queryOne('SELECT referrer_id FROM members WHERE id = ?', [memberId])
+        if (!(merged as any)?.referrer_id) {
+          await this.tryBindInviteCode(memberId, input.inviteCode)
+        }
         return this.buildLoginResult(memberId, openid, { isNewMember: false, canBindInvite: false })
       }
 

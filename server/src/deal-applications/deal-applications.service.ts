@@ -303,7 +303,7 @@ export class DealApplicationsService {
     const canResubmit = existing.audit_status !== 'approved' || ownerChanged
     const payload = this.validate(
       { ...existing, ...dto, owner_member_id: dto.owner_member_id ?? existing.owner_member_id },
-      { requireOwner: canResubmit },
+      { requireOwner: canResubmit, requireFinancial: canResubmit },
     )
     const project = await queryOne('SELECT id, title FROM projects WHERE id = ?', [payload.businessId])
     if (!project) throw new HttpException('所选项目不存在', HttpStatus.BAD_REQUEST)
