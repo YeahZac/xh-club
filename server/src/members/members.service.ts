@@ -7,7 +7,7 @@ import { UploadService } from '@/upload/upload.service'
 import { canonicalizeCloudStorageUrl } from '@/utils/media-url'
 import { normalizeUserCategory, userCategoryLabel } from '@/common/user-category'
 import { getMemberDashboardStats } from '@/common/member-stats'
-import QRCode from 'qrcode'
+import * as QRCode from 'qrcode'
 import { buildInviteQrText } from '@/common/invite-code'
 
 @Injectable()
@@ -399,12 +399,28 @@ export class MembersService {
   async getInviteQrDataUrl(memberId: string): Promise<{ data_url: string; invite_code: string }> {
     const inviteCode = await this.ensureInviteCode(memberId)
     const text = buildInviteQrText(inviteCode)
-    const dataUrl = await QRCode.toDataURL(text, {
-      errorCorrectionLevel: 'M',
-      margin: 2,
-      width: 320,
-    })
-    return { data_url: dataUrl, invite_code: inviteCode }
+    if (!text) {
+      throw new HttpException({ code: 400, msg: '邀请码无效' }, HttpStatus.BAD_REQUEST)
+    }
+    try {
+      // qrcode 为 CJS；须用 namespace import，勿用 default（tsc 无 esModuleInterop 时 default 为 undefined）
+      const toDataURL = (QRCode as any).toDataURL || (QRCode as any).default?.toDataURL
+      if (typeof toDataURL !== 'function') {
+        throw new Error('qrcode.toDataURL unavailable')
+      }
+      const dataUrl = await toDataURL(text, {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        width: 320,
+      })
+      return { data_url: dataUrl, invite_code: inviteCode }
+    } catch (error) {
+      console.error('[MembersService] invite-qrcode failed:', error)
+      throw new HttpException(
+        { code: 500, msg: '二维码生成失败，请稍后重试' },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      )
+    }
   }
 
   /** 获取成长数据 */
