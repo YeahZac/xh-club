@@ -1,16 +1,31 @@
 import { useState } from 'react'
-import { View, Text, ScrollView, Image, Textarea } from '@tarojs/components'
+import { View, Text, ScrollView, Image } from '@tarojs/components'
 import Taro, { useLoad } from '@tarojs/taro'
 import { ImagePlus, X, CircleAlert } from 'lucide-react-taro'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  FieldWell,
+  FixedBottomBar,
+  HeroHeader,
+  PageShell,
+  SoftCard,
+  brandColors,
+  icon,
+  ui,
+} from '@/components/brand-ui'
 import { Network } from '@/network'
 import { stripHtml } from '@/lib/rich-html'
+import { chooseAndCompressImages } from '@/lib/compress-image'
 import { ensureLogin } from '@/lib/auth'
+import { guardPromoterOrMemberUnitPage } from '@/lib/member-access'
+import { usePageShare } from '@/lib/mini-program-share'
 
 const CATEGORIES = [
-  { value: 'financing', label: '融资招募', tip: '寻找资金与投资机会' },
-  { value: 'resource', label: '资源对接', tip: '寻求合作与资源互补' },
+  { value: 'financing', label: '商业需求', tip: '发布商务合作与采购机会' },
+  { value: 'resource', label: '资源需求', tip: '寻求资源互补与合作对接' },
+  { value: 'life', label: '生活需求', tip: '发布生活服务与日常需求' },
 ]
 
 const MAX_CONTENT_IMAGES = 9
@@ -51,13 +66,15 @@ const buildContentHtml = (text: string, images: string[]) => {
 }
 
 const FieldLabel = ({ children, required }: { children: string; required?: boolean }) => (
-  <View className="flex flex-row items-center gap-1 mb-2">
-    <Text className="block text-sm font-medium text-[#1A1D2E]">{children}</Text>
-    {required ? <Text className="block text-xs text-[#C9A96E]">*</Text> : null}
+  <View className="mb-2 flex flex-row items-center gap-1">
+    <Text className={ui.label}>{children}</Text>
+    {required ? <Text className="block text-xs text-accent-foreground">*</Text> : null}
   </View>
 )
 
 const PublishPostPage = () => {
+  usePageShare()
+
   const [editId, setEditId] = useState('')
   const [categoryIndex, setCategoryIndex] = useState(0)
   const [title, setTitle] = useState('')
@@ -69,10 +86,13 @@ const PublishPostPage = () => {
   const [demandName, setDemandName] = useState('加载中...')
   const [submitting, setSubmitting] = useState(false)
 
-  useLoad((query) => {
+  useLoad(async (query) => {
     Taro.setNavigationBarTitle({ title: query?.id ? '编辑商机' : '发布商机' })
+    if (!(await guardPromoterOrMemberUnitPage('发布商机'))) return
     const isEdit = Boolean(query?.id)
     if (isEdit) {
+      const ok = await ensureLogin('')
+      if (!ok) return
       setEditId(String(query.id))
       void loadDetail(String(query.id))
     }
@@ -132,8 +152,8 @@ const PublishPostPage = () => {
 
   const uploadImage = async (onSuccess: (url: string) => void) => {
     try {
-      const choose = await Taro.chooseImage({ count: 1, size: ['compressed'] })
-      const filePath = choose.tempFilePaths?.[0]
+      const paths = await chooseAndCompressImages({ count: 1 })
+      const filePath = paths[0]
       if (!filePath) return
       Taro.showLoading({ title: '上传中...' })
       const uploadRes = await Network.uploadFile({
@@ -212,31 +232,31 @@ const PublishPostPage = () => {
   }
 
   return (
-    <View className="h-screen bg-[#F7F5F1]">
-      <ScrollView scrollY className="h-screen">
-        <View className="px-4 pt-4 pb-32">
-          <View className="mb-5">
-            <Text className="block text-2xl font-bold text-[#1B2A4A] tracking-wide">发布商机</Text>
-            <Text className="block text-sm text-gray-500 mt-1.5 leading-relaxed">
-              填写清晰信息，审核通过后将在商机大厅展示
-            </Text>
-          </View>
+    <PageShell scroll={false}>
+      <ScrollView scrollY className="h-screen" style={{ height: '100vh' }}>
+        <HeroHeader
+          title={editId ? '编辑商机' : '发布商机'}
+          subtitle="填写清晰信息，审核通过后将在商机大厅展示"
+          compact
+          withStatusBar={false}
+        />
 
+        <View className="px-4 pb-32">
           <View className="mb-6">
             <FieldLabel required>商机类型</FieldLabel>
-            <View className="flex flex-row gap-2.5">
+            <View className="flex flex-row gap-3">
               {CATEGORIES.map((item, index) => {
                 const active = categoryIndex === index
                 return (
                   <View
                     key={item.value}
-                    className={`flex-1 rounded-2xl px-3 py-3.5 ${active ? 'bg-[#1B2A4A]' : 'bg-white'}`}
+                    className={`flex-1 rounded-2xl px-3 py-4 ${active ? 'bg-primary' : 'bg-card border border-border'}`}
                     onClick={() => setCategoryIndex(index)}
                   >
-                    <Text className={`block text-sm font-semibold ${active ? 'text-white' : 'text-[#1A1D2E]'}`}>
+                    <Text className={`block text-sm font-semibold ${active ? 'text-primary-foreground' : 'text-foreground'}`}>
                       {item.label}
                     </Text>
-                    <Text className={`block text-xs mt-1 leading-snug ${active ? 'text-white/70' : 'text-gray-400'}`}>
+                    <Text className={`mt-1 block text-xs leading-snug ${active ? 'text-primary-foreground text-opacity-70' : 'text-muted-foreground'}`}>
                       {item.tip}
                     </Text>
                   </View>
@@ -245,95 +265,95 @@ const PublishPostPage = () => {
             </View>
           </View>
 
-          <View className="bg-white rounded-3xl px-4 py-5 mb-3">
+          <SoftCard className="mb-3 p-4">
             <FieldLabel required>封面图</FieldLabel>
             <View
-              className="relative w-full overflow-hidden rounded-2xl bg-[#EEF0F4]"
+              className="relative w-full overflow-hidden rounded-2xl bg-muted"
               onClick={uploadCover}
             >
               {coverImage ? (
                 <>
-                  <Image src={coverImage} className="w-full aspect-[4/3]" mode="aspectFill" />
-                  <View className="absolute bottom-3 right-3 bg-black/50 rounded-full px-3 py-1.5">
-                    <Text className="block text-xs text-white">更换封面</Text>
+                  <Image src={coverImage} className="aspect-[4/3] w-full" mode="aspectFill" />
+                  <View className="absolute bottom-3 right-3 rounded-full bg-primary px-3 py-2">
+                    <Text className="block text-xs text-primary-foreground">更换封面</Text>
                   </View>
                 </>
               ) : (
-                <View className="aspect-[4/3] flex flex-col items-center justify-center gap-2">
-                  <ImagePlus size={28} color="#9CA3AF" />
-                  <Text className="block text-sm text-gray-500">点击上传封面</Text>
-                  <Text className="block text-xs text-gray-400">建议 4:3 横图，清晰展示主题</Text>
+                <View className="flex aspect-[4/3] flex-col items-center justify-center gap-2">
+                  <ImagePlus size={icon.xl} color={brandColors.muted} />
+                  <Text className="block text-sm text-muted-foreground">点击上传封面</Text>
+                  <Text className={ui.caption}>建议 4:3 横图，清晰展示主题</Text>
                 </View>
               )}
             </View>
 
             <View className="mt-5">
               <FieldLabel required>标题</FieldLabel>
-              <View className="bg-[#F7F5F1] rounded-2xl px-3 py-1">
+              <FieldWell>
                 <Input
-                  className="w-full bg-transparent border-0"
+                  variant="ghost"
                   placeholder="一句话概括你的商机"
                   value={title}
                   maxlength={60}
                   onInput={(e) => setTitle(e.detail.value)}
                 />
-              </View>
+              </FieldWell>
             </View>
 
             <View className="mt-5">
               <FieldLabel>联系电话</FieldLabel>
-              <View className="bg-[#F7F5F1] rounded-2xl px-3 py-1">
+              <FieldWell>
                 <Input
-                  className="w-full bg-transparent border-0"
+                  variant="ghost"
                   type="number"
                   placeholder="方便对方联系你（选填）"
                   value={contactPhone}
                   onInput={(e) => setContactPhone(e.detail.value)}
                 />
-              </View>
+              </FieldWell>
             </View>
 
             <View className="mt-5">
               <FieldLabel>需求方</FieldLabel>
-              <View className="bg-[#F0EDE7] rounded-2xl px-4 py-3.5 flex flex-row items-center justify-between">
-                <Text className="block text-sm text-[#1A1D2E] font-medium">{demandName}</Text>
-                <Text className="block text-xs text-gray-400">当前账号</Text>
+              <View className="flex flex-row items-center justify-between rounded-2xl bg-gold-surface px-4 py-4">
+                <Text className="block text-sm font-medium text-foreground">{demandName}</Text>
+                <Text className={ui.caption}>当前账号</Text>
               </View>
             </View>
-          </View>
+          </SoftCard>
 
-          <View className="bg-white rounded-3xl px-4 py-5 mb-3">
+          <SoftCard className="mb-3 p-4">
             <FieldLabel>摘要</FieldLabel>
-            <View className="bg-[#F7F5F1] rounded-2xl p-3 mb-5">
+            <FieldWell className="mb-5">
               <Textarea
-                className="w-full bg-transparent text-sm"
+                className="w-full bg-transparent text-sm text-foreground"
                 style={{ minHeight: '64px', width: '100%' }}
                 placeholder="用一两句话介绍核心诉求"
                 value={summary}
                 onInput={(e) => setSummary(e.detail.value)}
                 maxlength={200}
               />
-            </View>
+            </FieldWell>
 
             <FieldLabel>详细内容</FieldLabel>
-            <View className="bg-[#F7F5F1] rounded-2xl p-3 mb-5">
+            <FieldWell className="mb-5">
               <Textarea
-                className="w-full bg-transparent text-sm"
+                className="w-full bg-transparent text-sm text-foreground"
                 style={{ minHeight: '150px', width: '100%' }}
                 placeholder="补充背景、合作条件、预期成果等"
                 value={content}
                 onInput={(e) => setContent(e.detail.value)}
                 maxlength={5000}
               />
-            </View>
+            </FieldWell>
 
             <FieldLabel>内容配图</FieldLabel>
-            <View className="flex flex-row flex-wrap gap-2.5">
+            <View className="flex flex-row flex-wrap gap-3">
               {contentImages.map((url, index) => (
-                <View key={`${url}-${index}`} className="relative w-20 h-20 rounded-xl overflow-hidden">
-                  <Image src={url} className="w-20 h-20" mode="aspectFill" />
+                <View key={`${url}-${index}`} className="relative h-20 w-20 overflow-hidden rounded-xl">
+                  <Image src={url} className="h-20 w-20" mode="aspectFill" />
                   <View
-                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/55 flex items-center justify-center"
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive"
                     onClick={() => removeContentImage(index)}
                   >
                     <X size={12} color="#FFFFFF" />
@@ -342,48 +362,39 @@ const PublishPostPage = () => {
               ))}
               {contentImages.length < MAX_CONTENT_IMAGES ? (
                 <View
-                  className="w-20 h-20 rounded-xl bg-[#F7F5F1] flex flex-col items-center justify-center gap-1"
+                  className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-xl bg-field"
                   onClick={uploadContentImage}
                 >
-                  <ImagePlus size={18} color="#9CA3AF" />
-                  <Text className="block text-xs text-gray-400">{contentImages.length}/{MAX_CONTENT_IMAGES}</Text>
+                  <ImagePlus size={icon.md} color={brandColors.muted} />
+                  <Text className={ui.caption}>{contentImages.length}/{MAX_CONTENT_IMAGES}</Text>
                 </View>
               ) : null}
             </View>
-          </View>
+          </SoftCard>
 
           <View className="flex flex-row items-start gap-2 px-1">
-            <CircleAlert size={14} color="#C9A96E" className="mt-0.5" />
-            <Text className="block flex-1 text-xs text-[#8A7A55] leading-relaxed">
+            <CircleAlert size={icon.sm} color={brandColors.gold} className="mt-1" />
+            <Text className="block flex-1 text-xs leading-relaxed text-accent-foreground">
               提交后进入审核，通过后才会在商机列表公开展示
             </Text>
           </View>
         </View>
       </ScrollView>
 
-      <View
-        style={{
-          position: 'fixed',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          padding: '12px 16px',
-          paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
-          backgroundColor: 'rgba(247,245,241,0.96)',
-          zIndex: 100,
-        }}
-      >
+      <FixedBottomBar>
         <Button
-          className="w-full h-12 rounded-2xl bg-[#1B2A4A]"
+          variant="brand"
+          size="lg"
+          className={ui.btnPrimary}
           disabled={submitting}
           onClick={submit}
         >
-          <Text className="text-white text-base font-semibold">
+          <Text className="text-base font-semibold text-primary-foreground">
             {submitting ? '提交中...' : editId ? '保存并重新审核' : '提交审核'}
           </Text>
         </Button>
-      </View>
-    </View>
+      </FixedBottomBar>
+    </PageShell>
   )
 }
 

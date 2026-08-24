@@ -73,6 +73,19 @@ export class BusinessController {
     return { code: 200, msg: '评分成功', data: result }
   }
 
+  @Get(':id/comments')
+  async listComments(@Param('id') id: string) {
+    const result = await this.businessService.listComments(id)
+    return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post(':id/comments')
+  @UseGuards(MemberAuthGuard)
+  async createComment(@Param('id') id: string, @Req() request: any, @Body() body: any) {
+    const result = await this.businessService.createComment(id, request.user.sub, body)
+    return { code: 200, msg: '评论成功', data: result }
+  }
+
   @Get(':id')
   async detail(@Param('id') id: string, @Req() request: any) {
     const memberId = readMemberId(request)

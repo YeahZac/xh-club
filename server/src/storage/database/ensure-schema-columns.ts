@@ -160,6 +160,8 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['talent_applications', 'apply_type', 'VARCHAR(32) NULL'],
   ['talent_applications', 'payment_method', 'VARCHAR(32) NULL'],
   ['talent_applications', 'payment_amount', 'DECIMAL(12,2) NULL'],
+  ['business_opportunity_comments', 'parent_id', 'INT NULL'],
+  ['business_opportunity_comments', 'member_id', 'INT NULL'],
   // 部门负责人姓名（组织架构展示用）
   ['departments', 'leader_name', 'VARCHAR(100) NULL'],
   ['departments', 'level', 'INT DEFAULT 1'],
@@ -487,6 +489,20 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       referrer VARCHAR(64),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_phone (phone)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  },
+  {
+    name: 'business_opportunity_comments',
+    sql: `CREATE TABLE IF NOT EXISTS business_opportunity_comments (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      opportunity_id INT NOT NULL,
+      member_id INT NOT NULL,
+      parent_id INT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_opportunity_id (opportunity_id),
+      INDEX idx_member_id (member_id),
+      INDEX idx_parent_id (parent_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   },
   {

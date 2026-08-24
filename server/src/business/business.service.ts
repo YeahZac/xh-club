@@ -245,6 +245,142 @@ export class BusinessService {
     return signed
   }
 
+  private normalizeCommentContent(content: unknown): string {
+    const text = String(content || '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!text) {
+      throw new HttpException('评论内容不能为空', HttpStatus.BAD_REQUEST)
+    }
+    if (text.length > 500) {
+      throw new HttpException('评论最多500字', HttpStatus.BAD_REQUEST)
+    }
+    if (/data:image|\.(jpg|jpeg|png|gif|webp|bmp|svg|mp4|mov|avi|pdf|doc|docx)(\?|$)/i.test(text)) {
+      throw new HttpException('评论仅支持文字，不可包含图片或文件', HttpStatus.BAD_REQUEST)
+    }
+    return text
+  }
+
+  private async assertCommentableBusiness(businessId: string) {
+    const business = await queryOne(
+      `SELECT id, title, category, user_id, audit_status, status
+       FROM business_opportunities WHERE id = ?`,
+      [businessId],
+    )
+    if (!business) throw new HttpException('商机不存在', HttpStatus.NOT_FOUND)
+    if (String(business.category) === 'roadshow') {
+      throw new HttpException('项目路演暂不支持评论', HttpStatus.BAD_REQUEST)
+    }
+    const audit = String(business.audit_status || 'approved')
+    if (String(business.status) !== 'published' || (audit && audit !== 'approved')) {
+      throw new HttpException('商机未发布或未通过审核', HttpStatus.BAD_REQUEST)
+    }
+    return business
+  }
+
+  async listComments(businessId: string) {
+    await this.assertCommentableBusiness(businessId)
+    const rows = await queryRows(
+      `SELECT c.id, c.opportunity_id,
+              COALESCE(c.member_id, c.user_id) AS member_id,
+              c.parent_id, c.content, c.created_at,
+              m.name AS member_name, m.avatar AS member_avatar
+       FROM business_opportunity_comments c
+       LEFT JOIN members m ON m.id = COALESCE(c.member_id, c.user_id)
+       WHERE c.opportunity_id = ?
+       ORDER BY c.created_at ASC`,
+      [businessId],
+    )
+    const signed = await this.uploadService.signRowsFields(rows || [], ['member_avatar'])
+    const map = new Map<string, any>()
+    const roots: any[] = []
+    for (const row of signed || []) {
+      map.set(String(row.id), { ...row, replies: [] })
+    }
+    for (const item of map.values()) {
+      if (item.parent_id) {
+        const parent = map.get(String(item.parent_id))
+        if (parent) parent.replies.push(item)
+        else roots.push(item)
+      } else {
+        roots.push(item)
+      }
+    }
+    return roots
+  }
+
+  async createComment(
+    businessId: string,
+    memberId: string | number,
+    dto: { content?: string; parent_id?: string | number | null },
+  ) {
+    const business = await this.assertCommentableBusiness(businessId)
+    const content = this.normalizeCommentContent(dto?.content)
+    let parentId: number | null = null
+    let parentAuthorId: number | null = null
+
+    if (dto?.parent_id) {
+      const parent = await queryOne(
+        `SELECT id, member_id, opportunity_id FROM business_opportunity_comments WHERE id = ?`,
+        [dto.parent_id],
+      )
+      if (!parent || String(parent.opportunity_id) !== String(businessId)) {
+        throw new HttpException('回复目标不存在', HttpStatus.BAD_REQUEST)
+      }
+      parentId = Number(parent.id)
+      parentAuthorId = Number(parent.member_id)
+    }
+
+    const result = await queryExecute(
+      `INSERT INTO business_opportunity_comments (opportunity_id, member_id, parent_id, content)
+       VALUES (?, ?, ?, ?)`,
+      [businessId, memberId, parentId, content],
+    )
+
+    const commenter = await queryOne('SELECT name FROM members WHERE id = ?', [memberId])
+    const commenterName = String(commenter?.name || '用户')
+    const link = `/pages/content-detail/index?type=business&id=${businessId}`
+    const title = String(business.title || '商机')
+
+    if (parentId && parentAuthorId && String(parentAuthorId) !== String(memberId)) {
+      await this.notifyMember(parentAuthorId, {
+        type: 'system',
+        title: '收到商机评论回复',
+        content: `${commenterName} 回复了您：${content.slice(0, 80)}`,
+        link,
+        bizType: 'business_comment',
+        bizId: businessId,
+      })
+    } else if (!parentId) {
+      const ownerId = business.user_id
+      if (ownerId && String(ownerId) !== String(memberId)) {
+        await this.notifyMember(ownerId, {
+          type: 'system',
+          title: '收到商机评论',
+          content: `${commenterName} 评论了您的商机「${title}」：${content.slice(0, 80)}`,
+          link,
+          bizType: 'business_comment',
+          bizId: businessId,
+        })
+      }
+    }
+
+    const row = await queryOne(
+      `SELECT c.id, c.opportunity_id,
+              COALESCE(c.member_id, c.user_id) AS member_id,
+              c.parent_id, c.content, c.created_at,
+              m.name AS member_name, m.avatar AS member_avatar
+       FROM business_opportunity_comments c
+       LEFT JOIN members m ON m.id = COALESCE(c.member_id, c.user_id)
+       WHERE c.id = ?`,
+      [result.insertId],
+    )
+    if (!row) throw new HttpException('评论创建失败', HttpStatus.INTERNAL_SERVER_ERROR)
+    const signed = await this.uploadService.signRowFields(row, ['member_avatar'])
+    return signed
+  }
+
   async adminList(query: any) {
     const where: string[] = []
     const values: any[] = []

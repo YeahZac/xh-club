@@ -1,108 +1,117 @@
-import { useState, useEffect } from "react"
-import { View, Text, ScrollView } from "@tarojs/components"
-import Taro from "@tarojs/taro"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { View, Text } from "@tarojs/components"
+import Taro, { useDidShow } from "@tarojs/taro"
 import {
-  Bell, ChevronRight, Clock, CircleAlert,
-  CircleCheck, Gift, TrendingUp, UserPlus
+  Bell, Clock, CircleAlert,
+  CircleCheck, Gift, Handshake, TrendingUp, UserPlus, FileCheck,
 } from "lucide-react-taro"
-import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { getResponseList } from "@/lib/api-response"
-import { Network } from "@/network"
+import { Button } from "@/components/ui/button"
+import { EmptyState, HeroHeader, PageShell, SoftCard, brandColors, icon, ui } from "@/components/brand-ui"
+import { AUTH_LOGGED_IN_EVENT, ensureLogin, isLoggedIn } from "@/lib/auth"
+import { cn } from "@/lib/utils"
+import { usePageShare } from '@/lib/mini-program-share'
+import {
+  fetchNotifications,
+  fetchUnreadNotificationCount,
+  markNotificationsRead,
+  type NotificationItem,
+} from "@/lib/notifications"
 
-interface ChatItem {
-  id: string
-  name: string
-  lastMessage: string
-  time: string
-  unread: number
-  avatar: string
+const RESULT_LABEL: Record<string, string> = {
+  pending: '待处理',
+  approved: '已通过/已同意',
+  rejected: '未通过/已拒绝',
+  shared: '已分享',
+  updated: '状态已更新',
+  admin_updated: '后台已更新',
 }
 
-interface MessageRecord {
-  id: string
-  sender_id: string
-  receiver_id: string
-  content: string
-  is_read: boolean
-  created_at: string
-  sender?: { id: string; name: string; avatar: string }
-  receiver?: { id: string; name: string; avatar: string }
+const BIZ_LABEL: Record<string, string> = {
+  project_audit: '项目审核',
+  business_audit: '商机审核',
+  business_comment: '商机评论',
+  talent_audit: '人才审核',
+  deal_application: '项目对接',
+  project_share: '项目分享',
+  member_audit: '会员审核',
+  event_register: '活动报名',
+  roadshow_register: '路演报名',
 }
 
-interface NotificationItem {
-  id: string
-  type: string
-  title: string
-  content: string
-  is_read: boolean
-  created_at: string
-  link: string
-}
-
-const notifIconMap: Record<string, any> = {
+const notifIconMap: Record<string, typeof Bell> = {
   system: CircleAlert,
   activity: Clock,
   approval: CircleCheck,
   commission: Gift,
   credit: TrendingUp,
   referral: UserPlus,
+  deal: Handshake,
+  share: TrendingUp,
+}
+
+const bizIconMap: Record<string, typeof Bell> = {
+  project_audit: FileCheck,
+  business_audit: FileCheck,
+  business_comment: FileCheck,
+  talent_audit: UserPlus,
+  member_audit: UserPlus,
+  deal_application: Handshake,
+  event_register: Clock,
+  roadshow_register: Clock,
 }
 
 const MessagePage = () => {
-  const [activeTab, setActiveTab] = useState("chat")
-  const isMiniApp = ([Taro.ENV_TYPE.WEAPP, Taro.ENV_TYPE.TT] as string[]).includes(Taro.getEnv() as string)
-  const statusBarHeight = isMiniApp ? (Taro.getWindowInfo().statusBarHeight || 22) : 44
+  usePageShare()
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
-  const [chats, setChats] = useState<ChatItem[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [needLogin, setNeedLogin] = useState(false)
+  const loadSeq = useRef(0)
 
-  useEffect(() => {
-    loadMessageData()
-  }, [])
-
-  const loadMessageData = async () => {
+  const loadMessageData = useCallback(async () => {
+    const seq = ++loadSeq.current
     try {
       setLoading(true)
-      const memberId = Taro.getStorageSync('member_id')
-      if (!memberId) {
+      if (!isLoggedIn()) {
+        if (seq !== loadSeq.current) return
+        setNeedLogin(true)
         setNotifications([])
-        setChats([])
         setUnreadCount(0)
         return
       }
-      const [notificationsRes, messagesRes, unreadRes] = await Promise.all([
-        Network.request({ url: '/api/notifications' }),
-        Network.request({ url: '/api/messages' }),
-        Network.request({ url: '/api/notifications/unread-count' }),
+      setNeedLogin(false)
+      const [notificationList, count] = await Promise.all([
+        fetchNotifications(),
+        fetchUnreadNotificationCount(),
       ])
-      console.log('[消息页] notifications:', notificationsRes?.data)
-      const notificationList = getResponseList<NotificationItem>(notificationsRes?.data?.data)
-      const messageList = getResponseList<MessageRecord>(messagesRes?.data?.data)
+      if (seq !== loadSeq.current) return
       setNotifications(notificationList)
-      setChats(messageList.map(message => {
-        const isIncoming = String(message.receiver_id) === String(memberId)
-        const counterpart = isIncoming ? message.sender : message.receiver
-        return {
-          id: message.id,
-          name: counterpart?.name || '会员',
-          lastMessage: message.content,
-          time: formatTime(message.created_at),
-          unread: isIncoming && !message.is_read ? 1 : 0,
-          avatar: counterpart?.avatar || '',
-        }
-      }))
-      setUnreadCount(unreadRes?.data?.data?.notifications || 0)
+      setUnreadCount(count)
     } catch (err) {
+      if (seq !== loadSeq.current) return
       console.error('[消息页] 加载失败:', err)
+      setNotifications([])
+      setUnreadCount(0)
+      Taro.showToast({ title: '通知加载失败', icon: 'none' })
     } finally {
-      setLoading(false)
+      if (seq === loadSeq.current) setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    void loadMessageData()
+    const onLogin = () => { void loadMessageData() }
+    Taro.eventCenter.on(AUTH_LOGGED_IN_EVENT, onLogin)
+    return () => {
+      Taro.eventCenter.off(AUTH_LOGGED_IN_EVENT, onLogin)
+    }
+  }, [loadMessageData])
+
+  useDidShow(() => {
+    void loadMessageData()
+  })
 
   const formatTime = (dateStr: string) => {
     if (!dateStr) return ''
@@ -114,102 +123,165 @@ const MessagePage = () => {
     return `${(d.getMonth() + 1)}/${d.getDate()}`
   }
 
+  const openNotification = async (item: NotificationItem) => {
+    if (!item.is_read) {
+      try {
+        await markNotificationsRead([String(item.id)])
+        setNotifications((current) =>
+          current.map((notification) =>
+            notification.id === item.id ? { ...notification, is_read: true } : notification,
+          ),
+        )
+        setUnreadCount((current) => Math.max(0, current - 1))
+      } catch (error) {
+        console.warn('[消息页] 标记通知已读失败:', error)
+      }
+    }
+    const link = String(item.link || '').trim()
+    if (!link) return
+    const appendFrom = (url: string) => {
+      if (url.includes('from=')) return url
+      return url.includes('?') ? `${url}&from=message` : `${url}?from=message`
+    }
+    if (link.startsWith('/pages/')) {
+      const tabPages = [
+        '/pages/index/index',
+        '/pages/business/index',
+        '/pages/discover/index',
+        '/pages/mall/index',
+        '/pages/profile/index',
+      ]
+      const normalized = link.split('?')[0]
+      if (tabPages.includes(normalized)) {
+        Taro.switchTab({
+          url: normalized,
+          fail: () => Taro.showToast({ title: '无法打开页面', icon: 'none' }),
+        })
+        return
+      }
+      Taro.navigateTo({
+        url: appendFrom(link),
+        fail: () => Taro.showToast({ title: '无法打开详情', icon: 'none' }),
+      })
+      return
+    }
+    if (link.startsWith('pages/')) {
+      Taro.navigateTo({
+        url: appendFrom(`/${link}`),
+        fail: () => Taro.showToast({ title: '无法打开详情', icon: 'none' }),
+      })
+    }
+  }
+
+  const markAllRead = async () => {
+    if (!unreadCount) return
+    try {
+      await markNotificationsRead()
+      setNotifications((current) => current.map((item) => ({ ...item, is_read: true })))
+      setUnreadCount(0)
+      Taro.showToast({ title: '已全部已读', icon: 'success' })
+    } catch (error) {
+      console.warn('[消息页] 全部已读失败:', error)
+      Taro.showToast({ title: '操作失败', icon: 'none' })
+    }
+  }
+
+  const handleLogin = async () => {
+    const ok = await ensureLogin('')
+    if (ok) void loadMessageData()
+  }
+
+  const headerAction = unreadCount > 0 ? (
+    <Text className="block text-xs text-white text-opacity-80" onClick={() => void markAllRead()}>
+      全部已读
+    </Text>
+  ) : undefined
+
   return (
-    <View className="flex flex-col h-full bg-[#F5F6FA]">
-      {/* Header */}
-      <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pb-4">
-        <View style={{ height: `${statusBarHeight}px` }} />
-        {isMiniApp && <Text className="block text-xl font-bold text-white">消息</Text>}
-      </View>
+    <PageShell>
+      <HeroHeader
+        eyebrow="星河俱乐部"
+        title={unreadCount > 0 ? `消息通知 · ${unreadCount > 99 ? '99+' : unreadCount}` : '消息通知'}
+        subtitle="审核、报名与对接进度将在此通知"
+        action={headerAction}
+        showBack
+        backFallbackUrl="/pages/profile/index"
+      />
 
-      {/* Tabs */}
-      <View className="px-4 -mt-3">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="bg-white rounded-xl shadow-sm w-full flex flex-row justify-around p-1 h-auto">
-            <TabsTrigger value="chat" className="flex-1 rounded-lg data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-2 text-sm">
-              聊天
-            </TabsTrigger>
-            <TabsTrigger value="notification" className="flex-1 rounded-lg data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-2 text-sm relative">
-              通知
-              {unreadCount > 0 && (
-                <Badge className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] px-1 py-0 min-w-[16px] h-4 flex items-center justify-center">{unreadCount > 99 ? '99+' : unreadCount}</Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Chat Tab */}
-          <TabsContent value="chat">
-            <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 180px)' }}>
-              <View className="flex flex-col gap-2 pb-8">
-                {chats.map((item) => (
-                  <Card key={item.id} className="shadow-sm border-0">
-                    <CardContent className="p-4">
-                      <View className="flex flex-row items-center gap-3">
-                        <View className="relative">
-                          <Avatar className="w-12 h-12">
-                            <AvatarFallback className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] text-white text-base">{item.name[0]}</AvatarFallback>
-                          </Avatar>
-                          {item.unread > 0 && (
-                            <Badge className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] px-1 py-0 min-w-[16px] h-4 flex items-center justify-center">{item.unread}</Badge>
-                          )}
-                        </View>
-                        <View className="flex-1 min-w-0">
-                          <View className="flex flex-row items-center justify-between mb-1">
-                            <Text className="block text-sm font-semibold text-[#1A1D2E]">{item.name}</Text>
-                            <Text className="block text-xs text-gray-400">{item.time}</Text>
-                          </View>
-                          <Text className="block text-xs text-gray-500 truncate">{item.lastMessage}</Text>
-                        </View>
-                        <ChevronRight size={16} color="#D1D5DB" />
+      <View className={`${ui.pagePad} ${ui.sectionGap} flex flex-col ${ui.listGap} ${ui.scrollBottomPad} pt-4`}>
+        {loading ? (
+          <Text className={cn(ui.caption, "py-16 text-center")}>加载中...</Text>
+        ) : needLogin ? (
+          <EmptyState
+            title="登录后查看通知"
+            description="审核结果、报名与对接消息将集中展示"
+            icon={Bell}
+          />
+        ) : notifications.length === 0 ? (
+          <EmptyState title="暂无通知" description="有新的动态时会在这里提醒你" icon={Bell} />
+        ) : (
+          notifications.map((item) => {
+            const IconComp = bizIconMap[item.biz_type || ''] || notifIconMap[item.type] || Bell
+            return (
+              <SoftCard
+                key={item.id}
+                className={!item.is_read ? 'border-primary border-opacity-20 bg-blue-tint' : ''}
+                onClick={() => void openNotification(item)}
+              >
+                <View className={ui.cardPad}>
+                  <View className="flex flex-row items-start gap-3">
+                    <View
+                      className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${
+                        !item.is_read ? 'bg-primary' : 'bg-muted'
+                      }`}
+                    >
+                      <IconComp
+                        size={ui.iconInline + 2}
+                        color={item.is_read ? brandColors.muted : icon.color.inverse}
+                        strokeWidth={ui.iconStroke}
+                      />
+                    </View>
+                    <View className="min-w-0 flex-1">
+                      <View className="mb-1 flex flex-row items-center justify-between gap-2">
+                        <Text className={cn(ui.cardTitle, "flex-1 line-clamp-1")}>{item.title}</Text>
+                        {!item.is_read ? (
+                          <View className="h-2 w-2 flex-shrink-0 rounded-full bg-primary" />
+                        ) : null}
                       </View>
-                    </CardContent>
-                  </Card>
-                ))}
-                {!loading && chats.length === 0 && (
-                  <Text className="block py-12 text-center text-sm text-gray-400">暂无聊天消息</Text>
-                )}
-              </View>
-            </ScrollView>
-          </TabsContent>
-
-          {/* Notification Tab */}
-          <TabsContent value="notification">
-            <ScrollView scrollY className="mt-4" style={{ height: 'calc(100vh - 180px)' }}>
-              <View className="flex flex-col gap-2 pb-8">
-                {notifications.map((item) => {
-                  const IconComp = notifIconMap[item.type] || Bell
-                  return (
-                    <Card key={item.id} className={`shadow-sm border-0 ${!item.is_read ? 'bg-blue-50' : ''}`}>
-                      <CardContent className="p-4">
-                        <View className="flex flex-row items-start gap-3">
-                          <View className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${!item.is_read ? 'bg-[#1B2A4A]' : 'bg-gray-100'}`}>
-                            <IconComp size={18} color={item.is_read ? '#9CA3AF' : '#ffffff'} />
-                          </View>
-                          <View className="flex-1 min-w-0">
-                            <View className="flex flex-row items-center justify-between mb-1">
-                              <Text className="block text-sm font-semibold text-[#1A1D2E]">{item.title}</Text>
-                              {!item.is_read && <View className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
-                            </View>
-                            <Text className="block text-xs text-gray-500 mb-1">{item.content}</Text>
-                            <Text className="block text-[10px] text-gray-400">{formatTime(item.created_at)}</Text>
-                          </View>
-                        </View>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
-                {notifications.length === 0 && !loading && (
-                  <View className="flex items-center justify-center py-16">
-                    <Text className="block text-sm text-gray-400">暂无通知</Text>
+                      <View className="mb-1 flex flex-row flex-wrap gap-2">
+                        {item.biz_type ? (
+                          <Badge className="bg-blue-surface px-2 py-0 text-xs text-primary">
+                            {BIZ_LABEL[item.biz_type] || item.biz_type}
+                          </Badge>
+                        ) : null}
+                        {item.result ? (
+                          <Badge className="bg-accent px-2 py-0 text-xs text-accent-foreground">
+                            {RESULT_LABEL[item.result] || item.result}
+                          </Badge>
+                        ) : null}
+                      </View>
+                      <Text className={cn(ui.caption, "mb-1 text-muted-foreground line-clamp-2")}>{item.content}</Text>
+                      <Text className={ui.caption}>
+                        {formatTime(item.processed_at || item.created_at)}
+                      </Text>
+                      {item.link ? (
+                        <Text className="mt-1 block text-xs text-primary">点击查看详情</Text>
+                      ) : null}
+                    </View>
                   </View>
-                )}
-              </View>
-            </ScrollView>
-          </TabsContent>
-        </Tabs>
+                </View>
+              </SoftCard>
+            )
+          })
+        )}
+
+        {needLogin ? (
+          <Button variant="brand" size="lg" className="w-full" onClick={() => void handleLogin()}>
+            <Text className="block text-sm font-semibold text-primary-foreground">去登录</Text>
+          </Button>
+        ) : null}
       </View>
-      <View className="h-16" />
-    </View>
+    </PageShell>
   )
 }
 

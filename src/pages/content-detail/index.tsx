@@ -1,17 +1,13 @@
 import { useRef, useState } from 'react'
-import { View, Text, ScrollView, Image, Video, Checkbox, CheckboxGroup } from '@tarojs/components'
-import Taro, { useLoad, useDidShow, useShareAppMessage } from '@tarojs/taro'
+import { View, Text, ScrollView, Image, Video } from '@tarojs/components'
+import Taro, { useLoad, useDidShow } from '@tarojs/taro'
+import { useDetailPageShare } from '@/lib/mini-program-share'
 import { Clock, MapPin, Users, Eye, FileText } from 'lucide-react-taro'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { WxShareButton } from '@/components/wx-share-button'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+import { Input } from '@/components/ui/input'
 import { RichHtml } from '@/components/rich-html'
+import { HtmlDetailFrame } from '@/components/html-detail-frame'
 import {
   brandColors,
   CoverThumb,
@@ -26,10 +22,13 @@ import { isDisplayableImageUrl } from '@/lib/media-url'
 import { maskPhone } from '@/lib/mask-phone'
 import { useMediaRefresh } from '@/lib/use-media-refresh'
 import { Network } from '@/network'
-import { ensureLogin } from '@/lib/auth'
+import { ensureLogin, getMemberSession, isLoggedIn } from '@/lib/auth'
+import { ensurePromoterOrMemberUnit } from '@/lib/member-access'
 import { openRegisterPage } from '@/lib/register-form'
 import { formatProjectStage } from '@/lib/project-stage'
 import { previewRemoteDocument, isPdfUrl } from '@/lib/open-document'
+import { isFullHtmlDocument, type HtmlRenderType } from '@/lib/rich-html'
+import { userCategoryLabel } from '@/lib/user-category'
 
 type ContentType = 'article' | 'project' | 'event' | 'business' | 'talent'
 
@@ -43,8 +42,9 @@ const TYPE_TITLE: Record<ContentType, string> = {
 
 const CATEGORY_MAP: Record<string, string> = {
   roadshow: '项目路演',
-  financing: '融资招募',
-  resource: '资源对接',
+  financing: '商业需求',
+  resource: '资源需求',
+  life: '生活需求',
   other: '其他活动',
   salon: '专题沙龙',
   annual: '年度大会',
@@ -54,6 +54,8 @@ const CATEGORY_MAP: Record<string, string> = {
 
 const STATUS_MAP: Record<string, string> = {
   open: '报名中',
+  full: '已满员',
+  ended: '已结束',
   closed: '已结束',
   cancelled: '已取消',
   draft: '草稿',
@@ -91,6 +93,17 @@ const unwrapDetail = (payload: unknown): Record<string, any> | null => {
 const scoreKey = (projectId: string | number, dimensionId: string | number) =>
   `${projectId}:${dimensionId}`
 
+interface BusinessComment {
+  id: string | number
+  member_id?: string | number
+  member_name?: string
+  member_avatar?: string
+  content: string
+  created_at?: string
+  parent_id?: string | number | null
+  replies?: BusinessComment[]
+}
+
 const StarPicker = ({
   value,
   onChange,
@@ -117,13 +130,12 @@ const ContentDetailPage = () => {
   const [industryMap, setIndustryMap] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [scoreDraft, setScoreDraft] = useState<Record<string, number>>({})
-  const [projectScoreDraft, setProjectScoreDraft] = useState<Record<string, number>>({})
-  const [scoreOpen, setScoreOpen] = useState(false)
-  const [shareOpen, setShareOpen] = useState(false)
-  const [talentPickerOpen, setTalentPickerOpen] = useState(false)
-  const [shareTalents, setShareTalents] = useState<Array<Record<string, string>>>([])
-  const [selectedTalentIds, setSelectedTalentIds] = useState<string[]>([])
-  const [sharingTalentsLoading, setSharingTalentsLoading] = useState(false)
+  const [h5Surface, setH5Surface] = useState<'loading' | 'webview' | 'fallback'>('loading')
+  const [businessComments, setBusinessComments] = useState<BusinessComment[]>([])
+  const [commentsLoading, setCommentsLoading] = useState(false)
+  const [commentText, setCommentText] = useState('')
+  const [replyTarget, setReplyTarget] = useState<{ id: string; name: string } | null>(null)
+  const [commentSubmitting, setCommentSubmitting] = useState(false)
   const skipFirstShowRef = useRef(true)
   const loadDetailSeq = useRef(0)
 
@@ -136,12 +148,18 @@ const ContentDetailPage = () => {
     setScoreDraft(next)
   }
 
-  const initProjectScoreDraft = (payload: Record<string, any>) => {
-    const next: Record<string, number> = {}
-    ;(payload?.member_state?.my_scores || []).forEach((item: any) => {
-      next[String(item.dimension_id)] = Number(item.stars) || 0
-    })
-    setProjectScoreDraft(next)
+  const loadBusinessComments = async (businessId: string) => {
+    setCommentsLoading(true)
+    try {
+      const res = await Network.request({ url: `/api/business/${businessId}/comments` })
+      const list = Array.isArray(res?.data?.data) ? res.data.data : []
+      setBusinessComments(list)
+    } catch (error) {
+      console.warn('[商机评论] 加载失败:', error)
+      setBusinessComments([])
+    } finally {
+      setCommentsLoading(false)
+    }
   }
 
   const loadDetail = async (type: ContentType, id: string, options?: { silent?: boolean }) => {
@@ -171,9 +189,15 @@ const ContentDetailPage = () => {
         setDetail(payload)
         if (payload.category === 'roadshow') {
           initRoadshowScoreDraft(payload)
-        }
-        if (type === 'project') {
-          initProjectScoreDraft(payload)
+          setBusinessComments([])
+          setReplyTarget(null)
+          setCommentText('')
+        } else if (type === 'business') {
+          void loadBusinessComments(id)
+        } else {
+          setBusinessComments([])
+          setReplyTarget(null)
+          setCommentText('')
         }
       } else if (!options?.silent) {
         Taro.showToast({ title: '内容不存在', icon: 'none' })
@@ -188,10 +212,11 @@ const ContentDetailPage = () => {
     }
   }
 
-  useShareAppMessage(() => ({
-    title: detail?.title || detail?.name || '星河百谷项目',
+  useDetailPageShare(() => ({
+    title: detail?.title || detail?.name || '星河百谷',
     path: `/pages/content-detail/index?type=${contentType}&id=${contentId}`,
-    imageUrl: detail?.cover_image || undefined,
+    query: `type=${encodeURIComponent(contentType || '')}&id=${encodeURIComponent(contentId || '')}`,
+    imageUrl: detail?.cover_image || detail?.image_url || detail?.photo_url || undefined,
   }))
 
 
@@ -243,12 +268,12 @@ const ContentDetailPage = () => {
   const html =
     contentType === 'article' || contentType === 'business'
       ? detail?.content
-      : contentType === 'event'
+      : contentType === 'event' || contentType === 'project'
         ? ([detail?.description, detail?.content].find(
             (v) => typeof v === 'string' && v.trim() && v.trim() !== '<p><br></p>',
           ) || '')
         : contentType === 'talent'
-          ? null
+          ? detail?.experience
           : detail?.description
 
   const eventSignupCount = contentType === 'event'
@@ -260,7 +285,13 @@ const ContentDetailPage = () => {
     )
     : 0
   const isRoadshow = contentType === 'business' && detail?.category === 'roadshow'
+  const isBusinessCommentable = contentType === 'business' && !isRoadshow
   const memberState = detail?.member_state || {}
+  const session = getMemberSession()
+  const isSelfTalent =
+    contentType === 'talent'
+    && session?.memberId
+    && String(detail?.member_id || '') === String(session.memberId)
   const roadshowProjects = Array.isArray(detail?.roadshow_projects) ? detail.roadshow_projects : []
   const scoreDimensions = Array.isArray(detail?.score_dimensions) ? detail.score_dimensions : []
   const roadshowScoreSummary = detail?.score_summary
@@ -290,15 +321,25 @@ const ContentDetailPage = () => {
       Taro.showToast({ title: '当前不在评分时间或未报名', icon: 'none' })
       return
     }
-    const scores = Object.entries(scoreDraft)
-      .filter(([, stars]) => stars > 0)
-      .map(([key, stars]) => {
-        const [projectId, dimensionId] = key.split(':')
-        return { project_id: projectId, dimension_id: dimensionId, stars }
-      })
-    if (!scores.length) {
-      Taro.showToast({ title: '请先完成评分', icon: 'none' })
+    if (!roadshowProjects.length || !scoreDimensions.length) {
+      Taro.showToast({ title: '暂无可评分项目', icon: 'none' })
       return
+    }
+    const scores: Array<{ project_id: string; dimension_id: string; stars: number }> = []
+    for (const project of roadshowProjects) {
+      for (const dimension of scoreDimensions) {
+        const key = `${project.id}:${dimension.id}`
+        const stars = Number(scoreDraft[key] || 0)
+        if (stars <= 0) {
+          Taro.showToast({ title: '请完成全部评分项', icon: 'none' })
+          return
+        }
+        scores.push({
+          project_id: String(project.id),
+          dimension_id: String(dimension.id),
+          stars,
+        })
+      }
     }
     setSubmitting(true)
     try {
@@ -317,7 +358,10 @@ const ContentDetailPage = () => {
       }
     } catch (error) {
       console.error('[路演评分] 失败:', error)
-      Taro.showToast({ title: '提交失败', icon: 'none' })
+      const msg = String((error as any)?.message || '')
+      if (!msg || /fail|error|network/i.test(msg)) {
+        Taro.showToast({ title: '提交失败', icon: 'none' })
+      }
     } finally {
       setSubmitting(false)
     }
@@ -332,117 +376,45 @@ const ContentDetailPage = () => {
     })
   }
 
-  const openProjectScore = async () => {
+  const goProjectScore = async () => {
     if (!(await ensureLogin())) return
     if (detail?.member_state?.has_scored) {
       Taro.showToast({ title: '您已评分，不能再次评分', icon: 'none' })
       return
     }
-    if (!(detail?.score_dimensions || []).length) {
-      Taro.showToast({ title: '该项目暂未开放评分', icon: 'none' })
-      return
-    }
-    setScoreOpen(true)
+    const query = [
+      `projectId=${encodeURIComponent(contentId)}`,
+      `title=${encodeURIComponent(detail?.title || '')}`,
+    ]
+    await Taro.navigateTo({ url: `/pages/project-score/index?${query.join('&')}` })
   }
 
-  const submitProjectScores = async () => {
-    if (!detail?.id || !(await ensureLogin())) return
-    const dimensions = Array.isArray(detail.score_dimensions) ? detail.score_dimensions : []
-    const scores = dimensions.map((dim: any) => ({
-      dimension_id: dim.id,
-      stars: Number(projectScoreDraft[String(dim.id)] || 0),
-    }))
-    if (scores.some((item) => !item.stars)) {
-      Taro.showToast({ title: '请完成全部评分维度', icon: 'none' })
-      return
-    }
-    setSubmitting(true)
-    try {
-      const response = await Network.request({
-        url: `/api/projects/${detail.id}/scores`,
-        method: 'POST',
-        data: { scores },
-      })
-      const ok = response.data?.code === 200
-      Taro.showToast({
-        title: ok ? '评分成功' : (response.data?.msg || '提交失败'),
-        icon: ok ? 'success' : 'none',
-      })
-      if (ok) {
-        setScoreOpen(false)
-        await loadDetail(contentType, contentId)
-      }
-    } catch (error) {
-      console.error('[项目评分] 失败:', error)
-      Taro.showToast({ title: (error as any)?.message || '提交失败', icon: 'none' })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const openProjectShare = async () => {
+  const goProjectShare = async () => {
     if (!(await ensureLogin())) return
-    setShareOpen(true)
-    if (!detail?.id || shareTalents.length) return
-    setSharingTalentsLoading(true)
-    try {
-      const response = await Network.request({
-        url: `/api/projects/${detail.id}/share-talents`,
-      })
-      const list = response.data?.data
-      if (response.data?.code === 200 && Array.isArray(list)) {
-        console.log('[项目分享] 人才列表加载成功', { projectId: detail.id, count: list.length })
-        setShareTalents(list)
-      } else {
-        Taro.showToast({ title: response.data?.msg || '人才列表加载失败', icon: 'none' })
-      }
-    } catch (error) {
-      console.error('[项目分享] 加载人才失败:', error)
-      Taro.showToast({ title: '人才列表加载失败', icon: 'none' })
-    } finally {
-      setSharingTalentsLoading(false)
-    }
+    // 不把已签名的超长 cover URL 塞进页面参数（易超 navigateTo 长度限制，导致丢参）
+    const query = [
+      `projectId=${encodeURIComponent(contentId)}`,
+      `title=${encodeURIComponent(detail?.title || '')}`,
+    ]
+    await Taro.navigateTo({ url: `/pages/project-share/index?${query.join('&')}` })
   }
 
-  const toggleShareTalent = (memberId: string) => {
-    setSelectedTalentIds((current) => (
-      current.includes(memberId)
-        ? current.filter((id) => id !== memberId)
-        : [...current, memberId]
-    ))
-  }
-
-  const shareToSelectedTalents = async () => {
-    if (!detail?.id) return
-    if (!selectedTalentIds.length) {
-      Taro.showToast({ title: '请至少选择一位入驻人才', icon: 'none' })
+  const openDealApplication = async () => {
+    if (!detail?.id || !(await ensureLogin('请先登录后申请成交记录'))) return
+    const session = getMemberSession()
+    const ownerId = detail.owner_member_id || detail.submitter_id
+    if (session && ownerId && String(session.memberId) === String(ownerId)) {
+      Taro.showToast({ title: '不能为自己发布的项目申请成交记录', icon: 'none' })
       return
     }
-    setSubmitting(true)
-    try {
-      const response = await Network.request({
-        url: `/api/projects/${detail.id}/share-talents`,
-        method: 'POST',
-        data: { member_ids: selectedTalentIds },
-      })
-      const okRes = response.data?.code === 200
-      const count = response.data?.data?.count
-      Taro.showToast({
-        title: okRes
-          ? (count ? `已通知 ${count} 位人才` : (response.data?.msg || '分享成功'))
-          : (response.data?.msg || '分享失败'),
-        icon: okRes ? 'success' : 'none',
-      })
-      if (okRes) {
-        setShareOpen(false)
-        setTalentPickerOpen(false)
-        setSelectedTalentIds([])
-      }
-    } catch (error) {
-      Taro.showToast({ title: (error as any)?.message || '分享失败', icon: 'none' })
-    } finally {
-      setSubmitting(false)
-    }
+    if (!(await ensurePromoterOrMemberUnit('项目成交申请'))) return
+    const query = [`project_id=${encodeURIComponent(String(detail.id))}`]
+    if (ownerId) query.push(`owner_member_id=${encodeURIComponent(String(ownerId))}`)
+    if (detail.title) query.push(`project_title=${encodeURIComponent(String(detail.title))}`)
+    if (detail.owner_name) query.push(`owner_name=${encodeURIComponent(String(detail.owner_name))}`)
+    await Taro.navigateTo({
+      url: `/pages/deal-applications/form/index?${query.join('&')}`,
+    })
   }
 
   if (loading) {
@@ -467,10 +439,16 @@ const ContentDetailPage = () => {
 
   const talentAvatar = detail.photo_url || detail.avatar_url || detail.member_avatar
   const eventRegistered = contentType === 'event' && !!memberState.is_registered
+  const canRegisterEvent = contentType === 'event' && Boolean(memberState.can_register)
+  const eventRegisterBlockedLabel =
+    memberState.register_blocked_reason
+    || (detail.status === 'ended' ? '已结束' : detail.status === 'full' ? '已满员' : detail.status === 'draft' ? '活动未开放' : '暂不可报名')
   const showProjectBar = contentType === 'project'
-  const projectDimensions = Array.isArray(detail?.score_dimensions) ? detail.score_dimensions : []
+  const showBusinessCommentBar = isBusinessCommentable
   const bottomPadding =
-    contentType === 'event' || showRoadshowBar || showProjectBar ? 'mb-24' : 'mb-8'
+    contentType === 'event' || showRoadshowBar || showProjectBar || showBusinessCommentBar
+      ? 'mb-32 pb-8'
+      : 'mb-8'
   const projectBodyText = contentType === 'project'
     ? String(detail?.description || detail?.content || '').trim()
     : ''
@@ -494,9 +472,265 @@ const ContentDetailPage = () => {
     return name || `附件 ${index + 1}`
   }
 
+  const submitBusinessComment = async () => {
+    if (!detail?.id || !isBusinessCommentable) return
+    if (!(await ensureLogin())) return
+    const text = commentText.trim()
+    if (!text) {
+      Taro.showToast({ title: '请输入评论内容', icon: 'none' })
+      return
+    }
+    setCommentSubmitting(true)
+    try {
+      const res = await Network.request({
+        url: `/api/business/${detail.id}/comments`,
+        method: 'POST',
+        data: {
+          content: text,
+          parent_id: replyTarget?.id || null,
+        },
+      })
+      if (res?.data?.code === 200) {
+        setCommentText('')
+        setReplyTarget(null)
+        Taro.showToast({ title: '已发送', icon: 'success' })
+        await loadBusinessComments(String(detail.id))
+      } else {
+        Taro.showToast({ title: String(res?.data?.msg || '发送失败').slice(0, 40), icon: 'none' })
+      }
+    } catch (error) {
+      console.error('[商机评论] 发送失败:', error)
+      Taro.showToast({ title: '发送失败', icon: 'none' })
+    } finally {
+      setCommentSubmitting(false)
+    }
+  }
+
+  const renderBusinessCommentItem = (item: BusinessComment, depth = 0) => (
+    <View key={String(item.id)} className={depth > 0 ? 'mt-3 ml-4 border-l border-border pl-3' : ''}>
+      <View className="flex flex-row items-start gap-2">
+        <View className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-muted">
+          <Text className="block text-xs font-semibold text-foreground">
+            {(item.member_name || '?')[0]}
+          </Text>
+        </View>
+        <View className="min-w-0 flex-1">
+          <View className="flex flex-row items-center justify-between gap-2">
+            <Text className="block text-sm font-medium text-foreground">{item.member_name || '用户'}</Text>
+            <Text className="block text-xs text-muted-foreground">{formatDetailTime(item.created_at)}</Text>
+          </View>
+          <Text className="mt-1 block text-sm leading-relaxed text-foreground">{item.content}</Text>
+          {depth === 0 ? (
+            <Text
+              className="mt-2 block text-xs text-primary"
+              onClick={() => {
+                if (!isLoggedIn()) {
+                  void ensureLogin()
+                  return
+                }
+                setReplyTarget({ id: String(item.id), name: item.member_name || '用户' })
+              }}
+            >
+              回复
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      {(item.replies || []).map((reply) => renderBusinessCommentItem(reply, depth + 1))}
+    </View>
+  )
+
+  const renderBusinessCommentBar = () => (
+    <FixedBottomBar mode={bottomBarMode} className="flex-col gap-2">
+      {replyTarget ? (
+        <View className="flex flex-row items-center justify-between rounded-xl bg-muted px-3 py-2">
+          <Text className="block text-xs text-muted-foreground">回复 {replyTarget.name}</Text>
+          <Text className="block text-xs text-primary" onClick={() => setReplyTarget(null)}>取消</Text>
+        </View>
+      ) : null}
+      <View style={{ display: 'flex', flexDirection: 'row', gap: '8px', alignItems: 'center' }}>
+        <View className="min-w-0 flex-1 rounded-xl bg-field px-3 py-2">
+          <Input
+            style={{ width: '100%' }}
+            value={commentText}
+            placeholder={replyTarget ? '写下回复...' : '写下评论（仅文字）'}
+            maxlength={500}
+            onInput={(e) => setCommentText(e.detail.value)}
+            onConfirm={() => void submitBusinessComment()}
+          />
+        </View>
+        <Button
+          variant="brand"
+          size="sm"
+          className="h-10 px-4"
+          disabled={commentSubmitting || !commentText.trim()}
+          onClick={() => void submitBusinessComment()}
+        >
+          <Text className="block text-xs text-primary-foreground">发送</Text>
+        </Button>
+      </View>
+    </FixedBottomBar>
+  )
+
+  const h5RenderType: HtmlRenderType | null =
+    contentType === 'article'
+    || contentType === 'business'
+    || contentType === 'event'
+    || contentType === 'project'
+    || contentType === 'talent'
+      ? contentType
+      : null
+  /**
+   * 人才详情：顶部保留原生资料卡，过往经历完整 H5 用下方 web-view 加载（不可整页替换）。
+   * 其余类型：完整 H5 仍走整页 HtmlDetailFrame。
+   */
+  const talentSplitH5 = contentType === 'talent' && isFullHtmlDocument(html)
+  // 路演商机需保留页内评分/报名区块，不走整页 H5 壳；人才走上下分栏
+  const useEmbeddedFullH5 = Boolean(
+    isFullHtmlDocument(html)
+    && h5RenderType
+    && !talentSplitH5
+    && (contentType === 'project'
+      || contentType === 'event'
+      || contentType === 'article'
+      || (contentType === 'business' && !isRoadshow)),
+  )
+  const showEventBar = contentType === 'event' && detail.status !== 'draft'
+  /** web-view 成功时底栏由 html-render 注入；降级预览时仍用原生 FixedBottomBar */
+  const showNativeBottomBar = !useEmbeddedFullH5 || h5Surface !== 'webview'
+  const bottomBarMode: 'fixed' | 'dock' = useEmbeddedFullH5 && h5Surface === 'fallback' ? 'dock' : 'fixed'
+
+  const h5ToolbarExtra =
+    contentType === 'project'
+      ? {
+          toolbar: 'project',
+          has_scored: memberState.has_scored ? '1' : '0',
+          owner_id: String(detail.owner_member_id || detail.submitter_id || ''),
+          owner_name: String(detail.owner_name || ''),
+          title: String(detail.title || ''),
+        }
+      : showEventBar
+        ? {
+            toolbar: 'event',
+            registered: eventRegistered ? '1' : '0',
+            can_register: canRegisterEvent ? '1' : '0',
+            blocked: eventRegisterBlockedLabel,
+          }
+        : undefined
+
+  const renderProjectBottomBar = () => (
+    <FixedBottomBar mode={bottomBarMode} className="items-stretch">
+      <Button
+        className="min-w-0 flex-1 rounded-2xl"
+        size="lg"
+        variant="gold"
+        onClick={() => void goProjectScore()}
+      >
+        <Text>{memberState.has_scored ? '已评分' : '评分'}</Text>
+      </Button>
+      <Button
+        className="min-w-0 flex-1 rounded-2xl"
+        size="lg"
+        variant="brand"
+        onClick={() => void goProjectShare()}
+      >
+        <Text>分享</Text>
+      </Button>
+      <Button
+        className="min-w-0 flex-1 rounded-2xl"
+        size="lg"
+        variant="outline"
+        onClick={() => void openDealApplication()}
+      >
+        <Text>申请成交记录</Text>
+      </Button>
+    </FixedBottomBar>
+  )
+
+  const renderEventBottomBar = () => (
+    <FixedBottomBar mode={bottomBarMode}>
+      {eventRegistered ? (
+        <Button className="w-full rounded-2xl" variant="secondary" disabled>
+          <Text>已报名</Text>
+        </Button>
+      ) : canRegisterEvent ? (
+        <Button className="w-full rounded-2xl" variant="brand" onClick={goRegister}>
+          <Text>立即报名</Text>
+        </Button>
+      ) : (
+        <Button
+          className="w-full rounded-2xl"
+          variant="secondary"
+          onClick={() => Taro.showToast({ title: eventRegisterBlockedLabel, icon: 'none' })}
+        >
+          <Text>{eventRegisterBlockedLabel}</Text>
+        </Button>
+      )}
+    </FixedBottomBar>
+  )
+
+  const renderRoadshowBottomBar = () => (
+    <FixedBottomBar mode={bottomBarMode}>
+      {(memberState.can_register || roadshowRegistered) && (
+        <View className="flex-1">
+          {roadshowRegistered ? (
+            <Button className="w-full rounded-2xl" variant="secondary" disabled>
+              <Text>已报名</Text>
+            </Button>
+          ) : (
+            <Button className="w-full rounded-2xl" variant="brand" onClick={openRoadshowRegister}>
+              <Text>立即报名</Text>
+            </Button>
+          )}
+        </View>
+      )}
+      {memberState.can_score && (
+        <View className="flex-1">
+          <Button className="w-full rounded-2xl" variant="gold" onClick={submitRoadshowScores}>
+            <Text className="block">{submitting ? '提交中...' : '提交评分'}</Text>
+          </Button>
+        </View>
+      )}
+      {canViewRoadshowResults && !memberState.can_score ? (
+        <View className="flex-1">
+          <Button className="w-full rounded-2xl" variant="secondary" disabled>
+            <Text className="block">评分已结束</Text>
+          </Button>
+        </View>
+      ) : null}
+    </FixedBottomBar>
+  )
+
   return (
     <PageShell scroll={false}>
-      <ScrollView scrollY className="flex-1">
+      <View
+        className="box-border"
+        style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}
+      >
+      {useEmbeddedFullH5 && h5RenderType ? (
+        <HtmlDetailFrame
+          layout="embedded"
+          html={html}
+          type={h5RenderType}
+          params={{ id: contentId, extra: h5ToolbarExtra }}
+          onSurfaceChange={setH5Surface}
+        />
+      ) : (
+      <View
+        className="box-border"
+        style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}
+      >
+      <ScrollView
+        scrollY
+        enhanced
+        showScrollbar
+        className="box-border"
+        style={
+          talentSplitH5
+            ? { flexShrink: 0, maxHeight: '46%', minHeight: 0 }
+            : { flex: 1, height: '100%', minHeight: 0 }
+        }
+      >
         <View className="px-4 pt-4">
           {isDisplayableImageUrl(cover) ? (
             <CoverThumb aspect="video" className="w-full">
@@ -582,6 +816,9 @@ const ContentDetailPage = () => {
                       {detail.membership_badge}
                     </Badge>
                   ) : null}
+                  <Badge variant="soft" className="px-2 py-0 text-xs">
+                    {detail.user_category_label || userCategoryLabel(detail.user_category)}
+                  </Badge>
                 </View>
                 {detail.job_title ? (
                   <Text className="mt-1 block text-xs text-foreground">{detail.job_title}</Text>
@@ -629,7 +866,7 @@ const ContentDetailPage = () => {
                     {CATEGORY_MAP[detail.category || detail.event_type] || detail.category || detail.event_type}
                   </Badge>
                 )}
-                {detail.stage && (
+                {contentType !== 'project' && detail.stage && (
                   <Badge variant="soft" className="px-2 py-0 text-xs">
                     {formatProjectStage(detail.stage)}
                   </Badge>
@@ -656,7 +893,7 @@ const ContentDetailPage = () => {
             </View>
           )}
 
-          {contentType === 'talent' ? (
+          {contentType === 'talent' && isSelfTalent ? (
             <View className="mt-3 flex flex-row rounded-xl bg-field px-2 py-3">
               <View className="flex-1">
                 <Text className="block text-center text-base font-semibold text-foreground">
@@ -674,7 +911,13 @@ const ContentDetailPage = () => {
                 <Text className="block text-center text-base font-semibold text-foreground">
                   {detail.deal_count || 0}
                 </Text>
-                <Text className="mt-1 block text-center text-xs text-muted-foreground">成交项目</Text>
+                <Text className="mt-1 block text-center text-xs text-muted-foreground">成功对接</Text>
+              </View>
+              <View className="flex-1">
+                <Text className="block text-center text-base font-semibold text-foreground">
+                  {Number(detail.deal_amount_wan || 0)}
+                </Text>
+                <Text className="mt-1 block text-center text-xs text-muted-foreground">成交金额(万)</Text>
               </View>
             </View>
           ) : null}
@@ -748,7 +991,7 @@ const ContentDetailPage = () => {
                 ) : null}
               </View>
             )}
-            {contentType === 'business' && (detail.category === 'financing' || detail.category === 'resource') && (
+            {contentType === 'business' && (detail.category === 'financing' || detail.category === 'resource' || detail.category === 'life') && (
               <>
                 {detail.contact_phone && (
                   <View className="flex flex-row items-center gap-2">
@@ -829,16 +1072,69 @@ const ContentDetailPage = () => {
           </SoftCard>
         ) : null}
 
-        <SoftCard className={`mx-4 mt-3 px-4 py-4 ${bottomPadding}`}>
+        {contentType === 'project' && isLoggedIn() && (
+          detail.promo_coop_mode
+          || detail.promo_commission_rate != null
+          || detail.promo_share_count
+          || detail.promo_remark
+        ) ? (
+          <SoftCard className="mx-4 mt-3 px-4 py-4">
+            <Text className="mb-3 block text-sm font-semibold text-foreground">推广收益</Text>
+            <View className="flex flex-col gap-2">
+              {detail.promo_coop_mode_label || detail.promo_coop_mode ? (
+                <Text className="block text-xs text-muted-foreground">
+                  合作模式：{detail.promo_coop_mode_label || detail.promo_coop_mode}
+                </Text>
+              ) : null}
+              {detail.promo_commission_rate != null ? (
+                <Text className="block text-xs text-muted-foreground">
+                  分成比例：{Number(detail.promo_commission_rate)}%
+                </Text>
+              ) : null}
+              <Text className="block text-xs text-muted-foreground">
+                推广次数：{Number(detail.promo_share_count || 0)}
+              </Text>
+              {detail.promo_remark ? (
+                <Text className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                  其他说明：{detail.promo_remark}
+                </Text>
+              ) : null}
+            </View>
+          </SoftCard>
+        ) : null}
+
+        {isBusinessCommentable ? (
+          <SoftCard className="mx-4 mt-3 px-4 py-4">
+            <Text className="mb-3 block text-sm font-semibold text-foreground">
+              评论与回复{businessComments.length ? `（${businessComments.length}）` : ''}
+            </Text>
+            {commentsLoading ? (
+              <Text className="block text-sm text-muted-foreground">加载中...</Text>
+            ) : businessComments.length === 0 ? (
+              <Text className="block text-sm text-muted-foreground">暂无评论，来抢沙发吧</Text>
+            ) : (
+              <View className="flex flex-col gap-4">
+                {businessComments.map((item) => renderBusinessCommentItem(item))}
+              </View>
+            )}
+          </SoftCard>
+        ) : null}
+
+        <SoftCard className={`mx-4 mt-3 px-4 py-4 ${talentSplitH5 ? 'mb-3' : bottomPadding}`}>
           <Text className="mb-3 block text-sm font-semibold text-foreground">
             {contentType === 'talent' ? '过往经历' : contentType === 'event' ? '活动详情' : '详细内容'}
           </Text>
-          {contentType === 'talent' ? (
-            <>
-              <Text className="block text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                {detail.experience || '暂无经历介绍'}
-              </Text>
-            </>
+          {talentSplitH5 ? (
+            <Text className="block text-xs leading-relaxed text-muted-foreground">
+              完整图文介绍在下方加载，可滚动查看。
+            </Text>
+          ) : contentType === 'talent' ? (
+            <RichHtml
+              html={html}
+              className="text-sm leading-6"
+              emptyText="暂无经历介绍"
+              fullPage={{ type: 'talent', id: contentId }}
+            />
           ) : contentType === 'project' && projectBodyIsPlain ? (
             <Text className="block text-base leading-7 text-foreground whitespace-pre-wrap">
               {projectBodyText || '暂无内容'}
@@ -848,214 +1144,40 @@ const ContentDetailPage = () => {
               html={html}
               className={contentType === 'project' ? 'text-base leading-7' : 'text-sm leading-6'}
               emptyText={contentType === 'event' ? '暂无活动图文详情，请在后台活动管理中完善' : '暂无内容'}
+              fullPage={
+                h5RenderType
+                  ? { type: h5RenderType, id: contentId }
+                  : undefined
+              }
             />
           )}
         </SoftCard>
       </ScrollView>
-
-      {contentType === 'event' && detail.status !== 'draft' && (
-        <FixedBottomBar>
-          {eventRegistered ? (
-            <Button className="w-full rounded-2xl" variant="secondary" disabled>
-              <Text>已报名</Text>
-            </Button>
-          ) : detail.status === 'ended' ? (
-            <Button
-              className="w-full rounded-2xl"
-              variant="secondary"
-              onClick={() => Taro.showToast({ title: '已结束', icon: 'none' })}
-            >
-              <Text>已结束</Text>
-            </Button>
-          ) : detail.status === 'full' ? (
-            <Button className="w-full rounded-2xl" variant="secondary" disabled>
-              <Text>已满员</Text>
-            </Button>
-          ) : (
-            <Button className="w-full rounded-2xl" variant="brand" onClick={goRegister}>
-              <Text>立即报名</Text>
-            </Button>
-          )}
-        </FixedBottomBar>
+      {talentSplitH5 ? (
+        <View
+          className="box-border min-h-0 w-full"
+          style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
+        >
+          <HtmlDetailFrame
+            layout="embedded"
+            html={html}
+            type="talent"
+            params={{ id: contentId }}
+            onSurfaceChange={setH5Surface}
+            loadingText="加载过往经历..."
+            errorText="过往经历加载失败"
+            className="h-full min-h-0"
+          />
+        </View>
+      ) : null}
+      </View>
       )}
 
-      {showRoadshowBar && (
-        <FixedBottomBar>
-          {(memberState.can_register || roadshowRegistered) && (
-            <View className="flex-1">
-              {roadshowRegistered ? (
-                <Button className="w-full rounded-2xl" variant="secondary" disabled>
-                  <Text>已报名</Text>
-                </Button>
-              ) : (
-                <Button className="w-full rounded-2xl" variant="brand" onClick={openRoadshowRegister}>
-                  <Text>立即报名</Text>
-                </Button>
-              )}
-            </View>
-          )}
-          {memberState.can_score && (
-            <View className="flex-1">
-              <Button className="w-full rounded-2xl" variant="gold" onClick={submitRoadshowScores}>
-                <Text className="block">{submitting ? '提交中...' : '提交评分'}</Text>
-              </Button>
-            </View>
-          )}
-          {canViewRoadshowResults && !memberState.can_score ? (
-            <View className="flex-1">
-              <Button className="w-full rounded-2xl" variant="secondary" disabled>
-                <Text className="block">评分已结束</Text>
-              </Button>
-            </View>
-          ) : null}
-        </FixedBottomBar>
-      )}
-
-      {showProjectBar && (
-        <FixedBottomBar>
-          <View className="flex-1">
-            <Button
-              className="w-full rounded-2xl"
-              variant="gold"
-              onClick={() => void openProjectScore()}
-            >
-              <Text>{memberState.has_scored ? '已评分' : '评分'}</Text>
-            </Button>
-          </View>
-          <View className="flex-1">
-            <Button
-              className="w-full rounded-2xl"
-              variant="brand"
-              onClick={() => void openProjectShare()}
-            >
-              <Text>分享</Text>
-            </Button>
-          </View>
-        </FixedBottomBar>
-      )}
-
-      <Sheet open={scoreOpen} onOpenChange={setScoreOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl bg-white px-4 pb-8 pt-4">
-          <SheetHeader>
-            <SheetTitle>项目评分</SheetTitle>
-          </SheetHeader>
-          <Text className="mt-2 block text-xs text-muted-foreground">每个会员仅可评分一次，提交后不可修改</Text>
-          <View className="mt-4 flex flex-col gap-4">
-            {projectDimensions.map((dim: any) => (
-              <View key={dim.id} className="flex flex-row items-center justify-between">
-                <Text className="block text-sm text-foreground">{dim.name}</Text>
-                <StarPicker
-                  value={Number(projectScoreDraft[String(dim.id)] || 0)}
-                  disabled={!!memberState.has_scored}
-                  onChange={(stars) =>
-                    setProjectScoreDraft((current) => ({ ...current, [String(dim.id)]: stars }))
-                  }
-                />
-              </View>
-            ))}
-          </View>
-          {!memberState.has_scored ? (
-            <Button
-              className="mt-6 w-full rounded-2xl"
-              variant="gold"
-              disabled={submitting}
-              onClick={() => void submitProjectScores()}
-            >
-              <Text>{submitting ? '提交中...' : '提交评分'}</Text>
-            </Button>
-          ) : null}
-        </SheetContent>
-      </Sheet>
-
-      <Sheet open={shareOpen} onOpenChange={setShareOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl bg-white px-4 pb-8 pt-4">
-          <SheetHeader>
-            <SheetTitle>分享项目</SheetTitle>
-          </SheetHeader>
-          <View className="mt-4 flex flex-col gap-3">
-            {/* openType=share 必须用原生 button，UI Button(View) 无效 */}
-            <WxShareButton
-              className="m-0 flex w-full items-center justify-center rounded-2xl border-0 bg-[#07C160] py-3 text-sm font-medium text-white after:border-0"
-              style={{ backgroundColor: '#07C160', color: '#ffffff', borderRadius: '16px' }}
-              onClick={() => setShareOpen(false)}
-            >
-              分享给微信好友
-            </WxShareButton>
-            <View className="rounded-2xl border border-border p-3">
-              <Text className="mb-2 block text-sm font-semibold text-foreground">分享给入驻人才</Text>
-              <Text className="mb-3 block text-xs leading-relaxed text-muted-foreground">
-                选择已通过人才入驻审核的会员发送消息通知，对方可在「消息通知」中打开项目详情。
-              </Text>
-              <Button
-                variant="outline"
-                className="w-full rounded-2xl"
-                disabled={sharingTalentsLoading}
-                onClick={() => setTalentPickerOpen((open) => !open)}
-              >
-                <Text className="block">
-                  {sharingTalentsLoading
-                    ? '加载人才中...'
-                    : selectedTalentIds.length
-                      ? `已选择 ${selectedTalentIds.length} 人`
-                      : '选择入驻人才'}
-                </Text>
-              </Button>
-              {talentPickerOpen ? (
-                <View className="mt-3 overflow-hidden rounded-xl border border-border">
-                  <ScrollView scrollY style={{ maxHeight: '360rpx' }}>
-                    {shareTalents.length ? (
-                      <CheckboxGroup
-                        onChange={(event) => {
-                          setSelectedTalentIds(event.detail.value || [])
-                        }}
-                      >
-                        {shareTalents.map((talent) => {
-                          const memberId = String(talent.member_id || '')
-                          const selected = selectedTalentIds.includes(memberId)
-                          const identity = [talent.company_name, talent.job_title].filter(Boolean).join(' · ')
-                          return (
-                            <View
-                              key={memberId}
-                              className="flex flex-row items-center gap-3 border-b border-border px-3 py-3 last:border-b-0"
-                              onClick={() => toggleShareTalent(memberId)}
-                            >
-                              <Checkbox
-                                value={memberId}
-                                checked={selected}
-                                color={brandColors.gold}
-                              />
-                              <View className="min-w-0 flex-1">
-                                <Text className="block truncate text-sm text-foreground">{talent.name || '未命名人才'}</Text>
-                                {identity ? (
-                                  <Text className="mt-1 block truncate text-xs text-muted-foreground">{identity}</Text>
-                                ) : null}
-                              </View>
-                            </View>
-                          )
-                        })}
-                      </CheckboxGroup>
-                    ) : (
-                      <View className="px-3 py-5">
-                        <Text className="block text-center text-xs text-muted-foreground">暂无可分享的入驻人才</Text>
-                      </View>
-                    )}
-                  </ScrollView>
-                </View>
-              ) : null}
-              <Button
-                className="mt-3 w-full rounded-2xl"
-                variant="brand"
-                disabled={submitting || !selectedTalentIds.length}
-                onClick={() => void shareToSelectedTalents()}
-              >
-                <Text className="block">
-                  {submitting ? '发送中...' : `分享给已选 ${selectedTalentIds.length} 位人才`}
-                </Text>
-              </Button>
-            </View>
-          </View>
-        </SheetContent>
-      </Sheet>
+      {showEventBar && showNativeBottomBar && renderEventBottomBar()}
+      {showRoadshowBar && renderRoadshowBottomBar()}
+      {showProjectBar && showNativeBottomBar && renderProjectBottomBar()}
+      {showBusinessCommentBar && showNativeBottomBar && renderBusinessCommentBar()}
+      </View>
     </PageShell>
   )
 }

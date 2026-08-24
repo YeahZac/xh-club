@@ -1,14 +1,24 @@
-import { useState, useEffect } from "react"
-import { View, Text, ScrollView, Image } from "@tarojs/components"
+import { useState, useEffect, useRef } from "react"
+import { View, Text, Image } from "@tarojs/components"
 import Taro, { useDidShow } from "@tarojs/taro"
 import {
-  User, Award, TrendingUp, ChevronRight, Settings, Shield,
-  FileText, Users, Gift, ShoppingBag, Star, Wallet, Crown,
-  DollarSign, BadgeCheck, SquarePen, LogOut
+  User, TrendingUp,
+  Users, Wallet, CalendarDays, Coins,
+  DollarSign, BadgeCheck, SquarePen, MessageSquare, LogOut, Bell,
 } from "lucide-react-taro"
-import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import {
+  brandColors,
+  HeroHeader,
+  icon,
+  MenuListItem,
+  layout,
+  PageShell,
+  SectionTitle,
+  SoftCard,
+} from "@/components/brand-ui"
 import { Network } from "@/network"
 import {
   AUTH_LOGGED_IN_EVENT,
@@ -16,9 +26,12 @@ import {
   clearMemberSession,
   ensureLogin,
   isLoggedIn,
-  isWeappEnv,
   logoutMember,
 } from "@/lib/auth"
+import { useTabShareAppMessage } from "@/lib/mini-program-share"
+import { userCategoryLabel } from "@/lib/user-category"
+import { ensurePromoterOrMemberUnit } from "@/lib/member-access"
+import { fetchUnreadNotificationCount } from "@/lib/notifications"
 
 interface MemberProfile {
   id: string
@@ -30,6 +43,8 @@ interface MemberProfile {
   industry_primary: string
   membership_level: string
   member_type: string
+  user_category?: string
+  user_category_label?: string
   credit_score: number
   active_score: number
   contribution_score: number
@@ -37,8 +52,14 @@ interface MemberProfile {
   available_points: number
   total_transactions: number
   total_transaction_amount: number
+  deal_amount?: number
+  deal_amount_wan?: number
+  deal_success_count?: number
+  deal_count?: number
   referrer_count: number
   match_count: number
+  member_days?: number
+  created_at?: string
 }
 
 interface DistributionStats {
@@ -50,44 +71,42 @@ interface DistributionStats {
   indirect_count: number
 }
 
-interface Subordinate {
-  id: string
-  name: string
-  avatar: string
-  company_name: string
-  level: number
-  created_at: string
-}
-
-const levelMap: Record<string, { label: string; color: string; icon: any }> = {
-  normal: { label: '普通会员', color: 'bg-gray-200 text-gray-700', icon: User },
-  silver: { label: '银卡会员', color: 'bg-gray-300 text-gray-800', icon: Award },
-  gold: { label: '金卡会员', color: 'bg-amber-100 text-amber-700', icon: Crown },
-  diamond: { label: '钻石会员', color: 'bg-sky-100 text-sky-700', icon: Star },
+const levelMap: Record<string, { label: string; badgeVariant: "soft" | "gold" | "navy" }> = {
+  normal: { label: "普通会员", badgeVariant: "soft" },
+  silver: { label: "银卡会员", badgeVariant: "soft" },
+  gold: { label: "金卡会员", badgeVariant: "gold" },
+  diamond: { label: "钻石会员", badgeVariant: "navy" },
 }
 
 const ProfilePage = () => {
-  const isMiniApp = isWeappEnv()
-  const statusBarHeight = isMiniApp ? 22 : 8
-
   const [profile, setProfile] = useState<MemberProfile | null>(null)
   const [distStats, setDistStats] = useState<DistributionStats | null>(null)
-  const [subordinates, setSubordinates] = useState<Subordinate[]>([])
-  const [showSubordinates, setShowSubordinates] = useState(false)
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
+  const refreshSeq = useRef(0)
+  const lastRefreshAt = useRef(0)
 
-  const refreshAll = async () => {
-    await loadProfile()
-    await loadDistributionStats()
+  useTabShareAppMessage("profile")
+
+  const refreshAll = async (options?: { force?: boolean }) => {
+    const now = Date.now()
+    if (!options?.force && now - lastRefreshAt.current < 60_000 && profile) {
+      void loadUnreadNotifications(refreshSeq.current)
+      return
+    }
+    lastRefreshAt.current = now
+    const seq = ++refreshSeq.current
+    await loadProfile(seq)
+    if (seq !== refreshSeq.current) return
+    await Promise.all([loadDistributionStats(seq), loadUnreadNotifications(seq)])
   }
 
   useEffect(() => {
-    void refreshAll()
-    const onLogin = () => { void refreshAll() }
+    void refreshAll({ force: true })
+    const onLogin = () => { void refreshAll({ force: true }) }
     const onLogout = () => {
       setProfile(null)
       setDistStats(null)
-      setSubordinates([])
-      setShowSubordinates(false)
+      lastRefreshAt.current = 0
     }
     Taro.eventCenter.on(AUTH_LOGGED_IN_EVENT, onLogin)
     Taro.eventCenter.on(AUTH_LOGGED_OUT_EVENT, onLogout)
@@ -101,253 +120,265 @@ const ProfilePage = () => {
     void refreshAll()
   })
 
-  const loadProfile = async () => {
+  const loadProfile = async (seq = refreshSeq.current) => {
     try {
       if (!isLoggedIn()) {
         setProfile(null)
         return
       }
-      const memberId = Taro.getStorageSync('member_id')
+      const memberId = Taro.getStorageSync("member_id")
       const res = await Network.request({ url: `/api/members/profile/${memberId}` })
-      console.log('[我的页] profile:', res?.data)
+      if (seq !== refreshSeq.current || !isLoggedIn()) return
       if (res?.data?.data) {
         setProfile(res.data.data)
         return
       }
-      // 本地有 token 但资料拉不到：清掉幽灵登录态
       const code = res?.data?.code
       if (code === 401 || code === 403 || code === 404 || res?.statusCode === 401) {
-        console.warn('[我的页] 会话失效，清除本地登录态')
         clearMemberSession()
         setProfile(null)
       }
     } catch (err) {
-      console.error('[我的页] 加载失败:', err)
+      console.error("[我的页] 加载失败:", err)
     }
   }
 
-  const loadDistributionStats = async () => {
+  const loadDistributionStats = async (seq = refreshSeq.current) => {
     try {
       if (!isLoggedIn()) return
-      const memberId = Taro.getStorageSync('member_id')
+      const memberId = Taro.getStorageSync("member_id")
       const res = await Network.request({ url: `/api/mall/distribution/stats/${memberId}` })
+      if (seq !== refreshSeq.current || !isLoggedIn()) return
       if (res?.data?.data) setDistStats(res.data.data)
     } catch (err) {
-      console.error('[我的页] 加载分销统计失败:', err)
+      console.error("[我的页] 加载分销统计失败:", err)
     }
   }
 
-  const loadSubordinates = async () => {
-    try {
-      if (!(await ensureLogin())) return
-      const memberId = Taro.getStorageSync('member_id')
-      const res = await Network.request({ url: `/api/mall/distribution/subordinates/${memberId}` })
-      if (res?.data?.data) {
-        setSubordinates(res.data.data)
-        setShowSubordinates(true)
-      }
-    } catch (err) {
-      console.error('[我的页] 加载下级人员失败:', err)
-    }
-  }
-
-  const handleAvatarClick = async () => {
-    console.log('[我的页] 点击头像/登录入口', {
-      loggedIn: isLoggedIn(),
-      hasProfile: !!profile,
-    })
-    if (isLoggedIn() && profile) {
-      Taro.showToast({ title: '头像来自微信，不可修改', icon: 'none' })
+  const loadUnreadNotifications = async (seq = refreshSeq.current) => {
+    if (!isLoggedIn()) {
+      setUnreadNotifications(0)
       return
     }
-    // 有 token 无资料 = 幽灵登录态，清掉后强制重新授权
-    if (isLoggedIn() && !profile) {
-      clearMemberSession()
+    const count = await fetchUnreadNotificationCount()
+    if (seq !== refreshSeq.current) return
+    setUnreadNotifications(count)
+  }
+
+  const openProfileEdit = async () => {
+    if (!isLoggedIn() || !profile) {
+      if (isLoggedIn() && !profile) {
+        clearMemberSession()
+      }
+      const ok = await ensureLogin("", true)
+      if (ok) await refreshAll()
+      return
     }
-    const ok = await ensureLogin('', true)
-    console.log('[我的页] ensureLogin 结果', ok)
-    if (ok) await refreshAll()
+    Taro.navigateTo({ url: "/pages/profile-edit/index" })
   }
 
   const handleLogout = () => {
     Taro.showModal({
-      title: '退出登录',
-      content: '确定退出当前微信账号吗？',
+      title: "退出登录",
+      content: "确定退出当前微信账号吗？",
       success: (res) => {
         if (!res.confirm) return
         logoutMember()
-        Taro.showToast({ title: '已退出', icon: 'success' })
+        Taro.showToast({ title: "已退出", icon: "success" })
       },
     })
   }
 
-  const currentLevel = levelMap[profile?.membership_level || 'normal'] || levelMap.normal
+  const currentLevel = levelMap[profile?.membership_level || "normal"] || levelMap.normal
+
+  const getRegisterDays = (createdAt?: string) => {
+    if (!createdAt) return 0
+    const created = new Date(createdAt).getTime()
+    if (Number.isNaN(created)) return 0
+    return Math.max(1, Math.floor((Date.now() - created) / (24 * 60 * 60 * 1000)) + 1)
+  }
+
+  const handleMenuAction = async (action: string) => {
+    if (action === "coming-soon") {
+      Taro.showToast({ title: "该功能暂未开通", icon: "none" })
+      return
+    }
+    if (action === "logout") {
+      if (!isLoggedIn()) {
+        await ensureLogin("")
+        return
+      }
+      handleLogout()
+      return
+    }
+    if (!(await ensureLogin())) return
+
+    // 推荐管理：所有会员类型均可；成交对接 / 发布商机仍限推广员、会员单位
+    const guardedActions: Record<string, string> = {
+      "deal-applications": "项目成交对接",
+      "publish-post": "发布商机",
+    }
+    const guardLabel = guardedActions[action]
+    if (guardLabel && !(await ensurePromoterOrMemberUnit(guardLabel))) return
+
+    const routes: Record<string, string> = {
+      invite: "/pages/invite/index",
+      "deal-applications": "/pages/deal-applications/index",
+      "my-registrations": "/pages/my-registrations/index",
+      "my-posts": "/pages/my-posts/index",
+      "publish-post": "/pages/publish-post/index",
+      "points-records": "/pages/points-records/index",
+      feedback: "/pages/feedback/index",
+      talent: "/pages/talent-settle/index",
+      messages: "/pages/message/index",
+    }
+    const url = routes[action]
+    if (url) Taro.navigateTo({ url })
+  }
 
   const menuSections = [
     {
-      title: '业务管理',
+      title: "业务管理",
       items: [
-        { icon: FileText, label: '成交记录', badge: profile?.total_transactions ? `${profile.total_transactions}单` : '', color: '#1B2A4A' },
-        { icon: TrendingUp, label: '推荐管理', badge: profile?.referrer_count ? `${profile.referrer_count}人` : '', color: '#2D4A7A', action: 'subordinates' },
-        { icon: Users, label: '撮合对接', badge: profile?.match_count ? `${profile.match_count}次` : '', color: '#3B5998' },
-      ]
+        { icon: TrendingUp, label: "推荐管理", badge: profile?.referrer_count ? `${profile.referrer_count}人` : "", action: "invite", iconColor: brandColors.blue },
+        { icon: Users, label: "项目成交对接", badge: profile?.match_count ? `${profile.match_count}次` : "", action: "deal-applications", iconColor: brandColors.navySecondary },
+      ],
     },
     {
-      title: '资产与权益',
+      title: "其他",
       items: [
-        { icon: Gift, label: '积分明细', badge: profile?.available_points ? `${profile.available_points}` : '', color: '#C9A96E' },
-        { icon: ShoppingBag, label: '积分商城', color: '#B8935E', action: 'mall' },
-        { icon: DollarSign, label: '分销收益', badge: distStats?.total_earnings ? `¥${distStats.total_earnings.toFixed(0)}` : '', color: '#10B981' },
-        { icon: Wallet, label: '收益管理', color: '#8B7355' },
-        { icon: Crown, label: '会员等级', badge: currentLevel.label, color: '#1B2A4A' },
-      ]
+        { icon: CalendarDays, label: "我的报名", action: "my-registrations", iconColor: brandColors.blue },
+        { icon: Bell, label: "消息通知", badge: unreadNotifications > 0 ? (unreadNotifications > 99 ? "99+" : `${unreadNotifications}`) : "", action: "messages", iconColor: brandColors.blue },
+        { icon: MessageSquare, label: "用户反馈", action: "feedback", iconColor: brandColors.mint },
+        { icon: SquarePen, label: "发布商机", action: "publish-post", iconColor: brandColors.warning },
+        { icon: SquarePen, label: "我的商机", action: "my-posts", iconColor: brandColors.warning },
+        { icon: BadgeCheck, label: "人才入驻", action: "talent", iconColor: brandColors.gold },
+        { icon: LogOut, label: "退出登录", action: "logout", danger: true },
+      ],
     },
     {
-      title: '其他',
+      title: "资产与权益",
       items: [
-        { icon: SquarePen, label: '我的动态', color: '#F59E0B', action: 'my-posts' },
-        { icon: BadgeCheck, label: '人才入驻', color: '#C9A96E', action: 'talent' },
-        { icon: Shield, label: '隐私设置', color: '#6B7280' },
-        { icon: Settings, label: '系统设置', color: '#6B7280' },
-        { icon: LogOut, label: '退出登录', color: '#EF4444', action: 'logout' },
-      ]
+        {
+          icon: Coins,
+          label: "积分明细",
+          badge: profile?.available_points != null ? `${profile.available_points}` : "",
+          action: "points-records",
+          iconColor: brandColors.gold,
+        },
+        { icon: DollarSign, label: "分销收益", badge: distStats?.total_earnings ? `¥${distStats.total_earnings.toFixed(0)}` : "", action: "coming-soon", iconColor: brandColors.success },
+        { icon: Wallet, label: "收益管理", action: "coming-soon", iconColor: brandColors.gold },
+      ],
     },
   ]
 
   return (
-    <View className="flex flex-col h-full bg-[#F5F6FA]">
-      <ScrollView scrollY style={{ height: '100vh' }}>
-        <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-4 pb-6 relative overflow-hidden">
-          <View style={{ height: `${statusBarHeight}px` }} />
-          <View className="absolute -right-12 -top-12 w-40 h-40 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.03)' }} />
+    <PageShell>
+      <HeroHeader title="我的" dense />
 
-          <View className="flex flex-row items-center gap-4 mt-2">
-            <View className="relative" onClick={handleAvatarClick}>
-              <Avatar className="w-16 h-16 border-2 border-[#C9A96E]">
-                {profile?.avatar ? (
-                  <Image src={profile.avatar} className="w-full h-full rounded-full" mode="aspectFill" />
+      <View className="px-4">
+        {profile ? (
+          <SoftCard className="overflow-hidden p-4">
+            <View className="flex flex-row items-center gap-3" onClick={() => void openProfileEdit()}>
+              <Avatar className="h-14 w-14 border-2 border-white shadow-sm">
+                {profile.avatar ? (
+                  <Image src={profile.avatar} className="h-full w-full rounded-full" mode="aspectFill" />
                 ) : (
-                  <AvatarFallback className="bg-gradient-to-br from-[#C9A96E] to-[#E8D5A8] text-white text-xl">
-                    {(profile?.name || '星')[0]}
+                  <AvatarFallback
+                    className="text-xl text-white"
+                    style={{ background: `linear-gradient(135deg, ${brandColors.navyDeep}, ${brandColors.navySecondary})` }}
+                  >
+                    {(profile.name || "星")[0]}
                   </AvatarFallback>
                 )}
               </Avatar>
-            </View>
-            <View className="flex-1" onClick={!profile ? handleAvatarClick : undefined}>
-              <Text className="block text-lg font-bold text-white">
-                {profile?.name || '点击微信授权登录'}
-              </Text>
-              <Text className="block text-xs text-white/70 mt-1">
-                {profile
-                  ? ([profile.company_position, profile.company_name].filter(Boolean).join(' · ') || '微信授权会员')
-                  : '登录后同步微信头像与昵称'}
-              </Text>
-              {profile ? (
-                <Text className="block text-xs text-white/50 mt-0.5">头像与昵称来自微信，不可修改</Text>
-              ) : null}
-              {profile ? (
-                <View className="mt-2">
-                  <Badge className={`${currentLevel.color} text-xs`}>{currentLevel.label}</Badge>
+              <View className="min-w-0 flex-1">
+                <Text className="block text-lg font-semibold text-foreground">{profile.name}</Text>
+                <Text className="mt-1 block text-sm leading-relaxed text-muted-foreground">
+                  {[profile.company_position, profile.company_name].filter(Boolean).join(" · ") || "点击编辑个人资料"}
+                </Text>
+                <View className="mt-2 flex flex-row flex-wrap items-center gap-2">
+                  <Badge variant={currentLevel.badgeVariant}>{currentLevel.label}</Badge>
+                  <Badge variant="soft">
+                    {profile.user_category_label || userCategoryLabel(profile.user_category)}
+                  </Badge>
                 </View>
-              ) : null}
-            </View>
-          </View>
-
-          {profile ? (
-            <View className="flex flex-row mt-5 bg-white/10 rounded-2xl px-3 py-3">
-              <View className="flex-1">
-                <Text className="block text-white text-base font-bold text-center">{profile.available_points || 0}</Text>
-                <Text className="block text-white/60 text-xs text-center mt-0.5">积分</Text>
-              </View>
-              <View className="flex-1">
-                <Text className="block text-white text-base font-bold text-center">{profile.credit_score || 0}</Text>
-                <Text className="block text-white/60 text-xs text-center mt-0.5">信用</Text>
-              </View>
-              <View className="flex-1">
-                <Text className="block text-white text-base font-bold text-center">{profile.referrer_count || 0}</Text>
-                <Text className="block text-white/60 text-xs text-center mt-0.5">推荐</Text>
               </View>
             </View>
-          ) : null}
-        </View>
-
-        {showSubordinates && (
-          <View className="px-3.5 mt-3">
-            <Card>
-              <CardContent className="p-4">
-                <Text className="block text-sm font-semibold text-[#1A1D2E] mb-3">推荐人员</Text>
-                {subordinates.length === 0 ? (
-                  <Text className="block text-xs text-gray-400">暂无推荐人员</Text>
-                ) : (
-                  subordinates.map((sub) => (
-                    <View key={sub.id} className="flex flex-row items-center gap-3 py-2">
-                      <View className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
-                        <Text className="text-xs text-gray-500">{(sub.name || '?')[0]}</Text>
-                      </View>
-                      <View className="flex-1">
-                        <Text className="block text-sm font-medium text-gray-900">{sub.name}</Text>
-                        <Text className="block text-xs text-gray-500">{sub.company_name || '未设置公司'}</Text>
-                      </View>
-                    </View>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          </View>
+            <View className="mt-4 flex flex-row rounded-xl bg-blue-surface px-3 py-3">
+              <View className="flex-1" onClick={() => void handleMenuAction("points-records")}>
+                <Text className="block text-center text-base font-semibold text-primary">{profile.available_points || 0}</Text>
+                <Text className="mt-1 block text-center text-xs text-muted-foreground">积分明细</Text>
+              </View>
+              <View className="flex-1">
+                <Text className="block text-center text-base font-semibold text-primary">
+                  {profile.member_days || getRegisterDays(profile.created_at)}
+                </Text>
+                <Text className="mt-1 block text-center text-xs text-muted-foreground">注册天数</Text>
+              </View>
+              <View className="flex-1">
+                <Text className="block text-center text-base font-semibold text-primary">{profile.referrer_count || 0}</Text>
+                <Text className="mt-1 block text-center text-xs text-muted-foreground">推荐</Text>
+              </View>
+            </View>
+            <View className="mt-2 flex flex-row rounded-xl bg-blue-surface px-3 py-3">
+              <View className="flex-1" onClick={() => void handleMenuAction("deal-applications")}>
+                <Text className="block text-center text-base font-semibold text-primary">
+                  {Number(profile.deal_amount_wan || 0)}
+                </Text>
+                <Text className="mt-1 block text-center text-xs text-muted-foreground">成交金额(万)</Text>
+              </View>
+              <View className="flex-1" onClick={() => void handleMenuAction("deal-applications")}>
+                <Text className="block text-center text-base font-semibold text-primary">
+                  {profile.deal_success_count ?? profile.match_count ?? 0}
+                </Text>
+                <Text className="mt-1 block text-center text-xs text-muted-foreground">成功对接</Text>
+              </View>
+            </View>
+          </SoftCard>
+        ) : (
+          <SoftCard className="overflow-hidden px-5 py-5">
+            <View className="flex flex-col items-center">
+              <View className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-blue-surface">
+                <User size={icon.xl} color={brandColors.blue} strokeWidth={icon.stroke} />
+              </View>
+              <Text className="block text-lg font-semibold text-foreground">欢迎来到星河俱乐部</Text>
+              <Text className="mt-1 block text-center text-xs text-muted-foreground">
+                登录后同步会员资料、积分与权益
+              </Text>
+              <Button variant="gold" size="lg" className="mt-4 w-full max-w-xs" onClick={() => void openProfileEdit()}>
+                <Text className="block text-sm font-medium text-white">立即登录</Text>
+              </Button>
+            </View>
+          </SoftCard>
         )}
+      </View>
 
-        {menuSections.map((section, sIdx) => (
-          <View key={sIdx} className="px-3.5 mt-3">
-            <Text className="block text-xs text-gray-400 mb-2 px-1">{section.title}</Text>
-            <Card>
-              <CardContent className="p-0">
-                {section.items.map((item, iIdx) => {
-                  const ItemIcon = item.icon
-                  const handleItemClick = async () => {
-                    if (item.action === 'logout') {
-                      if (!isLoggedIn()) {
-                        await ensureLogin('')
-                        return
-                      }
-                      handleLogout()
-                      return
-                    }
-                    if (item.action === 'subordinates') {
-                      await loadSubordinates()
-                    } else if (item.action === 'mall') {
-                      Taro.switchTab({ url: '/pages/mall/index' })
-                    } else if (item.action === 'my-posts') {
-                      if (!(await ensureLogin())) return
-                      Taro.navigateTo({ url: '/pages/my-posts/index' })
-                    } else if (item.action === 'talent') {
-                      if (!(await ensureLogin())) return
-                      Taro.navigateTo({ url: '/pages/talent-settle/index' })
-                    }
-                  }
-                  return (
-                    <View key={iIdx}>
-                      <View className="flex flex-row items-center px-4 py-3" onClick={handleItemClick}>
-                        <View className="w-8 h-8 rounded-lg flex items-center justify-center mr-3" style={{ backgroundColor: `${item.color}15` }}>
-                          <ItemIcon size={16} color={item.color} />
-                        </View>
-                        <Text className="block flex-1 text-sm text-[#1A1D2E]">{item.label}</Text>
-                        {item.badge ? (
-                          <Badge className="bg-[#C9A96E] bg-opacity-10 text-[#C9A96E] text-[10px] px-2 py-0 mr-2">{item.badge}</Badge>
-                        ) : null}
-                        <ChevronRight size={16} color="#D1D5DB" />
-                      </View>
-                      {iIdx < section.items.length - 1 && <View className="h-px bg-[#F0F1F5] ml-15" />}
-                    </View>
-                  )
-                })}
-              </CardContent>
-            </Card>
-          </View>
-        ))}
+      {menuSections.map((section, sIdx) => (
+        <View key={sIdx} className="mt-4 px-4">
+          <SectionTitle title={section.title} />
+          <SoftCard className="overflow-hidden">
+            {section.items.map((item, iIdx) => (
+              <View key={item.label}>
+                <MenuListItem
+                  icon={item.icon}
+                  label={item.label}
+                  badge={item.badge}
+                  iconColor={item.iconColor}
+                  danger={"danger" in item && item.danger}
+                  onClick={() => void handleMenuAction(item.action)}
+                />
+                {iIdx < section.items.length - 1 ? (
+                  <View className="ml-14 mr-4 h-px bg-border bg-opacity-70" />
+                ) : null}
+              </View>
+            ))}
+          </SoftCard>
+        </View>
+      ))}
 
-        <View className="h-24" />
-      </ScrollView>
-    </View>
+      <View className={layout.bottomBarPad} />
+    </PageShell>
   )
 }
 
