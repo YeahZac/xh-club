@@ -54,6 +54,14 @@ export class MembersController {
     return { code: 200, msg: 'success', data: result }
   }
 
+  @Get(':id/invite-qrcode')
+  @UseGuards(MemberAuthGuard)
+  async getInviteQrcode(@Param('id') id: string, @Req() request: any) {
+    this.assertOwnMember(id, request.user.sub)
+    const result = await this.membersService.getInviteQrDataUrl(id)
+    return { code: 200, msg: 'success', data: result }
+  }
+
   @Get(':id/invite')
   @UseGuards(MemberAuthGuard)
   async getInviteDashboard(@Param('id') id: string, @Req() request: any) {

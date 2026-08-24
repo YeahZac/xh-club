@@ -198,6 +198,10 @@ export class TalentService {
       ...this.computeMembership(signed),
       user_category: normalizeUserCategory(signed.user_category),
       user_category_label: userCategoryLabel(signed.user_category),
+      apply_type: signed.apply_type || null,
+      apply_type_label: this.applyTypeLabel(signed.apply_type),
+      payment_method: signed.payment_method || null,
+      payment_method_label: this.paymentMethodLabel(signed.payment_method),
     }
   }
 
@@ -524,6 +528,117 @@ export class TalentService {
       company_name: payload.company_name,
       job_title: payload.job_title,
     })
+    return this.getMine(memberId)
+  }
+
+  private normalizeApplyType(value: unknown): 'promoter' | 'member_unit' | null {
+    const raw = String(value || '').trim()
+    if (raw === 'promoter' || raw === 'member_unit') return raw
+    return null
+  }
+
+  private normalizePaymentMethod(value: unknown): string | null {
+    const raw = String(value || '').trim()
+    if (['offline', 'wechat', 'bank'].includes(raw)) return raw
+    return null
+  }
+
+  private applyTypeLabel(value: unknown): string {
+    const type = this.normalizeApplyType(value)
+    if (type === 'promoter') return '推广员'
+    if (type === 'member_unit') return '会员单位'
+    return '-'
+  }
+
+  private paymentMethodLabel(value: unknown): string {
+    const raw = String(value || '').trim()
+    if (raw === 'offline') return '线下缴费'
+    if (raw === 'wechat') return '微信支付'
+    if (raw === 'bank') return '银行转账'
+    return '-'
+  }
+
+  /** 推广员/会员单位升级申请（含缴费字段，与普通人才入驻分离） */
+  async memberApply(memberId: string, dto: any) {
+    const applyType = this.normalizeApplyType(dto.apply_type)
+    if (!applyType) {
+      throw new HttpException('请选择申请类型', HttpStatus.BAD_REQUEST)
+    }
+    const paymentMethod = this.normalizePaymentMethod(dto.payment_method)
+    if (!paymentMethod) {
+      throw new HttpException('请选择缴费方式', HttpStatus.BAD_REQUEST)
+    }
+    const paymentStatus = String(dto.payment_status || 'unpaid').trim() === 'paid' ? 'paid' : 'unpaid'
+
+    const payload = this.validateApplicationPayload(dto, false)
+    const avatarUrl = payload.avatar_url || payload.photo_url || null
+    const existing = await queryOne('SELECT id, status FROM talent_applications WHERE member_id = ?', [memberId])
+
+    if (existing) {
+      await queryExecute(
+        `UPDATE talent_applications SET
+           real_name = ?, contact = ?, company_name = ?, job_title = ?, photo_url = ?,
+           industry_tags = ?, experience = ?, card_image_url = ?, avatar_url = ?,
+           apply_type = ?, payment_status = ?, payment_method = ?,
+           status = 'pending', reject_reason = NULL, reviewed_at = NULL, reviewed_by = NULL,
+           updated_at = NOW()
+         WHERE member_id = ?`,
+        [
+          payload.real_name,
+          payload.contact,
+          payload.company_name,
+          payload.job_title,
+          payload.photo_url,
+          JSON.stringify(payload.industry_tags),
+          payload.experience || null,
+          payload.card_image_url || null,
+          avatarUrl,
+          applyType,
+          paymentStatus,
+          paymentMethod,
+          memberId,
+        ],
+      )
+    } else {
+      await queryExecute(
+        `INSERT INTO talent_applications
+          (member_id, real_name, contact, company_name, job_title, photo_url, industry_tags, experience,
+           card_image_url, avatar_url, apply_type, payment_status, payment_method, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+        [
+          memberId,
+          payload.real_name,
+          payload.contact,
+          payload.company_name,
+          payload.job_title,
+          payload.photo_url,
+          JSON.stringify(payload.industry_tags),
+          payload.experience || null,
+          payload.card_image_url || null,
+          avatarUrl,
+          applyType,
+          paymentStatus,
+          paymentMethod,
+        ],
+      )
+    }
+
+    await this.syncMemberProfileFromTalent(memberId, {
+      company_name: payload.company_name,
+      job_title: payload.job_title,
+    })
+
+    await createNotification({
+      memberId,
+      type: 'approval',
+      title: '会员升级申请已提交',
+      content: `您的${this.applyTypeLabel(applyType)}申请已提交，请等待后台审核`,
+      link: '/pages/member-apply/index',
+      bizType: 'talent_audit',
+      bizId: memberId,
+      result: 'pending',
+    })
+
     return this.getMine(memberId)
   }
 
@@ -958,6 +1073,13 @@ export class TalentService {
       })
     }
     if (dto.status === 'approved' && memberId) {
+      const applyType = this.normalizeApplyType((result as any)?.apply_type)
+      if (applyType) {
+        await queryExecute(
+          `UPDATE members SET user_category = ?, updated_at = NOW() WHERE id = ?`,
+          [applyType, memberId],
+        )
+      }
       void this.pointsEngine
         .evaluate(memberId, 'talent_settle', {
           referenceType: 'talent',

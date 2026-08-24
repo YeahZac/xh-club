@@ -808,33 +808,28 @@ export class EventsService {
     if (!isCloudStorageUrl(dto.cover_image)) {
       throw new HttpException('项目封面图片为必填项', HttpStatus.BAD_REQUEST)
     }
-    if (dto.video_url && !isCloudStorageUrl(dto.video_url)) {
-      throw new HttpException('项目视频必须使用微信云托管对象存储 URL', HttpStatus.BAD_REQUEST)
-    }
     const galleryImages = normalizeProjectUrlList(dto.gallery_images)
     const result = await queryExecute(
       `INSERT INTO projects
          (title, description, cover_image, video_url, gallery_images, file_urls, industry, stage, amount_max, status,
           audit_status, submitter_id, view_count, avg_score, score_count,
-          promo_coop_mode, promo_commission_rate, promo_amount_wan, promo_remark, promo_share_count)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 'pending', ?, 0, 0, 0, ?, ?, ?, ?, 0)`,
+          promo_coop_mode, promo_commission_rate, promo_amount_wan, promo_remark, promo_share_count,
+          project_commission, advantages, application_scenarios)
+       VALUES (?, ?, ?, NULL, ?, ?, ?, 'seed', ?, 'draft', 'pending', ?, 0, 0, 0, ?, NULL, NULL, ?, 0, ?, ?, ?)`,
       [
         String(dto.title).trim(),
         dto.description || null,
         canonicalizeCloudStorageUrl(dto.cover_image),
-        dto.video_url ? canonicalizeCloudStorageUrl(dto.video_url) : null,
         serializeJsonUrlList(galleryImages),
         serializeJsonUrlList([]),
         dto.industry || null,
-        dto.stage || 'seed',
         null,
         memberId,
         normalizePromoCoopMode(dto.promo_coop_mode),
-        dto.promo_commission_rate != null && dto.promo_commission_rate !== ''
-          ? Number(dto.promo_commission_rate)
-          : null,
-        null,
         dto.promo_remark != null ? String(dto.promo_remark || '').trim() || null : null,
+        dto.project_commission != null ? String(dto.project_commission || '').trim() || null : null,
+        dto.advantages != null ? String(dto.advantages || '').trim() || null : null,
+        dto.application_scenarios != null ? String(dto.application_scenarios || '').trim() || null : null,
       ],
     )
     const project = await queryOne('SELECT * FROM projects WHERE id = ?', [result.insertId])

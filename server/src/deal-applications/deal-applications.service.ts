@@ -94,11 +94,12 @@ export class DealApplicationsService {
     }
   }
 
-  private validate(dto: any, options?: { requireOwner?: boolean }) {
+  private validate(dto: any, options?: { requireOwner?: boolean; requireFinancial?: boolean }) {
     const businessId = Number(dto.business_id)
     const ownerMemberId = Number(dto.owner_member_id)
-    const contractAmount = Number(dto.contract_amount)
-    const commissionRate = Number(dto.commission_rate)
+    const requireFinancial = options?.requireFinancial !== false
+    const contractAmount = Number(dto.contract_amount ?? 0)
+    const commissionRate = Number(dto.commission_rate ?? 0)
     const contactName = String(dto.contact_name || '').trim()
     const dealStatus = String(dto.deal_status || 'connecting').trim()
     if (!Number.isFinite(businessId) || businessId <= 0) {
@@ -107,11 +108,13 @@ export class DealApplicationsService {
     if (options?.requireOwner !== false && (!Number.isFinite(ownerMemberId) || ownerMemberId <= 0)) {
       throw new HttpException('请选择项目负责人', HttpStatus.BAD_REQUEST)
     }
-    if (!Number.isFinite(contractAmount) || contractAmount < 0) {
-      throw new HttpException('合同金额无效', HttpStatus.BAD_REQUEST)
-    }
-    if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) {
-      throw new HttpException('分成比例应在 0-100 之间', HttpStatus.BAD_REQUEST)
+    if (requireFinancial) {
+      if (!Number.isFinite(contractAmount) || contractAmount < 0) {
+        throw new HttpException('合同金额无效', HttpStatus.BAD_REQUEST)
+      }
+      if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) {
+        throw new HttpException('分成比例应在 0-100 之间', HttpStatus.BAD_REQUEST)
+      }
     }
     if (!contactName) throw new HttpException('请填写对接人姓名', HttpStatus.BAD_REQUEST)
     if (!(DEAL_STATUSES as readonly string[]).includes(dealStatus)) {
@@ -219,7 +222,7 @@ export class DealApplicationsService {
   }
 
   async create(memberId: string | number, dto: any) {
-    const payload = this.validate(dto, { requireOwner: true })
+    const payload = this.validate(dto, { requireOwner: true, requireFinancial: false })
     if (String(payload.ownerMemberId) === String(memberId)) {
       throw new HttpException('项目负责人不能是自己', HttpStatus.BAD_REQUEST)
     }
@@ -484,13 +487,30 @@ export class DealApplicationsService {
     if (status === 'rejected' && !reason) {
       throw new HttpException('请填写拒绝原因', HttpStatus.BAD_REQUEST)
     }
-
-    await queryExecute(
-      `UPDATE project_deal_applications SET
-         audit_status = ?, reject_reason = ?, reviewed_by = ?, reviewed_at = NOW(), updated_at = NOW()
-       WHERE id = ?`,
-      [status, reason || null, ownerId, id],
-    )
+    if (status === 'approved') {
+      const contractAmount = Number(dto.contract_amount)
+      const commissionRate = Number(dto.commission_rate)
+      if (!Number.isFinite(contractAmount) || contractAmount < 0) {
+        throw new HttpException('请填写合同金额', HttpStatus.BAD_REQUEST)
+      }
+      if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) {
+        throw new HttpException('分成比例应在 0-100 之间', HttpStatus.BAD_REQUEST)
+      }
+      await queryExecute(
+        `UPDATE project_deal_applications SET
+           audit_status = ?, reject_reason = ?, reviewed_by = ?, reviewed_at = NOW(),
+           contract_amount = ?, commission_rate = ?, updated_at = NOW()
+         WHERE id = ?`,
+        [status, null, ownerId, contractAmount, commissionRate, id],
+      )
+    } else {
+      await queryExecute(
+        `UPDATE project_deal_applications SET
+           audit_status = ?, reject_reason = ?, reviewed_by = ?, reviewed_at = NOW(), updated_at = NOW()
+         WHERE id = ?`,
+        [status, reason || null, ownerId, id],
+      )
+    }
 
     await createNotification({
       memberId: row.member_id,

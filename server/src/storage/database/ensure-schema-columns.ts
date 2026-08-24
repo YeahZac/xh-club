@@ -33,6 +33,9 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['projects', 'promo_amount_wan', 'DECIMAL(14,2) NULL'],
   ['projects', 'promo_remark', 'TEXT NULL'],
   ['projects', 'promo_share_count', 'INT NOT NULL DEFAULT 0'],
+  ['projects', 'project_commission', 'VARCHAR(200) NULL'],
+  ['projects', 'advantages', 'TEXT NULL'],
+  ['projects', 'application_scenarios', 'TEXT NULL'],
   // 用户类型：普通用户 / 推广员 / 会员单位
   ['members', 'user_category', `VARCHAR(32) NOT NULL DEFAULT 'normal'`],
   // 项目成交对接：负责人确认
@@ -154,6 +157,8 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['talent_applications', 'update_status', 'VARCHAR(20) NULL'],
   ['talent_applications', 'update_reject_reason', 'VARCHAR(500) NULL'],
   ['talent_applications', 'view_count', 'INT NOT NULL DEFAULT 0'],
+  ['talent_applications', 'apply_type', 'VARCHAR(32) NULL'],
+  ['talent_applications', 'payment_method', 'VARCHAR(32) NULL'],
   // 部门负责人姓名（组织架构展示用）
   ['departments', 'leader_name', 'VARCHAR(100) NULL'],
   ['departments', 'level', 'INT DEFAULT 1'],

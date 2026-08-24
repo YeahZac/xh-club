@@ -37,6 +37,13 @@ export class TalentController {
     return { code: 200, msg: '提交成功', data }
   }
 
+  @Post('member-apply')
+  @UseGuards(MemberAuthGuard)
+  async memberApply(@Req() request: any, @Body() dto: any) {
+    const data = await this.talentService.memberApply(String(request.user.sub), dto)
+    return { code: 200, msg: '申请已提交', data }
+  }
+
   @Put('mine')
   @UseGuards(MemberAuthGuard)
   async updateMine(@Req() request: any, @Body() dto: any) {

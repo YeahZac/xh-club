@@ -7,6 +7,8 @@ import { UploadService } from '@/upload/upload.service'
 import { canonicalizeCloudStorageUrl } from '@/utils/media-url'
 import { normalizeUserCategory, userCategoryLabel } from '@/common/user-category'
 import { getMemberDashboardStats } from '@/common/member-stats'
+import QRCode from 'qrcode'
+import { buildInviteQrText } from '@/common/invite-code'
 
 @Injectable()
 export class MembersService {
@@ -391,6 +393,18 @@ export class MembersService {
       invitees,
       total_reward_points: totalRewardPoints,
     }
+  }
+
+  /** 会员推荐二维码（PNG Data URL，可保存） */
+  async getInviteQrDataUrl(memberId: string): Promise<{ data_url: string; invite_code: string }> {
+    const inviteCode = await this.ensureInviteCode(memberId)
+    const text = buildInviteQrText(inviteCode)
+    const dataUrl = await QRCode.toDataURL(text, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 320,
+    })
+    return { data_url: dataUrl, invite_code: inviteCode }
   }
 
   /** 获取成长数据 */
