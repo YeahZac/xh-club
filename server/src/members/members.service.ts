@@ -3,6 +3,7 @@ import { getSupabaseClient } from '@/storage/database/supabase-compat'
 import { queryRows, queryOne } from '@/storage/database/mysql-client'
 import * as bcrypt from 'bcryptjs'
 import { signAuthToken } from '@/auth/jwt'
+import { AuthService } from '@/auth/auth.service'
 import { UploadService } from '@/upload/upload.service'
 import { canonicalizeCloudStorageUrl } from '@/utils/media-url'
 import { normalizeUserCategory, userCategoryLabel } from '@/common/user-category'
@@ -12,7 +13,10 @@ import { buildInviteQrText } from '@/common/invite-code'
 
 @Injectable()
 export class MembersService {
-  constructor(private readonly uploadService: UploadService) {}
+  constructor(
+    private readonly uploadService: UploadService,
+    private readonly authService: AuthService,
+  ) {}
 
   private client() { return getSupabaseClient() }
 
@@ -395,15 +399,24 @@ export class MembersService {
     }
   }
 
-  /** 会员推荐二维码（PNG Data URL，可保存） */
+  /** 会员推荐二维码（微信官方小程序码，扫码打开登录页并携带邀请码） */
   async getInviteQrDataUrl(memberId: string): Promise<{ data_url: string; invite_code: string }> {
     const inviteCode = await this.ensureInviteCode(memberId)
+    try {
+      const png = await this.authService.getUnlimitedWxaQrcode(inviteCode, 'pages/login/index')
+      return {
+        data_url: `data:image/png;base64,${png.toString('base64')}`,
+        invite_code: inviteCode,
+      }
+    } catch (error) {
+      console.error('[MembersService] wxacode invite-qrcode failed, fallback text qrcode:', error)
+    }
+
     const text = buildInviteQrText(inviteCode)
     if (!text) {
       throw new HttpException({ code: 400, msg: '邀请码无效' }, HttpStatus.BAD_REQUEST)
     }
     try {
-      // qrcode 为 CJS；须用 namespace import，勿用 default（tsc 无 esModuleInterop 时 default 为 undefined）
       const toDataURL = (QRCode as any).toDataURL || (QRCode as any).default?.toDataURL
       if (typeof toDataURL !== 'function') {
         throw new Error('qrcode.toDataURL unavailable')

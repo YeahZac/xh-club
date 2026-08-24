@@ -518,4 +518,140 @@ export class AuthService {
     }
     return String(phone)
   }
+
+  /** 会员推荐：生成小程序码（微信扫一扫打开小程序，scene 携带邀请码） */
+  async getUnlimitedWxaQrcode(scene: string, page = 'pages/login/index'): Promise<Buffer> {
+    const normalizedScene = String(scene || '').trim().slice(0, 32)
+    if (!normalizedScene) {
+      throw new HttpException('scene 不能为空', HttpStatus.BAD_REQUEST)
+    }
+    const envRaw = String(process.env.WX_MINI_ENV || 'release').trim()
+    const envVersion = envRaw === 'develop' || envRaw === 'trial' || envRaw === 'release'
+      ? envRaw
+      : 'release'
+    const token = await this.getAccessToken()
+    const url = this.buildWeixinApiUrl('/wxa/getwxacodeunlimit', token)
+    return this.weixinFetchBinary(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scene: normalizedScene,
+        page,
+        check_path: false,
+        width: 430,
+        env_version: envVersion,
+      }),
+    })
+  }
+
+  private async weixinFetchBinary(url: string, init?: RequestInit): Promise<Buffer> {
+    const httpUrl = url.replace(/^https:\/\//i, 'http://')
+    try {
+      return await this.weixinFetchBinaryOnce(httpUrl, init)
+    } catch (error: any) {
+      const errCode = String(error?.cause?.code || error?.code || '')
+      const errMsg = String(error?.message || '')
+      if (errCode.includes('CERT') || errMsg.includes('fetch failed') || errMsg.includes('certificate')) {
+        console.warn('[AuthService] HTTP 微信二进制接口失败，尝试 HTTPS 兜底', errCode || errMsg)
+        return await this.weixinFetchBinaryOnce(url.replace(/^http:\/\//i, 'https://'), init, true)
+      }
+      throw error
+    }
+  }
+
+  private async weixinFetchBinaryOnce(
+    url: string,
+    init?: RequestInit,
+    insecureTls = false,
+  ): Promise<Buffer> {
+    if (insecureTls) {
+      return this.weixinFetchBinaryHttpsInsecure(url, init)
+    }
+    const response = await fetch(url, init)
+    const buffer = Buffer.from(await response.arrayBuffer())
+    if (!response.ok) {
+      const text = buffer.toString('utf8')
+      console.error('[AuthService] weixinFetchBinary HTTP error', {
+        url,
+        status: response.status,
+        body: text.slice(0, 500),
+      })
+      throw new HttpException('微信服务暂不可用', HttpStatus.BAD_GATEWAY)
+    }
+    return this.assertWeixinBinaryOk(buffer)
+  }
+
+  private weixinFetchBinaryHttpsInsecure(url: string, init?: RequestInit): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      try {
+        const parsed = new URL(url)
+        const body = typeof init?.body === 'string' ? init.body : init?.body ? JSON.stringify(init.body) : undefined
+        const headers: Record<string, string> = {
+          ...(init?.headers as Record<string, string> | undefined),
+        }
+        if (body && !headers['content-type'] && !headers['Content-Type']) {
+          headers['content-type'] = 'application/json'
+        }
+        const req = https.request(
+          {
+            protocol: parsed.protocol,
+            hostname: parsed.hostname,
+            port: parsed.port || 443,
+            path: `${parsed.pathname}${parsed.search}`,
+            method: (init?.method || 'GET').toUpperCase(),
+            headers,
+            rejectUnauthorized: false,
+          },
+          (res) => {
+            const chunks: Buffer[] = []
+            res.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+            res.on('end', () => {
+              const buffer = Buffer.concat(chunks)
+              if ((res.statusCode || 500) >= 400) {
+                console.error('[AuthService] weixin binary HTTPS error', {
+                  url,
+                  status: res.statusCode,
+                  body: buffer.toString('utf8').slice(0, 500),
+                })
+                reject(new HttpException('微信服务暂不可用', HttpStatus.BAD_GATEWAY))
+                return
+              }
+              try {
+                resolve(this.assertWeixinBinaryOk(buffer))
+              } catch (error) {
+                reject(error)
+              }
+            })
+          },
+        )
+        req.on('error', reject)
+        if (body) req.write(body)
+        req.end()
+      } catch (error) {
+        reject(error)
+      }
+    })
+  }
+
+  private assertWeixinBinaryOk(buffer: Buffer): Buffer {
+    if (buffer.length > 0 && buffer[0] === 0x7b) {
+      let json: any = null
+      try {
+        json = JSON.parse(buffer.toString('utf8'))
+      } catch {
+        json = null
+      }
+      if (json && typeof json.errcode === 'number' && json.errcode !== 0) {
+        console.error('[AuthService] weixinFetchBinary biz error', json)
+        const tip = String(json.errmsg || `微信接口错误（${json.errcode}）`)
+        throw new HttpException(
+          tip.includes('access_token')
+            ? '微信 access_token 无效，请检查开放接口服务权限或 AppSecret'
+            : tip,
+          HttpStatus.BAD_GATEWAY,
+        )
+      }
+    }
+    return buffer
+  }
 }
