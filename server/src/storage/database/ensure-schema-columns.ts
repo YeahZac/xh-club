@@ -159,6 +159,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['talent_applications', 'view_count', 'INT NOT NULL DEFAULT 0'],
   ['talent_applications', 'apply_type', 'VARCHAR(32) NULL'],
   ['talent_applications', 'payment_method', 'VARCHAR(32) NULL'],
+  ['talent_applications', 'payment_amount', 'DECIMAL(12,2) NULL'],
   // 部门负责人姓名（组织架构展示用）
   ['departments', 'leader_name', 'VARCHAR(100) NULL'],
   ['departments', 'level', 'INT DEFAULT 1'],

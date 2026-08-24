@@ -93,6 +93,12 @@ export class IndustryAdminController {
 export class TalentAdminController {
   constructor(private readonly talentService: TalentService) {}
 
+  @Get('stats')
+  async stats() {
+    const data = await this.talentService.adminStats()
+    return { code: 200, msg: 'success', data }
+  }
+
   @Get()
   async list(@Query() query: any) {
     const data = await this.talentService.adminList(query)

@@ -709,6 +709,30 @@ export class TalentService {
     return this.getMine(memberId)
   }
 
+  /** 后台人才管理页顶部统计 */
+  async adminStats() {
+    const row = await queryOne(
+      `SELECT
+        (SELECT COUNT(*) FROM talent_applications t
+          WHERE t.status = 'approved' AND (t.update_status IS NULL OR t.update_status = '')) AS total_talents,
+        (SELECT COUNT(*) FROM members m WHERE m.user_category = 'promoter') AS promoter_total,
+        (SELECT COUNT(*) FROM members m WHERE m.user_category = 'member_unit') AS member_unit_total,
+        (SELECT COUNT(*) FROM talent_applications t
+          WHERE t.apply_type = 'promoter'
+            AND (t.status = 'pending' OR t.update_status = 'pending')) AS pending_promoter,
+        (SELECT COUNT(*) FROM talent_applications t
+          WHERE t.apply_type = 'member_unit'
+            AND (t.status = 'pending' OR t.update_status = 'pending')) AS pending_member_unit`,
+    )
+    return {
+      total_talents: Number((row as any)?.total_talents || 0),
+      promoter_total: Number((row as any)?.promoter_total || 0),
+      member_unit_total: Number((row as any)?.member_unit_total || 0),
+      pending_promoter: Number((row as any)?.pending_promoter || 0),
+      pending_member_unit: Number((row as any)?.pending_member_unit || 0),
+    }
+  }
+
   async adminList(query: any = {}) {
     const where: string[] = []
     const values: any[] = []
@@ -998,6 +1022,19 @@ export class TalentService {
     }
 
     // 缴费会员：开始时间 + 年限（1/2/3）→ 自动计算到期日
+    if (dto.payment_amount !== undefined) {
+      const rawAmount = dto.payment_amount
+      if (rawAmount === null || rawAmount === '') {
+        assign('payment_amount', null)
+      } else {
+        const amount = Number(rawAmount)
+        if (!Number.isFinite(amount) || amount < 0) {
+          throw new HttpException('付款金额无效', HttpStatus.BAD_REQUEST)
+        }
+        assign('payment_amount', Math.round(amount * 100) / 100)
+      }
+    }
+
     if (
       dto.payment_status !== undefined
       || dto.payment_start_at !== undefined
@@ -1014,13 +1051,15 @@ export class TalentService {
         assign('membership_years', 0)
         assign('payment_expire_at', null)
       } else {
-        const years = Number(dto.membership_years ?? existing.membership_years ?? 0)
-        if (![1, 2, 3].includes(years) && paymentStatus === 'paid') {
-          throw new HttpException('请选择一年/二年/三年缴会员', HttpStatus.BAD_REQUEST)
+        let years = Number(dto.membership_years ?? existing.membership_years ?? 0)
+        if (paymentStatus === 'paid' && ![1, 2, 3].includes(years)) {
+          // 列表内联改「已缴费」时，若未设置年限则默认一年
+          years = 1
         }
-        const startRaw = String(dto.payment_start_at ?? existing.payment_start_at ?? '').slice(0, 10)
+        let startRaw = String(dto.payment_start_at ?? existing.payment_start_at ?? '').slice(0, 10)
         if (paymentStatus === 'paid' && !/^\d{4}-\d{2}-\d{2}$/.test(startRaw)) {
-          throw new HttpException('请填写缴费开始时间', HttpStatus.BAD_REQUEST)
+          const today = new Date()
+          startRaw = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
         }
         let expire: string | null = null
         if (startRaw && years > 0) {
