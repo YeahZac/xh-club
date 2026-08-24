@@ -322,7 +322,10 @@ export class BusinessService {
 
     if (dto?.parent_id) {
       const parent = await queryOne(
-        `SELECT id, member_id, opportunity_id FROM business_opportunity_comments WHERE id = ?`,
+        `SELECT id,
+                COALESCE(member_id, user_id) AS member_id,
+                opportunity_id
+         FROM business_opportunity_comments WHERE id = ?`,
         [dto.parent_id],
       )
       if (!parent || String(parent.opportunity_id) !== String(businessId)) {
@@ -332,11 +335,26 @@ export class BusinessService {
       parentAuthorId = Number(parent.member_id)
     }
 
-    const result = await queryExecute(
-      `INSERT INTO business_opportunity_comments (opportunity_id, member_id, parent_id, content)
-       VALUES (?, ?, ?, ?)`,
-      [businessId, memberId, parentId, content],
-    )
+    const mid = Number(memberId)
+    let result: { insertId?: number }
+    try {
+      result = await queryExecute(
+        `INSERT INTO business_opportunity_comments (opportunity_id, member_id, user_id, parent_id, content)
+         VALUES (?, ?, ?, ?, ?)`,
+        [businessId, mid, mid, parentId, content],
+      )
+    } catch (error: any) {
+      const msg = String(error?.message || '')
+      if (msg.includes('Unknown column')) {
+        result = await queryExecute(
+          `INSERT INTO business_opportunity_comments (opportunity_id, user_id, content)
+           VALUES (?, ?, ?)`,
+          [businessId, mid, content],
+        )
+      } else {
+        throw error
+      }
+    }
 
     const commenter = await queryOne('SELECT name FROM members WHERE id = ?', [memberId])
     const commenterName = String(commenter?.name || '用户')

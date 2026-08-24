@@ -160,8 +160,10 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['talent_applications', 'apply_type', 'VARCHAR(32) NULL'],
   ['talent_applications', 'payment_method', 'VARCHAR(32) NULL'],
   ['talent_applications', 'payment_amount', 'DECIMAL(12,2) NULL'],
+  // 商机评论：旧库仅有 user_id，新库使用 member_id + parent_id
   ['business_opportunity_comments', 'parent_id', 'INT NULL'],
   ['business_opportunity_comments', 'member_id', 'INT NULL'],
+  ['business_opportunity_comments', 'user_id', 'INT NULL'],
   // 部门负责人姓名（组织架构展示用）
   ['departments', 'leader_name', 'VARCHAR(100) NULL'],
   ['departments', 'level', 'INT DEFAULT 1'],
@@ -1200,6 +1202,20 @@ async function runSchemaEnsure(): Promise<void> {
     const msg = String(error?.message || '')
     if (!msg.includes("doesn't exist") && error?.code !== 'ER_NO_SUCH_TABLE') {
       console.warn('[MySQL] 归一会员 status 失败:', error?.message || error)
+    }
+  }
+
+  // 商机评论：旧库 user_id 回填到 member_id，便于新逻辑写入
+  try {
+    await pool.query(
+      `UPDATE business_opportunity_comments
+       SET member_id = user_id
+       WHERE member_id IS NULL AND user_id IS NOT NULL`,
+    )
+  } catch (error: any) {
+    const msg = String(error?.message || '')
+    if (!msg.includes("doesn't exist") && error?.code !== 'ER_NO_SUCH_TABLE') {
+      console.warn('[MySQL] 回填 business_opportunity_comments.member_id 失败:', error?.message || error)
     }
   }
 
