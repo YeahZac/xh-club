@@ -10,6 +10,7 @@ export const HOMEPAGE_SECTIONS = [
   'financing',
   'roadshow',
   'resource',
+  'life',
 ] as const
 
 export type HomepageSection = (typeof HOMEPAGE_SECTIONS)[number]
@@ -23,9 +24,10 @@ const SECTION_META: Record<
   products: { display_name: '商城商品', content_type: 'product', content_type_label: '商城商品', sort_order: 2 },
   projects: { display_name: '项目', content_type: 'project', content_type_label: '项目', sort_order: 3 },
   articles: { display_name: '文章', content_type: 'article', content_type_label: '文章', sort_order: 4 },
-  financing: { display_name: '融资招募', content_type: 'financing', content_type_label: '融资招募', sort_order: 5 },
+  financing: { display_name: '商业需求', content_type: 'financing', content_type_label: '商业需求', sort_order: 5 },
   roadshow: { display_name: '项目路演', content_type: 'roadshow', content_type_label: '项目路演', sort_order: 6 },
-  resource: { display_name: '资源对接', content_type: 'resource', content_type_label: '资源对接', sort_order: 7 },
+  resource: { display_name: '资源需求', content_type: 'resource', content_type_label: '资源需求', sort_order: 7 },
+  life: { display_name: '生活需求', content_type: 'life', content_type_label: '生活需求', sort_order: 8 },
 }
 
 const SORT_MODES: HomepageSortMode[] = ['time_desc', 'view_count', 'custom']
@@ -235,7 +237,7 @@ export class HomepageService {
          FROM articles WHERE id IN (${placeholders})`,
         ids,
       )
-    } else if (section === 'financing' || section === 'roadshow' || section === 'resource') {
+    } else if (section === 'financing' || section === 'roadshow' || section === 'resource' || section === 'life') {
       rows = await queryRows(
         `SELECT id, title, cover_image, IFNULL(view_count, 0) AS view_count, created_at, category
          FROM business_opportunities WHERE id IN (${placeholders}) AND category = ?`,
@@ -364,7 +366,7 @@ export class HomepageService {
       return queryRows(sql, kw ? [like] : [])
     }
 
-    // financing / roadshow / resource
+    // financing / roadshow / resource / life
     const sql = kw
       ? `SELECT id, title, cover_image, IFNULL(view_count, 0) AS view_count, created_at
          FROM business_opportunities

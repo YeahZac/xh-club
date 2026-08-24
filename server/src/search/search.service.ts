@@ -29,7 +29,7 @@ export class SearchService {
     const like = `%${keyword}%`
     const limit = 20
 
-    const [projects, talents, events, articles, roadshows, financings] = await Promise.all([
+    const [projects, talents, events, articles, roadshows, demands] = await Promise.all([
       queryRows(
         `SELECT id, title, cover_image, industry, created_at
          FROM projects
@@ -81,7 +81,7 @@ export class SearchService {
       queryRows(
         `SELECT id, title, cover_image, category, created_at
          FROM business_opportunities
-         WHERE category = 'financing'
+         WHERE category IN ('financing', 'resource', 'life')
            AND status = 'published'
            AND (audit_status = 'approved' OR audit_status IS NULL OR audit_status = '')
            AND (title LIKE ? OR IFNULL(summary, '') LIKE ? OR IFNULL(content, '') LIKE ?)
@@ -158,14 +158,21 @@ export class SearchService {
       })
     }
 
-    for (const row of financings || []) {
+    for (const row of demands || []) {
+      const category = String(row.category || '')
+      const label =
+        category === 'resource'
+          ? '资源需求'
+          : category === 'life'
+            ? '生活需求'
+            : '商业需求'
       hits.push({
         id: String(row.id),
-        title: row.title || '未命名融资',
-        subtitle: '融资招募',
+        title: row.title || `未命名${label}`,
+        subtitle: label,
         cover_image: row.cover_image || null,
-        type: 'financing',
-        type_label: '融资招募',
+        type: category || 'financing',
+        type_label: label,
         detail_type: 'business',
         detail_id: String(row.id),
       })

@@ -3,22 +3,26 @@ import { queryRows, queryOne, queryExecute } from '@/storage/database/mysql-clie
 import { UploadService } from '@/upload/upload.service'
 import { assertCloudStorageImageUrl } from '@/utils/media-validators'
 import { wantsListFields } from '@/common/list-fields'
+import {
+  BUSINESS_CATEGORIES,
+  BUSINESS_CATEGORY_LABELS,
+  isBusinessCategory,
+  isDemandBusinessCategory,
+  isUserBusinessCategory,
+  type BusinessCategory,
+  USER_BUSINESS_CATEGORIES,
+} from '@/common/business-category'
 import { RoadshowService } from './roadshow.service'
 import { createNotification } from '@/common/notify'
 
-export const BUSINESS_CATEGORIES = ['roadshow', 'financing', 'resource'] as const
-export type BusinessCategory = (typeof BUSINESS_CATEGORIES)[number]
-export const USER_BUSINESS_CATEGORIES = ['financing', 'resource'] as const
+export {
+  BUSINESS_CATEGORIES,
+  BUSINESS_CATEGORY_LABELS,
+  USER_BUSINESS_CATEGORIES,
+}
+export type { BusinessCategory }
 export const BUSINESS_SOURCES = ['admin', 'user'] as const
 export const BUSINESS_AUDIT_STATUSES = ['pending', 'approved', 'rejected'] as const
-
-function isBusinessCategory(value: unknown): value is BusinessCategory {
-  return typeof value === 'string' && (BUSINESS_CATEGORIES as readonly string[]).includes(value)
-}
-
-function isUserBusinessCategory(value: unknown): value is (typeof USER_BUSINESS_CATEGORIES)[number] {
-  return typeof value === 'string' && (USER_BUSINESS_CATEGORIES as readonly string[]).includes(value)
-}
 
 /** MySQL DATETIME 不接受 ISO（含 T/Z），统一转为 `YYYY-MM-DD HH:mm:ss` */
 function toMysqlDateTime(value: unknown): string | null {
@@ -276,13 +280,13 @@ export class BusinessService {
   }
 
   private normalizeContactPhone(category: string, phone: unknown) {
-    if (category !== 'financing' && category !== 'resource') return null
+    if (!isDemandBusinessCategory(category)) return null
     const value = String(phone || '').trim()
     return value || null
   }
 
   private normalizeDemandTalentId(category: string, talentId: unknown) {
-    if (category !== 'financing' && category !== 'resource') return null
+    if (!isDemandBusinessCategory(category)) return null
     if (talentId == null || talentId === '') return null
     const id = Number(talentId)
     return Number.isFinite(id) && id > 0 ? id : null
@@ -291,7 +295,7 @@ export class BusinessService {
   async create(dto: any, options?: { source?: 'admin' | 'user'; memberId?: string | number }) {
     if (!dto?.title?.trim()) throw new HttpException('标题不能为空', HttpStatus.BAD_REQUEST)
     if (!isBusinessCategory(dto.category)) {
-      throw new HttpException('分类必须是项目路演/融资招募/资源对接', HttpStatus.BAD_REQUEST)
+      throw new HttpException('分类必须是项目路演/商业需求/资源需求/生活需求', HttpStatus.BAD_REQUEST)
     }
     if (!dto.cover_image?.trim()) {
       throw new HttpException('封面图片为必填项', HttpStatus.BAD_REQUEST)
@@ -305,7 +309,7 @@ export class BusinessService {
     let auditStatus = dto.audit_status || 'approved'
     if (source === 'user') {
       if (!isUserBusinessCategory(dto.category)) {
-        throw new HttpException('用户仅可发布融资招募或资源对接', HttpStatus.BAD_REQUEST)
+        throw new HttpException('用户仅可发布商业需求、资源需求或生活需求', HttpStatus.BAD_REQUEST)
       }
       status = 'draft'
       auditStatus = 'pending'
@@ -554,7 +558,7 @@ export class BusinessService {
       throw new HttpException('无权编辑该内容', HttpStatus.FORBIDDEN)
     }
     if (!isUserBusinessCategory(dto.category || existing.category)) {
-      throw new HttpException('仅可发布融资招募或资源对接', HttpStatus.BAD_REQUEST)
+      throw new HttpException('仅可发布商业需求、资源需求或生活需求', HttpStatus.BAD_REQUEST)
     }
 
     const { demandTalentId } = await this.resolveMemberDemandParty(memberId)

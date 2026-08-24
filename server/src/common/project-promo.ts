@@ -12,7 +12,7 @@ export type PromoCoopMode = (typeof PROMO_COOP_MODES)[number]
 export const PROMO_COOP_MODE_LABELS: Record<PromoCoopMode, string> = {
   customer_referral: '客户引荐',
   project_deal: '项目成交',
-  resource_match: '资源对接',
+  resource_match: '资源需求',
   channel_coop: '渠道合作',
   equity_coop: '股权合作',
 }

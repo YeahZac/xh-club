@@ -821,7 +821,7 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
     sql: `CREATE TABLE IF NOT EXISTS business_opportunities (
       id INT AUTO_INCREMENT PRIMARY KEY,
       title VARCHAR(255) NOT NULL,
-      category VARCHAR(32) NOT NULL COMMENT 'roadshow|financing|resource',
+      category VARCHAR(32) NOT NULL COMMENT 'roadshow|financing|resource|life',
       summary TEXT NULL,
       content MEDIUMTEXT NULL,
       cover_image VARCHAR(500) NULL,

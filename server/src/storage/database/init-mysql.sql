@@ -24,11 +24,11 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE KEY uk_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 商机表（管理台商机管理：项目路演 / 融资招募 / 资源对接）
+-- 商机表（管理台商机管理：项目路演 / 商业需求 / 资源需求 / 生活需求）
 CREATE TABLE IF NOT EXISTS business_opportunities (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
-  category VARCHAR(32) NOT NULL COMMENT 'roadshow|financing|resource',
+  category VARCHAR(32) NOT NULL COMMENT 'roadshow|financing|resource|life',
   summary TEXT NULL,
   content MEDIUMTEXT NULL,
   cover_image VARCHAR(500) NULL,
@@ -250,6 +250,7 @@ INSERT IGNORE INTO homepage_sections (section, display_name, item_limit, sort_or
 ('events', '活动', 8, 1, 'custom'),
 ('products', '商城商品', 8, 2, 'custom'),
 ('projects', '项目', 8, 3, 'custom'),
-('financing', '融资招募', 8, 4, 'custom'),
+('financing', '商业需求', 8, 4, 'custom'),
 ('roadshow', '项目路演', 8, 5, 'custom'),
-('resource', '资源对接', 8, 6, 'custom');
+('resource', '资源需求', 8, 6, 'custom'),
+('life', '生活需求', 8, 7, 'custom');

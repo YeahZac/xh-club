@@ -332,7 +332,7 @@
     <div data-page="homepage" class="p-8 fade-in">
       <div class="mb-6">
         <h2 class="text-lg font-bold text-navy-800">首页内容管理</h2>
-        <p class="text-sm text-gray-500 mt-1">配置小程序首页瀑布流展示模块：活动、商城商品、项目、文章、融资招募、项目路演、资源对接。</p>
+        <p class="text-sm text-gray-500 mt-1">配置小程序首页瀑布流展示模块：活动、商城商品、项目、文章、商业需求、项目路演、资源需求、生活需求。</p>
       </div>
       <div id="homepageSortBar" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6 flex flex-wrap items-center gap-4">
         <div>
@@ -588,7 +588,7 @@
                 <option value="">未设置</option>
                 <option value="customer_referral">客户引荐</option>
                 <option value="project_deal">项目成交</option>
-                <option value="resource_match">资源对接</option>
+                <option value="resource_match">资源需求</option>
                 <option value="channel_coop">渠道合作</option>
                 <option value="equity_coop">股权合作</option>
               </select>
@@ -641,8 +641,9 @@
           <select id="bizCategoryFilter" onchange="loadBusiness()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
             <option value="">全部分类</option>
             <option value="roadshow">项目路演</option>
-            <option value="financing">融资招募</option>
-            <option value="resource">资源对接</option>
+            <option value="financing">商业需求</option>
+            <option value="resource">资源需求</option>
+            <option value="life">生活需求</option>
           </select>
           <select id="bizStatusFilter" onchange="loadBusiness()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
             <option value="">全部发布状态</option>
@@ -1344,7 +1345,7 @@ const STATUS_MAP = { active: '已激活', approved: '已激活', pending: '待�
 const USER_CATEGORY_MAP = { normal: '普通用户', promoter: '推广员', member_unit: '会员单位' }
 const STATUS_COLORS = { active: 'bg-green-100 text-green-700', approved: 'bg-green-100 text-green-700', pending: 'bg-yellow-100 text-yellow-700', frozen: 'bg-red-100 text-red-700', exited: 'bg-gray-100 text-gray-500', rejected: 'bg-red-100 text-red-700' }
 const EVENT_TYPE_MAP = { other: '其他活动', roadshow: '项目路演', salon: '专题沙龙', annual: '年度大会', training: '培训', meeting: '定期例会' }
-const BUSINESS_CATEGORY_MAP = { roadshow: '项目路演', financing: '融资招募', resource: '资源对接' }
+const BUSINESS_CATEGORY_MAP = { roadshow: '项目路演', financing: '商业需求', resource: '资源需求', life: '生活需求' }
 const CATEGORY_MAP = { rights: '会员权益', service: '商务服务', gift: '商务礼品', activity: '活动权益', learning: '学习成长' }
 const STAGE_MAP = { seed: '种子期', angel: '天使轮', a: 'A轮', b: 'B轮', c: 'C轮', ip: 'IPO', bootstrapped: '自有资金' }
 const PROJECT_STATUS_MAP = { active: '进行中', funded: '已融资', closed: '已关闭', draft: '草稿' }
@@ -3693,7 +3694,7 @@ function toggleBizRoadshowFields() {
   const panel = document.getElementById('bizRoadshowPanel')
   const extra = document.getElementById('bizExtraFields')
   if (panel) panel.classList.toggle('hidden', category !== 'roadshow')
-  if (extra) extra.classList.toggle('hidden', category !== 'financing' && category !== 'resource')
+  if (extra) extra.classList.toggle('hidden', category !== 'financing' && category !== 'resource' && category !== 'life')
 }
 
 function renderBizFormFields() {
@@ -4193,8 +4194,9 @@ async function showBusinessModal(editId) {
           <div><label class="block text-sm font-medium text-gray-700 mb-1">分类 *</label>
             <select id="bizCategory" onchange="toggleBizRoadshowFields()" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none">
               <option value="roadshow" ${(!item || item?.category==='roadshow')?'selected':''}>项目路演</option>
-              <option value="financing" ${item?.category==='financing'?'selected':''}>融资招募</option>
-              <option value="resource" ${item?.category==='resource'?'selected':''}>资源对接</option>
+              <option value="financing" ${item?.category==='financing'?'selected':''}>商业需求</option>
+              <option value="resource" ${item?.category==='resource'?'selected':''}>资源需求</option>
+              <option value="life" ${item?.category==='life'?'selected':''}>生活需求</option>
             </select>
           </div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">状态</label>
@@ -4211,7 +4213,7 @@ async function showBusinessModal(editId) {
           </label>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">展示排序</label><input id="bizSortOrder" type="number" min="0" value="${escapeHtml(item?.sort_order ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white"><p class="text-xs text-gray-400 mt-1">数值越小越靠前</p></div>
         </div>
-        <div id="bizExtraFields" class="${(item?.category==='financing' || item?.category==='resource') ? '' : 'hidden'} grid grid-cols-2 gap-4 border border-gray-100 rounded-2xl p-4 bg-gray-50/60">
+        <div id="bizExtraFields" class="${(item?.category==='financing' || item?.category==='resource' || item?.category==='life') ? '' : 'hidden'} grid grid-cols-2 gap-4 border border-gray-100 rounded-2xl p-4 bg-gray-50/60">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">电话号码（选填）</label>
             <input id="bizContactPhone" value="${escapeHtml(item?.contact_phone || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="联系电话">
@@ -4347,9 +4349,10 @@ const BANNER_LINK_TYPE_MAP = {
   event: '活动',
   article: '文章',
   project: '项目',
-  financing: '融资招募',
+  financing: '商业需求',
   roadshow: '项目路演',
-  resource: '资源对接',
+  resource: '资源需求',
+  life: '生活需求',
   product: '商城商品',
   link: 'URL',
   miniapp: '外部小程序'
@@ -4359,7 +4362,7 @@ function formatBannerLinkDesc(linkType, lc = {}) {
   if (linkType === 'article') return lc.article_id ? `文章#${lc.article_id}` : ''
   if (linkType === 'event') return lc.event_id ? `活动#${lc.event_id}` : ''
   if (linkType === 'project') return lc.project_id ? `项目#${lc.project_id}` : ''
-  if (linkType === 'financing' || linkType === 'roadshow' || linkType === 'resource') {
+  if (linkType === 'financing' || linkType === 'roadshow' || linkType === 'resource' || linkType === 'life') {
     return lc.business_id ? `商机#${lc.business_id}` : ''
   }
   if (linkType === 'product') return lc.product_id ? `商品#${lc.product_id}` : ''
@@ -4422,7 +4425,7 @@ function resolveBannerLinkTitle(linkType, lc = {}, maps = {}) {
   if (linkType === 'article' && lc.article_id) return maps.articles?.[String(lc.article_id)] || ''
   if (linkType === 'event' && lc.event_id) return maps.events?.[String(lc.event_id)] || ''
   if (linkType === 'project' && lc.project_id) return maps.projects?.[String(lc.project_id)] || ''
-  if ((linkType === 'financing' || linkType === 'roadshow' || linkType === 'resource') && lc.business_id) {
+  if ((linkType === 'financing' || linkType === 'roadshow' || linkType === 'resource' || linkType === 'life') && lc.business_id) {
     return maps.business?.[String(lc.business_id)] || ''
   }
   if (linkType === 'product' && lc.product_id) return maps.products?.[String(lc.product_id)] || ''
@@ -4501,9 +4504,10 @@ async function showBannerModal(editId) {
               <option value="event" ${linkType==='event'?'selected':''}>活动</option>
               <option value="article" ${linkType==='article'?'selected':''}>文章</option>
               <option value="project" ${linkType==='project'?'selected':''}>项目</option>
-              <option value="financing" ${linkType==='financing'?'selected':''}>融资招募</option>
+              <option value="financing" ${linkType==='financing'?'selected':''}>商业需求</option>
               <option value="roadshow" ${linkType==='roadshow'?'selected':''}>项目路演</option>
-              <option value="resource" ${linkType==='resource'?'selected':''}>资源对接</option>
+              <option value="resource" ${linkType==='resource'?'selected':''}>资源需求</option>
+              <option value="life" ${linkType==='life'?'selected':''}>生活需求</option>
               <option value="product" ${linkType==='product'?'selected':''}>商城商品</option>
               <option value="link" ${linkType==='link'?'selected':''}>URL</option>
               <option value="miniapp" ${linkType==='miniapp'?'selected':''}>外部小程序链接</option>
@@ -4518,7 +4522,7 @@ async function showBannerModal(editId) {
         </div>
         <div id="bnArticleField" class="${linkType==='article'?'':'hidden'}"><label class="block text-sm font-medium text-gray-700 mb-1">选择文章</label><select id="bnArticleId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
         <div id="bnProjectField" class="${linkType==='project'?'':'hidden'}"><label class="block text-sm font-medium text-gray-700 mb-1">选择项目</label><select id="bnProjectId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
-        <div id="bnBusinessField" class="${(linkType==='financing'||linkType==='roadshow'||linkType==='resource')?'':'hidden'}"><label class="block text-sm font-medium text-gray-700 mb-1" id="bnBusinessLabel">选择商机</label><select id="bnBusinessId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
+        <div id="bnBusinessField" class="${(linkType==='financing'||linkType==='roadshow'||linkType==='resource'||linkType==='life')?'':'hidden'}"><label class="block text-sm font-medium text-gray-700 mb-1" id="bnBusinessLabel">选择商机</label><select id="bnBusinessId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
         <div id="bnProductField" class="${linkType==='product'?'':'hidden'}"><label class="block text-sm font-medium text-gray-700 mb-1">选择商品</label><select id="bnProductId" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="">加载中...</option></select></div>
         <div id="bnLinkField" class="${linkType==='link'?'':'hidden'}"><label class="block text-sm font-medium text-gray-700 mb-1">URL链接</label><input id="bnUrl" value="${escapeHtml(lc.url || '')}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" placeholder="https://..."></div>
         <div id="bnMiniappField" class="${linkType==='miniapp'?'':'hidden'}">
@@ -4554,7 +4558,7 @@ function toggleBannerLinkFields() {
     bnEventField: type === 'event',
     bnArticleField: type === 'article',
     bnProjectField: type === 'project',
-    bnBusinessField: type === 'financing' || type === 'roadshow' || type === 'resource',
+    bnBusinessField: type === 'financing' || type === 'roadshow' || type === 'resource' || type === 'life',
     bnProductField: type === 'product',
     bnLinkField: type === 'link',
     bnMiniappField: type === 'miniapp',
@@ -4565,13 +4569,13 @@ function toggleBannerLinkFields() {
   })
   const label = document.getElementById('bnBusinessLabel')
   if (label) {
-    label.textContent = type === 'financing' ? '选择融资招募' : type === 'roadshow' ? '选择项目路演' : type === 'resource' ? '选择资源对接' : '选择商机'
+    label.textContent = type === 'financing' ? '选择商业需求' : type === 'roadshow' ? '选择项目路演' : type === 'resource' ? '选择资源需求' : type === 'life' ? '选择生活需求' : '选择商机'
   }
   if (type === 'event') {
     const current = document.getElementById('bnEventId')?.value || ''
     void loadBannerEventOptions(current)
   }
-  if (type === 'financing' || type === 'roadshow' || type === 'resource') {
+  if (type === 'financing' || type === 'roadshow' || type === 'resource' || type === 'life') {
     loadBannerBusinessOptions(type)
   }
 }
@@ -4637,7 +4641,7 @@ async function loadBannerProjectOptions(selectedId = '') {
 
 async function loadBannerBusinessOptions(category, selectedId = '') {
   const type = category || document.getElementById('bnLinkType')?.value
-  if (!['financing', 'roadshow', 'resource'].includes(type)) return
+  if (!['financing', 'roadshow', 'resource', 'life'].includes(type)) return
   const res = await api(`/admin/business?category=${type}`)
   if (res.code !== 200) return
   const list = Array.isArray(res.data) ? res.data : []
@@ -4673,7 +4677,7 @@ function buildBannerLinkPayload() {
   } else if (linkType === 'project') {
     linkId = document.getElementById('bnProjectId').value || null
     linkConfig = { project_id: linkId }
-  } else if (linkType === 'financing' || linkType === 'roadshow' || linkType === 'resource') {
+  } else if (linkType === 'financing' || linkType === 'roadshow' || linkType === 'resource' || linkType === 'life') {
     linkId = document.getElementById('bnBusinessId').value || null
     linkConfig = { business_id: linkId, category: linkType }
   } else if (linkType === 'product') {
@@ -4694,7 +4698,7 @@ function validateBannerLink(linkType, linkConfig) {
   if (linkType === 'article' && !linkConfig.article_id) return '请选择文章'
   if (linkType === 'event' && !linkConfig.event_id) return '请选择活动'
   if (linkType === 'project' && !linkConfig.project_id) return '请选择项目'
-  if ((linkType === 'financing' || linkType === 'roadshow' || linkType === 'resource') && !linkConfig.business_id) return '请选择对应商机内容'
+  if ((linkType === 'financing' || linkType === 'roadshow' || linkType === 'resource' || linkType === 'life') && !linkConfig.business_id) return '请选择对应商机内容'
   if (linkType === 'product' && !linkConfig.product_id) return '请选择商城商品'
   if (linkType === 'link' && !linkConfig.url) return '请填写 URL'
   if (linkType === 'miniapp' && (!linkConfig.appid || !linkConfig.path)) return '请填写小程序 APPID 与路径'
