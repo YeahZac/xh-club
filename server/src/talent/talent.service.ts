@@ -270,7 +270,8 @@ export class TalentService {
       values,
     )
     const selectSql = listFields
-      ? `SELECT t.id, t.member_id, t.real_name, t.contact, t.photo_url, t.avatar_url,
+      ? `SELECT t.id, t.member_id, t.real_name, t.contact, t.company_name, t.job_title,
+                t.experience, t.photo_url, t.avatar_url,
                 t.industry_tags, t.status, t.is_featured, t.sort_order, t.reviewed_at,
                 t.updated_at, t.created_at, t.admin_operated_at, t.payment_expire_at,
                 t.payment_start_at, t.payment_status, m.avatar AS member_avatar, m.name AS member_name, m.user_category
