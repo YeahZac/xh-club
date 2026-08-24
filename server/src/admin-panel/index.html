@@ -2387,27 +2387,41 @@ async function removeHomepageItem(id) {
 
 // ===== 会员管理 =====
 async function loadMembers() {
-  const status = document.getElementById('memberFilter').value
-  const search = document.getElementById('memberSearch').value.trim()
-  const qs = new URLSearchParams({
-    page: String(memberListState.page),
-    pageSize: String(memberListState.pageSize),
-  })
-  if (status) qs.set('status', status)
-  if (search) qs.set('search', search)
-  const res = await api(`/admin/members?${qs.toString()}`)
-  if (res.code !== 200) return
-  const { list: members, total, page, pageSize } = unwrapAdminList(res.data)
-  memberListState.total = total
-  memberListState.page = page
-  memberListState.pageSize = pageSize
-  document.getElementById('memberCount').textContent = `共 ${total} 位会员`
-  renderAdminPagination('memberPagination', memberListState, 'goMemberPage')
-  if (!members.length) {
-    document.getElementById('memberTableBody').innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">暂无数据</td></tr>'
-    return
+  const tbody = document.getElementById('memberTableBody')
+  if (tbody) {
+    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>'
   }
-  document.getElementById('memberTableBody').innerHTML = members.map(m => `
+  try {
+    const status = document.getElementById('memberFilter').value
+    const search = document.getElementById('memberSearch').value.trim()
+    const qs = new URLSearchParams({
+      page: String(memberListState.page),
+      pageSize: String(memberListState.pageSize),
+    })
+    if (status) qs.set('status', status)
+    if (search) qs.set('search', search)
+    const res = await api(`/admin/members?${qs.toString()}`)
+    if (res.code !== 200) {
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-12 text-center text-red-500">${escapeHtml(res.msg || '加载失败')}</td></tr>`
+      }
+      toast(res.msg || '会员列表加载失败', 'error')
+      return
+    }
+    const { list: members, total, page, pageSize } = unwrapAdminList(res.data)
+    memberListState.total = total
+    memberListState.page = page
+    memberListState.pageSize = pageSize
+    document.getElementById('memberCount').textContent = `共 ${total} 位会员`
+    renderAdminPagination('memberPagination', memberListState, 'goMemberPage')
+    if (!members.length) {
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">暂无数据</td></tr>'
+      }
+      return
+    }
+    if (tbody) {
+      tbody.innerHTML = members.map(m => `
     <tr class="hover:bg-gray-50 transition">
       <td class="px-6 py-4">
         <div class="flex items-center gap-3">
@@ -2440,6 +2454,14 @@ async function loadMembers() {
       </td>
     </tr>
   `).join('')
+    }
+  } catch (error) {
+    console.error('[会员管理] 加载失败:', error)
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-12 text-center text-red-500">${escapeHtml(error?.message || '加载失败')}</td></tr>`
+    }
+    toast(error?.message || '会员列表加载失败', 'error')
+  }
 }
 
 async function approveMember(id) {

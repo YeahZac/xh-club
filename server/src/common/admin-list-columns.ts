@@ -15,7 +15,7 @@ export const ADMIN_MEMBER_LIST_COLUMNS = [
   'referrer_id',
   'available_points',
   'total_points',
-  'growth_value',
+  'active_score',
   'credit_score',
   'join_source',
   'created_at',
