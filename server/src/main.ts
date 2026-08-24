@@ -164,6 +164,32 @@ async function bootstrap() {
   })
   console.log(`[启动] COS 域名反代前缀: ${COS_PUBLIC_PROXY_PREFIXES.join(', ')}`)
 
+  const siteIndexPath = publicDirs
+    .map((dir) => path.join(dir, 'index.html'))
+    .find((fullPath) => fs.existsSync(fullPath))
+  if (siteIndexPath) {
+    expressApp.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        next()
+        return
+      }
+      const pathname = String(req.path || '')
+      if (pathname !== '/' && pathname !== '/index.html') {
+        next()
+        return
+      }
+      res.status(200)
+      res.type('html')
+      res.setHeader('Cache-Control', 'public, max-age=120')
+      if (req.method === 'HEAD') {
+        res.end()
+        return
+      }
+      createReadStream(siteIndexPath).pipe(res)
+    })
+    console.log(`[启动] 官网首页: / -> ${siteIndexPath}`)
+  }
+
   // CORS 配置
   app.enableCors({
     origin: true,
