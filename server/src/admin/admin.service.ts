@@ -26,6 +26,7 @@ import {
   ADMIN_MALL_PRODUCT_LIST_COLUMNS,
   ADMIN_MEMBER_LIST_COLUMNS,
 } from '@/common/admin-list-columns'
+import { emptyAdminPage, parseAdminPage } from '@/common/admin-pagination'
 import { normalizeUserCategory, userCategoryLabel } from '@/common/user-category'
 import { toDatetimeLocalValue, toMysqlDateTime } from '@/common/mysql-datetime'
 import {
@@ -362,13 +363,42 @@ export class AdminService {
   /** ====== 会员管理 ====== */
   async getAllMembers(query: any) {
     try {
-      const rows = await queryRows(`SELECT ${ADMIN_MEMBER_LIST_COLUMNS} FROM members ORDER BY created_at DESC`)
+      const { page, pageSize, offset } = parseAdminPage(query)
+      const where: string[] = []
+      const params: any[] = []
+      if (query?.status) {
+        where.push('status = ?')
+        params.push(String(query.status))
+      }
+      const search = String(query?.search || query?.keyword || '').trim()
+      if (search) {
+        const like = `%${search}%`
+        where.push('(name LIKE ? OR company_name LIKE ? OR phone LIKE ?)')
+        params.push(like, like, like)
+      }
+      const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+      const totalRow = await queryOne(
+        `SELECT COUNT(*) AS total FROM members ${whereSql}`,
+        params,
+      )
+      const rows = await queryRows(
+        `SELECT ${ADMIN_MEMBER_LIST_COLUMNS} FROM members ${whereSql}
+         ORDER BY created_at DESC
+         LIMIT ? OFFSET ?`,
+        [...params, pageSize, offset],
+      )
       const signed = await this.uploadService.signRowsFields(rows || [], ['avatar'])
-      return (signed || []).map((row: any) => ({
+      const list = (signed || []).map((row: any) => ({
         ...row,
         user_category: normalizeUserCategory(row.user_category),
         user_category_label: userCategoryLabel(row.user_category),
       }))
+      return {
+        list,
+        total: Number(totalRow?.total || 0),
+        page,
+        pageSize,
+      }
     } catch (error) {
       console.error('[AdminService] getAllMembers error:', error)
       throw new HttpException('获取会员列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
@@ -856,24 +886,39 @@ export class AdminService {
 
   async getAllEvents(query: any) {
     try {
-      let sql = `SELECT ${ADMIN_EVENT_LIST_COLUMNS} FROM events`
+      const { page, pageSize, offset } = parseAdminPage(query)
+      const where: string[] = []
       const params: any[] = []
       if (query?.status) {
-        sql += ' WHERE status = ?'
-        params.push(query.status)
+        where.push('status = ?')
+        params.push(String(query.status))
       }
-      sql += ' ORDER BY updated_at DESC, created_at DESC'
-      const rows = (await queryRows(sql, params)) as any[]
+      const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+      const totalRow = await queryOne(
+        `SELECT COUNT(*) AS total FROM events ${whereSql}`,
+        params,
+      )
+      const rows = (await queryRows(
+        `SELECT ${ADMIN_EVENT_LIST_COLUMNS} FROM events ${whereSql}
+         ORDER BY updated_at DESC, created_at DESC
+         LIMIT ? OFFSET ?`,
+        [...params, pageSize, offset],
+      )) as any[]
       const synced: any[] = []
-      for (const row of rows) {
-        const next: any = await this.syncEventRuntimeStatus(row)
-        synced.push(next)
+      for (const row of rows || []) {
+        synced.push(await this.syncEventRuntimeStatus(row))
       }
-      // 若按状态筛选，同步后可能状态已变，再过滤一次
+      // 若按状态筛选，同步后可能状态已变，再过滤当前页
       const filtered: any[] = query?.status
         ? synced.filter((row: any) => String(row.status) === String(query.status))
         : synced
-      return this.uploadService.signRowsFields(filtered, ['cover_image', 'video_url'])
+      const list = await this.uploadService.signRowsFields(filtered, ['cover_image', 'video_url'])
+      return {
+        list,
+        total: Number(totalRow?.total || 0),
+        page,
+        pageSize,
+      }
     } catch (error) {
       console.error('[AdminService] getAllEvents error:', error)
       throw new HttpException('获取活动列表失败', HttpStatus.INTERNAL_SERVER_ERROR)
@@ -1644,10 +1689,38 @@ export class AdminService {
   /** ====== 文章管理 ====== */
   async getAllArticles(query?: any) {
     try {
-      const rows = await queryRows(`SELECT ${ADMIN_ARTICLE_LIST_COLUMNS} FROM articles ORDER BY created_at DESC`)
-      return this.uploadService.signRowsFields(rows, ['cover_image', 'video_url'])
+      const { page, pageSize, offset } = parseAdminPage(query)
+      const where: string[] = []
+      const params: any[] = []
+      if (query?.status) {
+        where.push('status = ?')
+        params.push(String(query.status))
+      }
+      if (query?.category) {
+        where.push('category = ?')
+        params.push(String(query.category))
+      }
+      const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+      const totalRow = await queryOne(
+        `SELECT COUNT(*) AS total FROM articles ${whereSql}`,
+        params,
+      )
+      const rows = await queryRows(
+        `SELECT ${ADMIN_ARTICLE_LIST_COLUMNS} FROM articles ${whereSql}
+         ORDER BY created_at DESC
+         LIMIT ? OFFSET ?`,
+        [...params, pageSize, offset],
+      )
+      const list = await this.uploadService.signRowsFields(rows || [], ['cover_image', 'video_url'])
+      return {
+        list,
+        total: Number(totalRow?.total || 0),
+        page,
+        pageSize,
+      }
     } catch (error) {
-      return []
+      console.error('[AdminService] getAllArticles error:', error)
+      return emptyAdminPage(query)
     }
   }
 
@@ -1742,10 +1815,44 @@ export class AdminService {
   }
 
   /** ====== 商品列表 ====== */
-  async getMallProducts() {
+  async getMallProducts(query: any = {}) {
     try {
-      const rows = await queryRows(`SELECT ${ADMIN_MALL_PRODUCT_LIST_COLUMNS} FROM mall_products ORDER BY created_at DESC`)
-      return this.uploadService.signRowsFields(rows, ['image_url', 'video_url', 'cover_image'])
+      const { page, pageSize, offset } = parseAdminPage(query)
+      const where: string[] = []
+      const params: any[] = []
+      if (query?.category) {
+        where.push('category = ?')
+        params.push(String(query.category))
+      }
+      // 列表页默认隐藏已下架；下拉可传 include_inactive=1
+      if (String(query?.include_inactive || '') !== '1') {
+        where.push(`(status IS NULL OR status <> 'inactive')`)
+      }
+      if (query?.status) {
+        where.push('status = ?')
+        params.push(String(query.status))
+      }
+      const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+      const totalRow = await queryOne(
+        `SELECT COUNT(*) AS total FROM mall_products ${whereSql}`,
+        params,
+      )
+      const rows = await queryRows(
+        `SELECT ${ADMIN_MALL_PRODUCT_LIST_COLUMNS} FROM mall_products ${whereSql}
+         ORDER BY created_at DESC
+         LIMIT ? OFFSET ?`,
+        [...params, pageSize, offset],
+      )
+      const list = await this.uploadService.signRowsFields(
+        rows || [],
+        ['image_url', 'video_url', 'cover_image'],
+      )
+      return {
+        list,
+        total: Number(totalRow?.total || 0),
+        page,
+        pageSize,
+      }
     } catch (error) {
       console.error('[AdminService] getMallProducts error:', error)
       throw new HttpException('获取商品列表失败', HttpStatus.INTERNAL_SERVER_ERROR)

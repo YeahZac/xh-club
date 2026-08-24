@@ -16,6 +16,8 @@ export const ADMIN_MEMBER_LIST_COLUMNS = [
   'available_points',
   'total_points',
   'growth_value',
+  'credit_score',
+  'join_source',
   'created_at',
   'updated_at',
 ].join(', ')

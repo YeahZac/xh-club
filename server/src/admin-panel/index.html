@@ -355,13 +355,13 @@
     <div data-page="members" class="p-8 fade-in">
       <div class="flex items-center justify-between mb-6">
         <div class="flex items-center gap-3">
-          <select id="memberFilter" onchange="loadMembers()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+          <select id="memberFilter" onchange="memberListState.page=1;loadMembers()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
             <option value="">全部会员</option>
             <option value="active">已激活</option>
             <option value="pending">待审批</option>
             <option value="frozen">已冻结</option>
           </select>
-          <input id="memberSearch" oninput="loadMembers()" type="text" placeholder="搜索姓名/公司/手机号..." class="px-4 py-2 border border-gray-200 rounded-xl text-sm w-64 focus:ring-2 focus:ring-brand-400 outline-none">
+          <input id="memberSearch" oninput="onMemberSearchInput()" type="text" placeholder="搜索姓名/公司/手机号..." class="px-4 py-2 border border-gray-200 rounded-xl text-sm w-64 focus:ring-2 focus:ring-brand-400 outline-none">
         </div>
         <span class="text-sm text-gray-500" id="memberCount">共 0 位会员</span>
       </div>
@@ -383,6 +383,7 @@
           </tbody>
         </table>
       </div>
+      <div id="memberPagination" class="mt-4 flex items-center justify-between"></div>
     </div>
 
 
@@ -432,7 +433,7 @@
     <div data-page="events" class="p-8 fade-in">
       <div class="flex items-center justify-between mb-6">
         <div class="flex items-center gap-3">
-          <select id="eventFilter" onchange="loadEvents()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+          <select id="eventFilter" onchange="eventListState.page=1;loadEvents()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
             <option value="">全部状态</option>
             <option value="open">报名中</option>
             <option value="full">已满员</option>
@@ -462,6 +463,7 @@
           </tbody>
         </table>
       </div>
+      <div id="eventPagination" class="mt-4 flex items-center justify-between"></div>
     </div>
 
     <!-- ====== 项目管理 ====== -->
@@ -753,13 +755,13 @@
     <div data-page="articles" class="p-8 fade-in">
       <div class="flex items-center justify-between mb-6">
         <div class="flex items-center gap-3">
-          <select id="articleStatusFilter" onchange="loadArticles()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+          <select id="articleStatusFilter" onchange="articleListState.page=1;loadArticles()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
             <option value="">全部状态</option>
             <option value="draft">草稿</option>
             <option value="published">已发布</option>
             <option value="archived">已归档</option>
           </select>
-          <select id="articleCategoryFilter" onchange="loadArticles()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+          <select id="articleCategoryFilter" onchange="articleListState.page=1;loadArticles()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
             <option value="">全部分类</option>
             <option value="news">商会新闻</option>
             <option value="insight">行业洞察</option>
@@ -786,6 +788,7 @@
           <tbody id="articleTableBody"><tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr></tbody>
         </table>
       </div>
+      <div id="articlePagination" class="mt-4 flex items-center justify-between"></div>
     </div>
 
     <!-- ====== 积分商城 ====== -->
@@ -796,7 +799,7 @@
           <button id="mallTabOrders" onclick="switchMallTab('orders')" class="px-4 py-2 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">订单发货</button>
         </div>
         <div class="flex items-center gap-3">
-          <select id="mallFilter" onchange="loadMallProducts()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
+          <select id="mallFilter" onchange="mallListState.page=1;loadMallProducts()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-400 outline-none">
             <option value="">全部分类</option>
             <option value="rights">会员权益</option>
             <option value="service">商务服务</option>
@@ -814,6 +817,7 @@
         <div id="mallCards" class="grid grid-cols-3 gap-6">
           <p class="text-gray-400 col-span-3 text-center py-12">加载中...</p>
         </div>
+        <div id="mallPagination" class="mt-4 flex items-center justify-between"></div>
       </div>
       <div id="mallOrdersPanel" class="hidden">
         <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4 flex items-center gap-3">
@@ -1230,6 +1234,59 @@ function toast(msg, type = 'success') {
   document.getElementById('toastContainer').appendChild(div)
   setTimeout(() => div.remove(), 3000)
 }
+
+/** 兼容旧数组响应与新分页 { list, total, page, pageSize } */
+function unwrapAdminList(payload) {
+  if (Array.isArray(payload)) {
+    return { list: payload, total: payload.length, page: 1, pageSize: payload.length || 20 }
+  }
+  const list = Array.isArray(payload?.list) ? payload.list : []
+  return {
+    list,
+    total: Number(payload?.total ?? list.length) || 0,
+    page: Math.max(1, Number(payload?.page) || 1),
+    pageSize: Math.max(1, Number(payload?.pageSize) || 20),
+  }
+}
+
+function renderAdminPagination(elId, state, goFnName) {
+  const el = document.getElementById(elId)
+  if (!el) return
+  const total = Number(state.total) || 0
+  const pageSize = Math.max(1, Number(state.pageSize) || 20)
+  const page = Math.max(1, Number(state.page) || 1)
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  if (total <= 0) {
+    el.innerHTML = ''
+    return
+  }
+  el.innerHTML = `
+    <p class="text-sm text-gray-500">共 ${total} 条 · 第 ${page}/${totalPages} 页</p>
+    <div class="flex items-center gap-2">
+      <button type="button" ${page <= 1 ? 'disabled' : ''} onclick="${goFnName}(${page - 1})"
+        class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 ${page <= 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-50'}">上一页</button>
+      <button type="button" ${page >= totalPages ? 'disabled' : ''} onclick="${goFnName}(${page + 1})"
+        class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 ${page >= totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-50'}">下一页</button>
+    </div>
+  `
+}
+
+const memberListState = { page: 1, pageSize: 20, total: 0 }
+const eventListState = { page: 1, pageSize: 20, total: 0 }
+const articleListState = { page: 1, pageSize: 20, total: 0 }
+const mallListState = { page: 1, pageSize: 12, total: 0 }
+let memberSearchTimer = null
+function onMemberSearchInput() {
+  clearTimeout(memberSearchTimer)
+  memberSearchTimer = setTimeout(() => {
+    memberListState.page = 1
+    loadMembers()
+  }, 300)
+}
+function goMemberPage(p) { memberListState.page = Math.max(1, p); loadMembers() }
+function goEventPage(p) { eventListState.page = Math.max(1, p); loadEvents() }
+function goArticlePage(p) { articleListState.page = Math.max(1, p); loadArticles() }
+function goMallPage(p) { mallListState.page = Math.max(1, p); loadMallProducts() }
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -2010,8 +2067,8 @@ async function loadDashboard() {
     document.getElementById('pendingBadge').classList.remove('hidden')
   }
   // 最近活动
-  const eventsRes = await api('/admin/events')
-  const recentEvents = Array.isArray(eventsRes.data) ? eventsRes.data : (eventsRes.data?.list || [])
+  const eventsRes = await api('/admin/events?page=1&pageSize=5')
+  const recentEvents = unwrapAdminList(eventsRes.data).list
   if (eventsRes.code === 200 && recentEvents.length) {
     document.getElementById('recentEvents').innerHTML = recentEvents.slice(0, 5).map(e => `
       <div class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition">
@@ -2318,17 +2375,21 @@ async function removeHomepageItem(id) {
 // ===== 会员管理 =====
 async function loadMembers() {
   const status = document.getElementById('memberFilter').value
-  const search = document.getElementById('memberSearch').value
-  let url = '/admin/members?limit=100'
-  if (status) url += `&status=${status}`
-  const res = await api(url)
+  const search = document.getElementById('memberSearch').value.trim()
+  const qs = new URLSearchParams({
+    page: String(memberListState.page),
+    pageSize: String(memberListState.pageSize),
+  })
+  if (status) qs.set('status', status)
+  if (search) qs.set('search', search)
+  const res = await api(`/admin/members?${qs.toString()}`)
   if (res.code !== 200) return
-  let members = res.data || []
-  if (search) {
-    const s = search.toLowerCase()
-    members = members.filter(m => (m.name || '').toLowerCase().includes(s) || (m.company_name || '').toLowerCase().includes(s) || (m.phone || '').includes(s))
-  }
-  document.getElementById('memberCount').textContent = `共 ${members.length} 位会员`
+  const { list: members, total, page, pageSize } = unwrapAdminList(res.data)
+  memberListState.total = total
+  memberListState.page = page
+  memberListState.pageSize = pageSize
+  document.getElementById('memberCount').textContent = `共 ${total} 位会员`
+  renderAdminPagination('memberPagination', memberListState, 'goMemberPage')
   if (!members.length) {
     document.getElementById('memberTableBody').innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">暂无数据</td></tr>'
     return
@@ -2737,11 +2798,19 @@ async function viewMemberMetric(memberId, metric, label) {
 // ===== 活动管理 =====
 async function loadEvents() {
   const status = document.getElementById('eventFilter').value
-  // 管理端列表走 /admin/events（返回数组）；公开 /events 返回 { list, total }，不能当数组用
-  const res = await api('/admin/events')
+  const qs = new URLSearchParams({
+    page: String(eventListState.page),
+    pageSize: String(eventListState.pageSize),
+  })
+  if (status) qs.set('status', status)
+  // 管理端列表走 /admin/events（返回 { list, total }）；公开 /events 结构不同
+  const res = await api(`/admin/events?${qs.toString()}`)
   if (res.code !== 200) return
-  let events = Array.isArray(res.data) ? res.data : (res.data?.list || [])
-  if (status) events = events.filter(e => e.status === status)
+  const { list: events, total, page, pageSize } = unwrapAdminList(res.data)
+  eventListState.total = total
+  eventListState.page = page
+  eventListState.pageSize = pageSize
+  renderAdminPagination('eventPagination', eventListState, 'goEventPage')
   if (!events.length) {
     document.getElementById('eventTableBody').innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">暂无活动</td></tr>'
     return
@@ -3250,12 +3319,12 @@ async function ensureProjectOwnerOptions() {
     return _pjOwnerMembers
   }
   const [membersRes, projectsRes, talentsRes] = await Promise.all([
-    api('/admin/members'),
+    api('/admin/members?page=1&pageSize=500'),
     api('/admin/projects').catch(() => ({ code: 0, data: [] })),
     api('/admin/talents').catch(() => ({ code: 0, data: [] })),
   ])
   if (membersRes.code !== 200) throw new Error(membersRes.msg || '加载会员失败')
-  const list = Array.isArray(membersRes.data) ? membersRes.data : (membersRes.data?.list || [])
+  const list = unwrapAdminList(membersRes.data).list
 
   const projectList = Array.isArray(projectsRes.data) ? projectsRes.data : (projectsRes.data?.list || [])
   const talentList = Array.isArray(talentsRes.data) ? talentsRes.data : (talentsRes.data?.list || [])
@@ -3846,8 +3915,8 @@ async function showAddRoadshowRegistration(businessId) {
     fields = res.data?.form_fields || []
     window.__roadshowRegContext = { businessId, fields }
   }
-  const membersRes = await api('/admin/members')
-  const members = Array.isArray(membersRes.data) ? membersRes.data : []
+  const membersRes = await api('/admin/members?page=1&pageSize=500')
+  const members = unwrapAdminList(membersRes.data).list
   window.__roadshowMemberOptions = members
   const fieldInputs = fields.map((f, index) => {
     const id = `rsAddField_${index}`
@@ -4322,11 +4391,11 @@ function normalizeBannerListPayload(payload) {
 
 async function loadBannerTitleMaps() {
   const [eventsRes, articlesRes, projectsRes, businessRes, productsRes] = await Promise.all([
-    api('/admin/events'),
-    api('/admin/articles?limit=500'),
+    api('/admin/events?page=1&pageSize=500'),
+    api('/admin/articles?page=1&pageSize=500'),
     api('/admin/projects'),
     api('/admin/business'),
-    api('/admin/mall-products'),
+    api('/admin/mall-products?page=1&pageSize=500'),
   ])
   const toMap = (rows, titleKey = 'title') => {
     const list = normalizeBannerListPayload(rows)
@@ -4508,9 +4577,9 @@ function toggleBannerLinkFields() {
 }
 
 async function loadBannerArticleOptions(selectedId = '') {
-  const res = await api('/admin/articles?limit=200')
+  const res = await api('/admin/articles?page=1&pageSize=500')
   if (res.code !== 200) return
-  const articles = normalizeBannerListPayload(res.data)
+  const articles = unwrapAdminList(res.data).list
   const sel = document.getElementById('bnArticleId')
   if (!sel) return
   sel.innerHTML = '<option value="">请选择文章</option>' + articles.map(a =>
@@ -4523,12 +4592,12 @@ async function loadBannerEventOptions(selectedId = '') {
   if (!sel) return
   sel.innerHTML = '<option value="">加载活动列表...</option>'
   try {
-    const res = await api('/admin/events')
+    const res = await api('/admin/events?page=1&pageSize=500')
     if (res.code !== 200) {
       sel.innerHTML = '<option value="">活动列表加载失败</option>'
       return
     }
-    const events = normalizeBannerListPayload(res.data)
+    const events = unwrapAdminList(res.data).list
       .slice()
       .sort((a, b) => {
         const order = { open: 0, full: 1, draft: 2, ended: 3 }
@@ -4581,9 +4650,9 @@ async function loadBannerBusinessOptions(category, selectedId = '') {
 }
 
 async function loadBannerProductOptions(selectedId = '') {
-  const res = await api('/admin/mall-products')
+  const res = await api('/admin/mall-products?page=1&pageSize=500')
   if (res.code !== 200) return
-  const products = Array.isArray(res.data) ? res.data : (res.data?.list || [])
+  const products = unwrapAdminList(res.data).list
   const sel = document.getElementById('bnProductId')
   if (!sel) return
   sel.innerHTML = '<option value="">请选择商品</option>' + products.map(p =>
@@ -4685,12 +4754,18 @@ async function deleteBanner(id, closeModalAfter = false) {
 // ===== 积分商城 =====
 async function loadMallProducts() {
   const cat = document.getElementById('mallFilter').value
-  const res = await api('/admin/mall-products')
+  const qs = new URLSearchParams({
+    page: String(mallListState.page),
+    pageSize: String(mallListState.pageSize),
+  })
+  if (cat) qs.set('category', cat)
+  const res = await api(`/admin/mall-products?${qs.toString()}`)
   if (res.code !== 200) return
-  let products = res.data || []
-  // 已下架（有订单后删除）的商品不在列表展示
-  products = products.filter((p) => String(p.status || 'active') !== 'inactive')
-  if (cat) products = products.filter(p => p.category === cat)
+  const { list: products, total, page, pageSize } = unwrapAdminList(res.data)
+  mallListState.total = total
+  mallListState.page = page
+  mallListState.pageSize = pageSize
+  renderAdminPagination('mallPagination', mallListState, 'goMallPage')
   if (!products.length) {
     document.getElementById('mallCards').innerHTML = '<p class="text-gray-400 col-span-3 text-center py-12">暂无商品</p>'
     return
@@ -5586,12 +5661,19 @@ const ARTICLE_CATEGORY_MAP = { news: '商会新闻', insight: '行业洞察', me
 async function loadArticles() {
   const status = document.getElementById('articleStatusFilter').value
   const category = document.getElementById('articleCategoryFilter').value
-  let url = '/admin/articles?limit=100'
-  if (status) url += `&status=${status}`
-  if (category) url += `&category=${category}`
-  const res = await api(url)
+  const qs = new URLSearchParams({
+    page: String(articleListState.page),
+    pageSize: String(articleListState.pageSize),
+  })
+  if (status) qs.set('status', status)
+  if (category) qs.set('category', category)
+  const res = await api(`/admin/articles?${qs.toString()}`)
   if (res.code !== 200) return
-  const articles = res.data?.list || res.data || []
+  const { list: articles, total, page, pageSize } = unwrapAdminList(res.data)
+  articleListState.total = total
+  articleListState.page = page
+  articleListState.pageSize = pageSize
+  renderAdminPagination('articlePagination', articleListState, 'goArticlePage')
   if (!articles.length) {
     document.getElementById('articleTableBody').innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">暂无文章</td></tr>'
     return
@@ -6470,7 +6552,7 @@ async function showAddTalentModal() {
   await ensureIndustryNameMap()
   const [industries, membersRes, talentsRes] = await Promise.all([
     api('/admin/industries'),
-    api('/admin/members?limit=500'),
+    api('/admin/members?page=1&pageSize=500'),
     api('/admin/talents'),
   ])
   const taken = new Set(
@@ -6478,7 +6560,7 @@ async function showAddTalentModal() {
       .map((t) => String(t.member_id))
       .filter(Boolean),
   )
-  const members = Array.isArray(membersRes.data) ? membersRes.data : []
+  const members = unwrapAdminList(membersRes.data).list
   const memberOptions = members
     .filter((m) => !taken.has(String(m.id)))
     .map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || '未命名')} · ${escapeHtml(m.phone || '')} · ID ${escapeHtml(m.id)}</option>`)

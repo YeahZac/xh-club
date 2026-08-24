@@ -1319,9 +1319,9 @@ export class AdminController {
 
   /** ====== 商城管理 ====== */
   @Get('mall-products')
-  async getMallProducts() {
+  async getMallProducts(@Query() query: any) {
     console.log('[AdminController] GET /api/admin/mall-products')
-    const result = await this.adminService.getMallProducts()
+    const result = await this.adminService.getMallProducts(query)
     return { code: 200, msg: 'success', data: result }
   }
 
