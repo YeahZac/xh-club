@@ -7,8 +7,13 @@ import {
   extractCosObjectInfo,
   normalizeMediaUrl,
 } from '@/utils/media-url';
+import { LruCache } from '@/common/lru-cache';
 
 const DEFAULT_SIGNED_URL_EXPIRES = 7200;
+/** 预签名 URL 内存缓存上限（条） */
+const SIGNED_URL_CACHE_MAX = Math.max(100, Number(process.env.COS_SIGNED_URL_CACHE_MAX) || 800);
+/** 媒体库 COS 扫描上限（条），防止大桶全量 listing 占满内存 */
+const MEDIA_LIBRARY_SCAN_MAX = Math.max(200, Number(process.env.MEDIA_LIBRARY_SCAN_MAX) || 800);
 /** STS 临时密钥下签名 URL 不宜过长：密钥一过期，即使 q-sign-time 未到也会 403 */
 const STS_SIGNED_URL_MAX_EXPIRES = 30 * 60;
 export const IMAGE_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
@@ -38,7 +43,9 @@ export class UploadService {
   private region: string = 'ap-shanghai';
   private credentialsExpireAt: number = 0;
   private usingPermanentKeys = false;
-  private readonly signedUrlCache = new Map<string, { url: string; expireAt: number }>();
+  private readonly signedUrlCache = new LruCache<string, { url: string; expireAt: number }>(
+    SIGNED_URL_CACHE_MAX,
+  );
 
   constructor() {
     // 从环境变量获取存储桶和地域配置（可选，也可从控制台获取）
@@ -458,10 +465,12 @@ export class UploadService {
       size: number;
       lastModified: string;
     }> = [];
+    const needed = page * pageSize;
+    const scanCap = Math.min(MEDIA_LIBRARY_SCAN_MAX, Math.max(needed + pageSize, pageSize * 3));
 
-    for (const prefix of prefixes) {
+    outer: for (const prefix of prefixes) {
       let marker = '';
-      for (let round = 0; round < 4; round += 1) {
+      for (let round = 0; round < 20; round += 1) {
         const pageData = await this.listBucketPage(prefix, marker, 100);
         for (const item of pageData.contents) {
           const key = item.Key || '';
@@ -474,6 +483,7 @@ export class UploadService {
             size: Number(item.Size || 0),
             lastModified: item.LastModified || '',
           });
+          if (collected.length >= scanCap) break outer;
         }
         if (!pageData.isTruncated) break;
         marker = pageData.nextMarker;
@@ -488,6 +498,7 @@ export class UploadService {
     });
 
     const total = collected.length;
+    const truncatedScan = collected.length >= scanCap;
     const start = (page - 1) * pageSize;
     const slice = collected.slice(start, start + pageSize);
     const list = await Promise.all(
@@ -517,7 +528,8 @@ export class UploadService {
       total,
       page,
       pageSize,
-      hasMore: start + pageSize < total,
+      hasMore: start + pageSize < total || truncatedScan,
+      truncatedScan,
     };
   }
 

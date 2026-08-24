@@ -1,6 +1,7 @@
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
+import { createReadStream } from 'fs';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from '@/app.module';
@@ -170,8 +171,9 @@ async function bootstrap() {
   });
   
   // 全局中间件（在 setGlobalPrefix 之前）
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+  const bodyLimit = process.env.BODY_LIMIT || '10mb';
+  app.use(express.json({ limit: bodyLimit }));
+  app.use(express.urlencoded({ limit: bodyLimit, extended: true }));
   
   // 设置全局前缀
   app.setGlobalPrefix('api');
@@ -198,12 +200,13 @@ async function bootstrap() {
     console.warn('[启动] 读取公网域名失败:', error?.message || error)
   }
 
-  // 提供 Admin 管理后台静态页面（异步读取）
+  // 提供 Admin 管理后台静态页面（流式输出，避免整页读入内存）
   const adminHtmlPath = path.resolve(process.cwd(), 'src/admin-panel/index.html');
   if (fs.existsSync(adminHtmlPath)) {
-    const adminHtml = await fs.promises.readFile(adminHtmlPath, 'utf-8');
-    app.use('/admin', (req: express.Request, res: express.Response) => {
-      res.type('text/html').send(adminHtml);
+    app.use('/admin', (_req: express.Request, res: express.Response) => {
+      res.type('text/html');
+      res.setHeader('Cache-Control', 'no-cache');
+      createReadStream(adminHtmlPath).pipe(res);
     });
     console.log('[启动] Admin panel available at /admin');
   }

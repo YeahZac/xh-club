@@ -20,6 +20,12 @@ import {
 } from '@/points/points-rule.util'
 import { createNotification } from '@/common/notify'
 import { resolveEventStatus } from '@/common/event-status'
+import {
+  ADMIN_ARTICLE_LIST_COLUMNS,
+  ADMIN_EVENT_LIST_COLUMNS,
+  ADMIN_MALL_PRODUCT_LIST_COLUMNS,
+  ADMIN_MEMBER_LIST_COLUMNS,
+} from '@/common/admin-list-columns'
 import { normalizeUserCategory, userCategoryLabel } from '@/common/user-category'
 import { toDatetimeLocalValue, toMysqlDateTime } from '@/common/mysql-datetime'
 import {
@@ -356,7 +362,7 @@ export class AdminService {
   /** ====== 会员管理 ====== */
   async getAllMembers(query: any) {
     try {
-      const rows = await queryRows('SELECT * FROM members ORDER BY created_at DESC')
+      const rows = await queryRows(`SELECT ${ADMIN_MEMBER_LIST_COLUMNS} FROM members ORDER BY created_at DESC`)
       const signed = await this.uploadService.signRowsFields(rows || [], ['avatar'])
       return (signed || []).map((row: any) => ({
         ...row,
@@ -522,7 +528,7 @@ export class AdminService {
 
   async getPendingMembers(query: any) {
     try {
-      const rows = await queryRows('SELECT * FROM members ORDER BY created_at DESC LIMIT 10')
+      const rows = await queryRows(`SELECT ${ADMIN_MEMBER_LIST_COLUMNS} FROM members ORDER BY created_at DESC LIMIT 10`)
       return this.uploadService.signRowsFields(rows || [], ['avatar'])
     } catch (error) {
       console.error('[AdminService] getPendingMembers error:', error)
@@ -850,7 +856,7 @@ export class AdminService {
 
   async getAllEvents(query: any) {
     try {
-      let sql = 'SELECT * FROM events'
+      let sql = `SELECT ${ADMIN_EVENT_LIST_COLUMNS} FROM events`
       const params: any[] = []
       if (query?.status) {
         sql += ' WHERE status = ?'
@@ -1638,7 +1644,7 @@ export class AdminService {
   /** ====== 文章管理 ====== */
   async getAllArticles(query?: any) {
     try {
-      const rows = await queryRows('SELECT * FROM articles ORDER BY created_at DESC')
+      const rows = await queryRows(`SELECT ${ADMIN_ARTICLE_LIST_COLUMNS} FROM articles ORDER BY created_at DESC`)
       return this.uploadService.signRowsFields(rows, ['cover_image', 'video_url'])
     } catch (error) {
       return []
@@ -1738,7 +1744,7 @@ export class AdminService {
   /** ====== 商品列表 ====== */
   async getMallProducts() {
     try {
-      const rows = await queryRows('SELECT * FROM mall_products ORDER BY created_at DESC')
+      const rows = await queryRows(`SELECT ${ADMIN_MALL_PRODUCT_LIST_COLUMNS} FROM mall_products ORDER BY created_at DESC`)
       return this.uploadService.signRowsFields(rows, ['image_url', 'video_url', 'cover_image'])
     } catch (error) {
       console.error('[AdminService] getMallProducts error:', error)

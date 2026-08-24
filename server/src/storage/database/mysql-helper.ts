@@ -6,6 +6,15 @@
 import { getPool } from './mysql-client'
 import { RowDataPacket, ResultSetHeader } from 'mysql2'
 
+function isMysqlDebugEnabled(): boolean {
+  return String(process.env.MYSQL_DEBUG || '0').trim() === '1'
+}
+
+function debugSql(label: string, sql: string, params: unknown): void {
+  if (!isMysqlDebugEnabled()) return
+  console.log(label, sql, 'Params:', params)
+}
+
 // 通用查询构建器
 export class MySQLQueryBuilder<T extends RowDataPacket = RowDataPacket> {
   private tableName: string
@@ -146,7 +155,7 @@ export class MySQLQueryBuilder<T extends RowDataPacket = RowDataPacket> {
     }
 
     const sql = `SELECT ${this.selectFields} FROM ${this.tableName}${this.buildWhereClause()}${this.orderByClause}${this.limitClause}${this.offsetClause}`
-    console.log('[MySQLQueryBuilder] Query:', sql, 'Params:', this.params)
+    debugSql('[MySQLQueryBuilder] Query:', sql, this.params)
 
     const [rows] = await pool.query(sql, this.params)
     return rows as T[]
@@ -199,7 +208,7 @@ export async function insert<T extends RowDataPacket = RowDataPacket>(
   const values = Object.values(data)
 
   const sql = `INSERT INTO ${tableName} (${fields.join(', ')}) VALUES (${placeholders})`
-  console.log('[MySQL] Insert:', sql, 'Values:', values)
+  debugSql('[MySQL] Insert:', sql, values)
 
   const [result] = await pool.query(sql, values) as [ResultSetHeader, any]
   
@@ -255,7 +264,7 @@ export async function update<T extends RowDataPacket = RowDataPacket>(
 
   const sql = `UPDATE ${tableName} SET ${setClause} WHERE ${condClause}`
   const values = [...setValues, ...condValues]
-  console.log('[MySQL] Update:', sql, 'Values:', values)
+  debugSql('[MySQL] Update:', sql, values)
 
   await pool.query(sql, values)
 
@@ -282,7 +291,7 @@ export async function remove(
   const condValues = Object.values(conditions)
 
   const sql = `DELETE FROM ${tableName} WHERE ${condClause}`
-  console.log('[MySQL] Delete:', sql, 'Values:', condValues)
+  debugSql('[MySQL] Delete:', sql, condValues)
 
   const [result] = await pool.query(sql, condValues) as [ResultSetHeader, any]
   return result.affectedRows > 0
@@ -299,7 +308,7 @@ export async function query<T extends RowDataPacket = RowDataPacket>(
     return []
   }
 
-  console.log('[MySQL] Query:', sql, 'Params:', params)
+  debugSql('[MySQL] Query:', sql, params)
   const [rows] = await pool.query(sql, params) as [RowDataPacket[], any]
   return rows as T[]
 }
@@ -314,7 +323,7 @@ export async function execute(
     throw new Error('MySQL Pool is not initialized')
   }
 
-  console.log('[MySQL] Execute:', sql, 'Params:', params)
+  debugSql('[MySQL] Execute:', sql, params)
   const [result] = await pool.query(sql, params)
   return result as ResultSetHeader
 }

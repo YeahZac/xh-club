@@ -168,11 +168,20 @@ export class EventsService {
       console.warn('[EventsService] increment event view_count failed:', error)
     }
 
-    // 获取已报名会员
-    const { data: registrations } = await this.client()
-      .from('event_registrations')
-      .select('member_id, status, created_at, members(id, name, avatar, company_name)')
-      .eq('event_id', id)
+    // 报名数与当前用户是否已报名（避免拉全量报名+会员 JOIN）
+    const countRow = await queryOne(
+      'SELECT COUNT(*) AS total FROM event_registrations WHERE event_id = ?',
+      [id],
+    )
+    const registrationCount = Number(countRow?.total || 0)
+    let isRegistered = false
+    if (memberId) {
+      const reg = await queryOne(
+        'SELECT id FROM event_registrations WHERE event_id = ? AND member_id = ? LIMIT 1',
+        [id, memberId],
+      )
+      isRegistered = Boolean(reg?.id)
+    }
 
     const signed = await this.uploadService.signDetailMediaFields(
       data,
@@ -183,18 +192,16 @@ export class EventsService {
     const formDefaultsBundle = memberId
       ? await resolveRegisterFormDefaults(memberId, formFields, 'event')
       : { defaults: {}, talentDefaults: {} }
-    const registrationCount = Array.isArray(registrations) ? registrations.length : 0
+    const registrationCountResolved = registrationCount
     const currentParticipants = Math.max(
       Number(signed.current_participants || 0),
-      registrationCount,
+      registrationCountResolved,
     )
     const synced = await this.syncEventRuntimeStatus({
       ...signed,
       current_participants: currentParticipants,
     })
-    const isRegistered = memberId
-      ? (registrations || []).some((item: any) => String(item.member_id) === String(memberId))
-      : false
+    const isRegisteredResolved = isRegistered
     const runtimeStatus = resolveEventStatus({
       ...synced,
       current_participants: currentParticipants,
@@ -207,11 +214,11 @@ export class EventsService {
       form_defaults: formDefaultsBundle.defaults,
       talent_defaults: formDefaultsBundle.talentDefaults,
       current_participants: currentParticipants,
-      registration_count: registrationCount,
+      registration_count: registrationCountResolved,
       registrations: [],
       member_state: {
-        is_registered: isRegistered,
-        can_register: !isRegistered && runtimeStatus === 'open',
+        is_registered: isRegisteredResolved,
+        can_register: !isRegisteredResolved && runtimeStatus === 'open',
         register_blocked_reason:
           runtimeStatus === 'ended'
             ? '已结束'

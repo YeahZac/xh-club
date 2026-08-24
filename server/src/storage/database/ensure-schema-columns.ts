@@ -1095,7 +1095,15 @@ function isDuplicateColumnError(message?: string): boolean {
   return msg.includes('Duplicate column') || msg.includes('ER_DUP_FIELDNAME')
 }
 
-export async function ensureSchemaColumns(): Promise<void> {
+let schemaEnsureDone = false
+let schemaEnsureRunning: Promise<void> | null = null
+
+/** 是否跳过 schema 补齐（本地开发可设 SCHEMA_ENSURE=0） */
+export function isSchemaEnsureEnabled(): boolean {
+  return String(process.env.SCHEMA_ENSURE || '1').trim() !== '0'
+}
+
+async function runSchemaEnsure(): Promise<void> {
   const pool = getPool()
   if (!pool) return
 
@@ -1374,4 +1382,22 @@ async function ensureSeedData(pool: NonNullable<ReturnType<typeof getPool>>): Pr
   } catch (error: any) {
     console.warn('[MySQL] 回填 8/8 议程 HTML 失败:', error?.message || error)
   }
+}
+
+/** 幂等 schema 补齐：进程内只执行一次，避免每次请求重复 DDL */
+export async function ensureSchemaColumns(): Promise<void> {
+  if (!isSchemaEnsureEnabled()) return
+  if (schemaEnsureDone) return
+  if (schemaEnsureRunning) return schemaEnsureRunning
+
+  schemaEnsureRunning = (async () => {
+    try {
+      await runSchemaEnsure()
+      schemaEnsureDone = true
+    } finally {
+      schemaEnsureRunning = null
+    }
+  })()
+
+  return schemaEnsureRunning
 }

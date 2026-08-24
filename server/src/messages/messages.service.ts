@@ -3,8 +3,16 @@ import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-clie
 import { createNotification } from '@/common/notify'
 import { UploadService } from '@/upload/upload.service'
 
+/** 同会员去重清理最短间隔（毫秒），避免每次拉列表都跑 DELETE JOIN */
+const PURGE_DEDUPE_INTERVAL_MS = Math.max(
+  60_000,
+  Number(process.env.NOTIFY_PURGE_INTERVAL_MS) || 60 * 60 * 1000,
+)
+
 @Injectable()
 export class MessagesService {
+  private readonly purgeDedupeAt = new Map<string, number>()
+
   constructor(private readonly uploadService: UploadService) {}
 
   /** 获取私信列表（MySQL；前端当前不展示聊天，保留接口兼容） */
@@ -98,6 +106,10 @@ export class MessagesService {
    * 解决历史双提交/重复写入导致消息列表刷屏。
    */
   private async purgeDuplicateBizNotifications(memberId: string): Promise<void> {
+    const now = Date.now()
+    const last = this.purgeDedupeAt.get(memberId) || 0
+    if (now - last < PURGE_DEDUPE_INTERVAL_MS) return
+
     try {
       await queryExecute(
         `DELETE n FROM notifications n
@@ -117,6 +129,7 @@ export class MessagesService {
            AND n.biz_id <> ''`,
         [memberId],
       )
+      this.purgeDedupeAt.set(memberId, now)
     } catch (error: any) {
       // 旧表无 biz 列时忽略
       if (error?.errno === 1054) return
