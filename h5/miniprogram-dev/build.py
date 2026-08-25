@@ -79,32 +79,33 @@ html = r'''<!DOCTYPE html>
   <meta name="renderer" content="webkit" />
   <meta name="format-detection" content="telephone=yes,email=yes" />
   <meta name="applicable-device" content="pc,mobile" />
-  <meta name="theme-color" content="#070d1a" />
-  <title>小程序开发_APP开发_商城会员CRM定制_企业信息系统外包</title>
-  <meta name="description" content="深圳龙岗星河COCO Park，承接微信小程序、APP、商城、会员、CRM、广告与后台。已服务390+企业，源码交付、合同保障。电话15918651523。" />
+  <meta name="theme-color" content="#e8f1fb" />
+  <title>小程序APP定制开发_商城会员CRM系统_深圳软件外包</title>
+  <meta name="description" content="深圳龙岗星河COCO Park，小程序与APP定制开发4000起。商城、会员、CRM、后台系统，已服务390+企业，源码交付。" />
   <meta name="keywords" content="小程序开发,深圳软件外包,获客系统,私域运营,APP开发,商城系统,会员系统,CRM系统,后台管理系统" />
   <style>
-/* Hallmark · genre: atmospheric · macrostructure: Marquee Hero + Catalogue
- * theme: Cobalt · nav: N1b · footer: Ft5 · enrichment: photography + CN UI showcase
- * Hallmark · pre-emit critique: P5 H5 E5 S5 R4 V5 */
+/* Hallmark · genre: modern-minimal · macrostructure: Marquee Hero + Catalogue
+ * theme: Cobalt bright · nav: N1b · footer: Ft5 · tone: 科技蓝+金色点缀
+ * Hallmark · pre-emit critique: P5 H4 E5 S5 R4 V5 */
 
 :root {
-  --color-paper: #070d1a;
-  --color-paper-2: #0c1528;
-  --color-paper-3: #101e36;
-  --color-card: #121f36;
-  --color-rule: #1e3354;
-  --color-muted: #8fa3c4;
-  --color-ink: #e8f0ff;
-  --color-accent: #2dd4ff;
-  --color-accent-hover: #5ce4ff;
-  --color-accent-active: #1ab8e0;
-  --color-on-accent: #041018;
-  --color-accent-2: #3b82f6;
-  --color-gold: #c9a96e;
-  --color-focus: #2dd4ff;
-  --color-caption: rgba(7, 13, 26, 0.82);
-  --color-scrim: rgba(4, 10, 20, 0.72);
+  --color-paper: #eef4fc;
+  --color-paper-2: #e3edf9;
+  --color-paper-3: #d6e6f8;
+  --color-card: #ffffff;
+  --color-rule: #c5d9f0;
+  --color-muted: #5a728e;
+  --color-ink: #0c2340;
+  --color-accent: #1565d8;
+  --color-accent-hover: #1e7aef;
+  --color-accent-active: #0f52b8;
+  --color-on-accent: #ffffff;
+  --color-accent-2: #2b8cff;
+  --color-gold: #c9a227;
+  --color-gold-soft: rgba(201, 162, 39, 0.14);
+  --color-focus: #1565d8;
+  --color-caption: rgba(255, 255, 255, 0.96);
+  --color-scrim: rgba(12, 35, 64, 0.62);
   --font-display: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   --font-body: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   --text-hero: clamp(1.35rem, 4.2vw, 2rem);
@@ -125,46 +126,70 @@ html = r'''<!DOCTYPE html>
   --page: 72rem;
   --z-nav: 4;
   --z-caption: 2;
-  --glow: 0 0 0 1px rgba(45, 212, 255, 0.12), 0 24px 60px rgba(0, 0, 0, 0.45);
+  --glow: 0 0 0 1px rgba(21, 101, 216, 0.1), 0 16px 40px rgba(21, 101, 216, 0.08);
 }
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html, body {
   margin: 0; padding: 0;
   overflow-x: clip;
-  background: radial-gradient(120% 80% at 50% -10%, #142a52 0%, var(--color-paper) 42%, #050910 100%);
+  background:
+    radial-gradient(ellipse 85% 55% at 100% 0%, rgba(201, 162, 39, 0.14) 0%, transparent 52%),
+    radial-gradient(ellipse 75% 50% at 0% 8%, rgba(21, 101, 216, 0.16) 0%, transparent 48%),
+    linear-gradient(180deg, #f6f9fe 0%, var(--color-paper) 42%, #dde9f7 100%);
   color: var(--color-ink);
   font-family: var(--font-body);
   font-size: 16px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
-img { display: block; width: 100%; height: auto; border: 0; }
-figure { margin: 0; }
-h1, h2, h3 { font-family: var(--font-display); font-style: normal; font-weight: 600; margin: 0; letter-spacing: -0.02em; overflow-wrap: anywhere; min-width: 0; }
-p { margin: 0; }
-a { color: var(--color-accent); text-decoration: none; -webkit-tap-highlight-color: rgba(45, 212, 255, 0.18); }
-a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
-
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(90deg, rgba(21, 101, 216, 0.03) 1px, transparent 1px),
+    linear-gradient(rgba(21, 101, 216, 0.03) 1px, transparent 1px);
+  background-size: 2.5rem 2.5rem;
+  mask-image: linear-gradient(180deg, rgba(0,0,0,0.35), transparent 70%);
+}
 .page {
+  position: relative;
+  z-index: 1;
   width: min(100%, var(--page));
   margin: 0 auto;
   padding: 0 var(--space-md) calc(var(--space-xl) + env(safe-area-inset-bottom));
 }
+img { display: block; width: 100%; height: auto; border: 0; }
+figure { margin: 0; }
+h1, h2, h3 { font-family: var(--font-display); font-style: normal; font-weight: 600; margin: 0; letter-spacing: -0.02em; overflow-wrap: anywhere; min-width: 0; }
+p { margin: 0; }
+a { color: var(--color-accent); text-decoration: none; -webkit-tap-highlight-color: rgba(21, 101, 216, 0.15); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
 .nav {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
   padding: calc(var(--space-sm) + env(safe-area-inset-top)) 0 var(--space-sm);
   position: relative; z-index: var(--z-nav);
 }
-.brand { color: var(--color-ink); font-weight: 600; font-size: 1rem; white-space: nowrap; }
+.brand {
+  color: var(--color-ink);
+  font-weight: 600;
+  font-size: clamp(0.78rem, 3.2vw, 0.95rem);
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
 .nav-links { display: none; list-style: none; margin: 0; padding: 0; gap: var(--space-md); }
 .nav-links a { color: var(--color-muted); font-size: var(--text-sm); white-space: nowrap; }
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
   min-height: 2.5rem; padding: 0 var(--space-md);
-  border: 1px solid var(--color-accent); border-radius: 999px;
+  border: 1px solid rgba(201, 162, 39, 0.45);
+  border-radius: 999px;
   background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));
+  box-shadow: 0 4px 14px rgba(21, 101, 216, 0.22);
   color: var(--color-on-accent); font-weight: 600;
   font-size: var(--text-sm); white-space: nowrap;
   transition: filter var(--dur-micro) var(--ease-out), transform var(--dur-short) var(--ease-out);
@@ -193,7 +218,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
 .slide::after {
   content: "";
   position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(7,13,26,0.05) 20%, rgba(7,13,26,0.78) 100%);
+  background: linear-gradient(180deg, rgba(12,35,64,0.02) 15%, rgba(12,35,64,0.55) 100%);
   pointer-events: none;
 }
 .caption {
@@ -205,12 +230,12 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
   display: block;
   font-size: var(--text-hero);
   line-height: 1.2;
-  color: var(--color-ink);
+  color: #fff;
   text-shadow: 0 2px 24px rgba(0,0,0,0.55);
 }
 .caption span {
   display: block; margin-top: var(--space-2xs);
-  font-size: var(--text-sm); color: var(--color-muted);
+  font-size: var(--text-sm); color: rgba(255,255,255,0.88);
   line-height: 1.45;
 }
 .dots { display: flex; justify-content: center; gap: var(--space-xs); padding: var(--space-sm) 0 0; }
@@ -231,7 +256,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
   padding: var(--space-md);
   border-radius: var(--radius);
   border: 1px solid var(--color-rule);
-  background: linear-gradient(160deg, rgba(18,31,54,0.95), rgba(10,18,32,0.88));
+  background: linear-gradient(160deg, var(--color-card), var(--color-paper-2));
   box-shadow: var(--glow);
 }
 .trust-card strong { display: block; font-size: 1rem; margin-bottom: var(--space-2xs); color: var(--color-ink); }
@@ -247,10 +272,11 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
   border-radius: var(--radius);
   border: 1px solid var(--color-rule);
   background: var(--color-card);
+  box-shadow: var(--glow);
 }
 .pain-card h3, .solve-card h3 { font-size: 1rem; margin-bottom: var(--space-2xs); }
 .pain-card p, .solve-card p { font-size: var(--text-xs); color: var(--color-muted); line-height: 1.55; }
-.solve-card { border-color: rgba(45, 212, 255, 0.28); background: linear-gradient(145deg, rgba(16,30,54,0.95), rgba(8,16,30,0.92)); }
+.solve-card { border-color: rgba(21, 101, 216, 0.28); background: linear-gradient(145deg, var(--color-card), var(--color-paper-3)); }
 
 .showcase { display: grid; gap: var(--space-xl); }
 .subhead {
@@ -271,8 +297,8 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
   flex-direction: column;
   min-height: 100%;
   border-radius: calc(var(--radius) + 2px);
-  border: 1px solid rgba(45, 212, 255, 0.16);
-  background: linear-gradient(168deg, rgba(16, 28, 50, 0.98) 0%, rgba(8, 14, 28, 0.94) 100%);
+  border: 1px solid var(--color-rule);
+  background: linear-gradient(168deg, var(--color-card) 0%, var(--color-paper-2) 100%);
   overflow: hidden;
   box-shadow: var(--glow);
 }
@@ -305,23 +331,41 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
   margin: 0 var(--space-md) var(--space-md);
   border-radius: 10px;
   overflow: hidden;
-  background: #02060f;
-  border: 1px solid rgba(45, 212, 255, 0.12);
+  border: 1px solid var(--color-rule);
   flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.ui-shot.mobile { aspect-ratio: 9 / 16; min-height: 14rem; }
+.ui-shot.mobile {
+  background: linear-gradient(180deg, var(--color-paper-3), var(--color-paper-2));
+  padding: var(--space-xs);
+  min-height: 12rem;
+}
 .ui-shot.mobile img {
-  width: 100%; height: 100%; object-fit: cover; object-position: top center;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 20rem;
+  object-fit: contain;
+  object-position: center top;
 }
-.ui-shot.desktop { aspect-ratio: 16 / 10; min-height: 10rem; }
+.ui-shot.desktop {
+  aspect-ratio: 16 / 10;
+  background: #0a1628;
+  min-height: 10rem;
+}
 .ui-shot.desktop img {
-  width: 100%; height: 100%; object-fit: cover; object-position: center;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
 }
 .case-panel.copy {
   justify-content: center;
   padding: var(--space-lg) var(--space-md);
   min-height: 11rem;
-  background: linear-gradient(155deg, rgba(12, 22, 40, 0.96), rgba(7, 13, 26, 0.98));
+  background: linear-gradient(155deg, var(--color-card), var(--color-gold-soft));
 }
 .case-panel.copy h3 { font-size: 1.1rem; margin-bottom: var(--space-sm); }
 .case-panel.copy p { font-size: var(--text-sm); color: var(--color-muted); line-height: 1.7; }
@@ -349,14 +393,52 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
 .quote {
   margin-top: var(--space-xl);
   padding: var(--space-lg) var(--space-md);
-  background: linear-gradient(160deg, rgba(18,31,54,0.96), rgba(7,13,26,0.98));
+  background: linear-gradient(160deg, var(--color-card), var(--color-paper-3));
   border: 1px solid var(--color-rule);
   border-radius: var(--radius);
   text-align: center;
   box-shadow: var(--glow);
+  position: relative;
+  overflow: hidden;
+}
+.quote::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-accent), var(--color-gold), var(--color-accent));
 }
 .quote h2 { margin-bottom: var(--space-md); }
 .quote-box { display: grid; justify-items: center; gap: var(--space-sm); }
+.price-from {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-2xs);
+  margin: 0;
+}
+.price-num {
+  font-size: clamp(2rem, 8vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-accent);
+  letter-spacing: -0.03em;
+}
+.price-unit {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--color-gold);
+}
+.price-note {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  max-width: 26ch;
+  line-height: 1.55;
+}
+.quote-cta {
+  min-width: 10rem;
+  margin-top: var(--space-2xs);
+}
 .qr {
   background: #fff;
   border: 1px solid var(--color-rule);
@@ -364,7 +446,6 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
   border-radius: 8px;
 }
 .qr img { width: 5.75rem; height: 5.75rem; object-fit: contain; }
-.tel { font-size: 1.15rem; font-weight: 600; color: var(--color-ink); white-space: nowrap; }
 .mail { color: var(--color-muted); font-size: var(--text-sm); word-break: break-all; }
 .addr, .foot-addr {
   color: var(--color-ink);
@@ -411,7 +492,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
 <body>
   <div class="page">
     <header class="nav">
-      <a class="brand" href="#top">企业系统外包</a>
+      <a class="brand" href="#top">小程序APP定制开发</a>
       <ul class="nav-links">
         <li><a href="#trust">实力</a></li>
         <li><a href="#cases">案例</a></li>
@@ -420,7 +501,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
       <a class="btn" href="#contact">获取报价</a>
     </header>
 
-    <h1 class="sr-only">深圳企业信息系统外包：小程序、APP、商城、会员、CRM、后台定制开发</h1>
+    <h1 class="sr-only">深圳小程序APP定制开发：商城、会员、CRM、后台系统，4000起</h1>
 
     <div class="carousel" id="carousel">
       <div class="viewport" id="viewport">
@@ -663,8 +744,10 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
     <aside class="quote" id="contact">
       <h2>获取报价</h2>
       <div class="quote-box">
+        <p class="price-from"><span class="price-num">4000</span><span class="price-unit">起</span></p>
+        <p class="price-note">按功能模块评估，扫码沟通需求后给到明细方案</p>
+        <a class="btn quote-cta" href="#contact">获取报价</a>
         <div class="qr"><img src="{{qr}}" alt="微信二维码" width="152" height="152" /></div>
-        <a class="tel" href="tel:15918651523">15918651523</a>
         <a class="mail" href="mailto:zacforward@163.com">zacforward@163.com</a>
         <p class="addr">深圳市龙岗区星河 COCO Park F栋2楼</p>
         <p class="hint">扫码加微信，说清行业、功能与预算，24 小时内回复方案思路</p>
