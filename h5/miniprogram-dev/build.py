@@ -55,17 +55,18 @@ imgs = {
     "b3": load_image(ASSETS / "banner-tech-systems.jpg", 1080, 72),
     "building": load_image(ASSETS / "building-cocopark.jpg", 960, 74),
     "team": load_image(ASSETS / "office-team-work.jpg", 960, 72),
-    "ui_home": load_image(ASSETS / "ui-home.png", 400, 68, force_jpeg=True),
-    "ui_mall": load_image(ASSETS / "ui-mall.png", 400, 68, force_jpeg=True),
-    "ui_biz": load_image(ASSETS / "ui-business.png", 400, 68, force_jpeg=True),
-    "ui_disc": load_image(ASSETS / "ui-discover.png", 400, 68, force_jpeg=True),
-    "ui_profile": load_image(ASSETS / "ui-profile.png", 400, 68, force_jpeg=True),
-    "ui_msg": load_image(ASSETS / "ui-message.png", 400, 68, force_jpeg=True),
-    "ui_project": load_image(ASSETS / "ui-project-detail.png", 400, 68, force_jpeg=True),
-    "ui_h5": load_image(ASSETS / "ui-h5-detail.png", 400, 68, force_jpeg=True),
-    "adm_crm": load_image(ASSETS / "admin-crm-cn.jpg", 1200, 74),
-    "adm_mall": load_image(ASSETS / "admin-mall-cn.jpg", 1200, 74),
-    "adm_ads": load_image(ASSETS / "admin-ads-cn.jpg", 1200, 74),
+    "app_retail": load_image(ASSETS / "app-ui-retail.jpg", 420, 72),
+    "app_rest": load_image(ASSETS / "app-ui-restaurant.jpg", 420, 72),
+    "app_channel": load_image(ASSETS / "app-ui-channel.jpg", 420, 72),
+    "app_mkt": load_image(ASSETS / "app-ui-marketing.jpg", 420, 72),
+    "app_health": load_image(ASSETS / "app-ui-health.jpg", 420, 72),
+    "app_logistics": load_image(ASSETS / "app-ui-logistics.jpg", 420, 72),
+    "dash_cmd": load_image(ASSETS / "dash-command-center.jpg", 1200, 76),
+    "dash_crm": load_image(ASSETS / "admin-crm-cn.jpg", 1200, 76),
+    "dash_mall": load_image(ASSETS / "admin-mall-cn.jpg", 1200, 76),
+    "dash_member": load_image(ASSETS / "dash-member-ops.jpg", 1200, 76),
+    "dash_supply": load_image(ASSETS / "dash-supply-chain.jpg", 1200, 76),
+    "dash_finance": load_image(ASSETS / "dash-finance.jpg", 1200, 76),
     "qr": load_image(QR_SRC, 152, 90, png=True),
 }
 
@@ -251,36 +252,80 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
 .pain-card p, .solve-card p { font-size: var(--text-xs); color: var(--color-muted); line-height: 1.55; }
 .solve-card { border-color: rgba(45, 212, 255, 0.28); background: linear-gradient(145deg, rgba(16,30,54,0.95), rgba(8,16,30,0.92)); }
 
-.showcase {
+.showcase { display: grid; gap: var(--space-xl); }
+.subhead {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: none;
+  color: var(--color-gold);
+  margin: 0 0 var(--space-sm);
+}
+.case-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-md);
 }
-.case {
-  border-radius: var(--radius);
-  border: 1px solid var(--color-rule);
-  background: var(--color-card);
+.case-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  border-radius: calc(var(--radius) + 2px);
+  border: 1px solid rgba(45, 212, 255, 0.16);
+  background: linear-gradient(168deg, rgba(16, 28, 50, 0.98) 0%, rgba(8, 14, 28, 0.94) 100%);
   overflow: hidden;
   box-shadow: var(--glow);
 }
-.case-head { padding: var(--space-sm) var(--space-md) 0; }
-.case-head h3 { font-size: 1rem; }
-.case-head p { margin-top: var(--space-2xs); font-size: var(--text-xs); color: var(--color-muted); }
+.case-panel .meta {
+  padding: var(--space-md) var(--space-md) var(--space-sm);
+  flex: 0 0 auto;
+}
+.case-panel .tag {
+  display: inline-block;
+  margin-bottom: var(--space-2xs);
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(201, 169, 110, 0.35);
+  color: var(--color-gold);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+}
+.case-panel h3 {
+  font-size: 1.05rem;
+  line-height: 1.3;
+  color: var(--color-ink);
+}
+.case-panel .meta p {
+  margin-top: var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  line-height: 1.65;
+}
 .ui-shot {
-  margin: var(--space-sm) var(--space-sm) var(--space-md);
+  margin: 0 var(--space-md) var(--space-md);
   border-radius: 10px;
   overflow: hidden;
   background: #02060f;
-  border: 1px solid rgba(45, 212, 255, 0.14);
+  border: 1px solid rgba(45, 212, 255, 0.12);
+  flex: 1 1 auto;
 }
-.ui-shot.mobile { aspect-ratio: 9 / 19.5; }
+.ui-shot.mobile { aspect-ratio: 9 / 16; min-height: 14rem; }
 .ui-shot.mobile img {
-  width: 100%; height: 100%; object-fit: contain; object-position: top center;
+  width: 100%; height: 100%; object-fit: cover; object-position: top center;
 }
-.ui-shot.desktop { aspect-ratio: 16 / 9; }
+.ui-shot.desktop { aspect-ratio: 16 / 10; min-height: 10rem; }
 .ui-shot.desktop img {
   width: 100%; height: 100%; object-fit: cover; object-position: center;
 }
+.case-panel.copy {
+  justify-content: center;
+  padding: var(--space-lg) var(--space-md);
+  min-height: 11rem;
+  background: linear-gradient(155deg, rgba(12, 22, 40, 0.96), rgba(7, 13, 26, 0.98));
+}
+.case-panel.copy h3 { font-size: 1.1rem; margin-bottom: var(--space-sm); }
+.case-panel.copy p { font-size: var(--text-sm); color: var(--color-muted); line-height: 1.7; }
+.case-panel.copy .tag { margin-bottom: var(--space-sm); }
 
 .office {
   display: grid;
@@ -344,14 +389,12 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
   .caption { left: var(--space-lg); bottom: var(--space-lg); right: auto; max-width: 26rem; }
   .trust { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pain-grid, .solve-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .showcase { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .case.wide { grid-column: 1 / -1; }
+  .case-grid.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .office { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (min-width: 56rem) {
   .trust { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .showcase { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .case.wide { grid-column: span 2; }
+  .case-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
@@ -460,53 +503,138 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
     </section>
 
     <section class="band" id="cases">
-      <h2>真实中文界面，可直接体验质感</h2>
-      <p class="lede">以下为已交付系统的界面样本（中文 UI），手机端完整展示，后台大屏铺满画面，不再套手机外壳。</p>
+      <h2>系统样本 · 所见即所得</h2>
+      <p class="lede">以下为各行业定制系统的界面样本。命名以系统为单位，每一套均可按您的业务深度定制。</p>
+
       <div class="showcase">
-        <article class="case">
-          <div class="case-head"><h3>会员俱乐部小程序</h3><p>首页、活动、会员权益一体化</p></div>
-          <div class="ui-shot mobile"><img src="{{ui_home}}" alt="会员俱乐部小程序首页中文界面" loading="lazy" decoding="async" /></div>
-        </article>
-        <article class="case">
-          <div class="case-head"><h3>积分商城系统</h3><p>积分兑换、商品管理、订单闭环</p></div>
-          <div class="ui-shot mobile"><img src="{{ui_mall}}" alt="积分商城小程序中文界面" loading="lazy" decoding="async" /></div>
-        </article>
-        <article class="case">
-          <div class="case-head"><h3>商机撮合平台</h3><p>项目路演、融资对接、成交跟进</p></div>
-          <div class="ui-shot mobile"><img src="{{ui_biz}}" alt="商机撮合小程序中文界面" loading="lazy" decoding="async" /></div>
-        </article>
-        <article class="case">
-          <div class="case-head"><h3>人才与活动发现</h3><p>人才库、活动报名、内容聚合</p></div>
-          <div class="ui-shot mobile"><img src="{{ui_disc}}" alt="发现页中文界面" loading="lazy" decoding="async" /></div>
-        </article>
-        <article class="case">
-          <div class="case-head"><h3>会员中心</h3><p>资料、积分、推荐与权益总览</p></div>
-          <div class="ui-shot mobile"><img src="{{ui_profile}}" alt="会员中心中文界面" loading="lazy" decoding="async" /></div>
-        </article>
-        <article class="case">
-          <div class="case-head"><h3>消息通知中心</h3><p>业务提醒、活动通知、系统消息</p></div>
-          <div class="ui-shot mobile"><img src="{{ui_msg}}" alt="消息中心中文界面" loading="lazy" decoding="async" /></div>
-        </article>
-        <article class="case wide">
-          <div class="case-head"><h3>CRM 客户跟进后台</h3><p>线索看板、销售漏斗、团队协同 — 画面完整铺满</p></div>
-          <div class="ui-shot desktop"><img src="{{adm_crm}}" alt="中文CRM后台管理系统界面" loading="lazy" decoding="async" /></div>
-        </article>
-        <article class="case wide">
-          <div class="case-head"><h3>商城运营中台</h3><p>商品、订单、会员、营销数据一屏掌控</p></div>
-          <div class="ui-shot desktop"><img src="{{adm_mall}}" alt="中文商城后台管理系统界面" loading="lazy" decoding="async" /></div>
-        </article>
-        <article class="case wide">
-          <div class="case-head"><h3>广告投放与线索报表</h3><p>投放计划、线索转化、ROI 分析</p></div>
-          <div class="ui-shot desktop"><img src="{{adm_ads}}" alt="中文广告投放后台界面" loading="lazy" decoding="async" /></div>
-        </article>
-        <article class="case">
-          <div class="case-head"><h3>项目详情与路演</h3><p>项目档案、路演资料、投资人触达</p></div>
-          <div class="ui-shot mobile"><img src="{{ui_project}}" alt="项目详情中文界面" loading="lazy" decoding="async" /></div>
-        </article>
-        <article class="case">
-          <div class="case-head"><h3>富文本活动页</h3><p>H5 详情、报名转化、品牌内容承载</p></div>
-          <div class="ui-shot mobile"><img src="{{ui_h5}}" alt="活动详情中文H5界面" loading="lazy" decoding="async" /></div>
-        </article>
+        <div>
+          <p class="subhead">移动系统</p>
+          <div class="case-grid cols-3">
+            <article class="case-panel">
+              <div class="meta">
+                <span class="tag">MOBILE</span>
+                <h3>智慧零售会员系统</h3>
+                <p>门店收银、线上商城与会员积分三端打通，一项权益全渠道通用，复购路径清晰可追踪。</p>
+              </div>
+              <div class="ui-shot mobile"><img src="{{app_retail}}" alt="智慧零售会员系统APP首页界面" loading="lazy" decoding="async" /></div>
+            </article>
+            <article class="case-panel">
+              <div class="meta">
+                <span class="tag">MOBILE</span>
+                <h3>餐饮连锁运营系统</h3>
+                <p>预订排队、会员卡与多店库存联动，高峰期翻台与备餐节奏有据可依。</p>
+              </div>
+              <div class="ui-shot mobile"><img src="{{app_rest}}" alt="餐饮连锁运营系统APP首页界面" loading="lazy" decoding="async" /></div>
+            </article>
+            <article class="case-panel">
+              <div class="meta">
+                <span class="tag">MOBILE</span>
+                <h3>渠道分销订货系统</h3>
+                <p>经销商手机端下单对账，总部实时掌握各区域出货、回款与库存水位。</p>
+              </div>
+              <div class="ui-shot mobile"><img src="{{app_channel}}" alt="渠道分销订货系统APP首页界面" loading="lazy" decoding="async" /></div>
+            </article>
+            <article class="case-panel">
+              <div class="meta">
+                <span class="tag">MOBILE</span>
+                <h3>营销裂变增长系统</h3>
+                <p>抽奖助力、分享海报与奖品核销形成闭环，让老客户持续带来新客。</p>
+              </div>
+              <div class="ui-shot mobile"><img src="{{app_mkt}}" alt="营销裂变增长系统APP首页界面" loading="lazy" decoding="async" /></div>
+            </article>
+            <article class="case-panel">
+              <div class="meta">
+                <span class="tag">MOBILE</span>
+                <h3>医疗健康管理系统</h3>
+                <p>预约挂号、报告查询与健康档案一屏触达，提升患者粘性与复诊率。</p>
+              </div>
+              <div class="ui-shot mobile"><img src="{{app_health}}" alt="医疗健康管理系统APP首页界面" loading="lazy" decoding="async" /></div>
+            </article>
+            <article class="case-panel">
+              <div class="meta">
+                <span class="tag">MOBILE</span>
+                <h3>智慧物流调度系统</h3>
+                <p>司机派单、路线优化与签收回传同步，配送状态全程可视、异常即时预警。</p>
+              </div>
+              <div class="ui-shot mobile"><img src="{{app_logistics}}" alt="智慧物流调度系统APP首页界面" loading="lazy" decoding="async" /></div>
+            </article>
+          </div>
+        </div>
+
+        <div>
+          <p class="subhead">交付保障</p>
+          <div class="case-grid cols-3">
+            <article class="case-panel copy">
+              <span class="tag">DELIVERY</span>
+              <h3>源码交付 · 自主可控</h3>
+              <p>验收后移交完整源码、接口文档与部署手册，支持二次开发与团队接手，知识产权归您所有。</p>
+            </article>
+            <article class="case-panel copy">
+              <span class="tag">SECURITY</span>
+              <h3>私有化 · 合规部署</h3>
+              <p>可按企业要求选择云部署或私有化机房，数据归属清晰，满足行业审计与等保要求。</p>
+            </article>
+            <article class="case-panel copy">
+              <span class="tag">SERVICE</span>
+              <h3>上线陪跑 · 持续迭代</h3>
+              <p>上线不是终点。版本升级、运营培训与故障响应全程跟进，系统跟着业务一起长大。</p>
+            </article>
+          </div>
+        </div>
+
+        <div>
+          <p class="subhead">后台数据中台</p>
+          <div class="case-grid cols-3">
+            <article class="case-panel">
+              <div class="meta">
+                <span class="tag">DASHBOARD</span>
+                <h3>企业经营指挥大屏</h3>
+                <p>销售额、客流、区域热力与核心 KPI 一屏纵览，管理层例会可直接投屏决策。</p>
+              </div>
+              <div class="ui-shot desktop"><img src="{{dash_cmd}}" alt="企业经营指挥大屏数据看板" loading="lazy" decoding="async" /></div>
+            </article>
+            <article class="case-panel">
+              <div class="meta">
+                <span class="tag">DASHBOARD</span>
+                <h3>CRM 销售跟进中台</h3>
+                <p>线索池、商机阶段、跟进记录与成交漏斗完整打通，销售过程透明可复盘。</p>
+              </div>
+              <div class="ui-shot desktop"><img src="{{dash_crm}}" alt="CRM销售跟进中台界面" loading="lazy" decoding="async" /></div>
+            </article>
+            <article class="case-panel">
+              <div class="meta">
+                <span class="tag">DASHBOARD</span>
+                <h3>商城运营数据中台</h3>
+                <p>商品转化、活动 ROI、库存周转多维度下钻，运营动作有数据支撑。</p>
+              </div>
+              <div class="ui-shot desktop"><img src="{{dash_mall}}" alt="商城运营数据中台界面" loading="lazy" decoding="async" /></div>
+            </article>
+            <article class="case-panel">
+              <div class="meta">
+                <span class="tag">DASHBOARD</span>
+                <h3>会员经营分析看板</h3>
+                <p>RFM 分层、复购曲线与积分消耗全景呈现，精准识别高价值人群。</p>
+              </div>
+              <div class="ui-shot desktop"><img src="{{dash_member}}" alt="会员经营分析看板界面" loading="lazy" decoding="async" /></div>
+            </article>
+            <article class="case-panel">
+              <div class="meta">
+                <span class="tag">DASHBOARD</span>
+                <h3>供应链进销存系统</h3>
+                <p>采购、入库、出库、预警与供应商绩效一站管理，库存周转心中有数。</p>
+              </div>
+              <div class="ui-shot desktop"><img src="{{dash_supply}}" alt="供应链进销存系统后台界面" loading="lazy" decoding="async" /></div>
+            </article>
+            <article class="case-panel">
+              <div class="meta">
+                <span class="tag">DASHBOARD</span>
+                <h3>财务对账结算系统</h3>
+                <p>多渠道收款、分账退款与日报月报自动生成，财务核对省时省力。</p>
+              </div>
+              <div class="ui-shot desktop"><img src="{{dash_finance}}" alt="财务对账结算系统后台界面" loading="lazy" decoding="async" /></div>
+            </article>
+          </div>
+        </div>
       </div>
     </section>
 
