@@ -366,7 +366,14 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
 .qr img { width: 5.75rem; height: 5.75rem; object-fit: contain; }
 .tel { font-size: 1.15rem; font-weight: 600; color: var(--color-ink); white-space: nowrap; }
 .mail { color: var(--color-muted); font-size: var(--text-sm); word-break: break-all; }
-.addr { color: var(--color-ink); font-size: var(--text-sm); line-height: 1.6; max-width: 28ch; }
+.addr, .foot-addr {
+  color: var(--color-ink);
+  font-size: clamp(0.72rem, 3.1vw, var(--text-sm));
+  line-height: 1.6;
+  max-width: none;
+  white-space: nowrap;
+}
+.foot .foot-addr { color: var(--color-muted); }
 .hint { color: var(--color-muted); font-size: var(--text-xs); }
 
 .foot {
@@ -659,7 +666,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
         <div class="qr"><img src="{{qr}}" alt="微信二维码" width="152" height="152" /></div>
         <a class="tel" href="tel:15918651523">15918651523</a>
         <a class="mail" href="mailto:zacforward@163.com">zacforward@163.com</a>
-        <p class="addr">深圳市龙岗区星河 COCO Park F 栋 2 楼</p>
+        <p class="addr">深圳市龙岗区星河 COCO Park F栋2楼</p>
         <p class="hint">扫码加微信，说清行业、功能与预算，24 小时内回复方案思路</p>
       </div>
     </aside>
@@ -667,7 +674,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--color-focus); o
     <footer class="foot">
       <p class="line">从获客到复购，系统接着做。</p>
       <p>小程序 · APP · 商城 · 会员 · CRM · 广告 · 后台</p>
-      <p>深圳市龙岗区星河 COCO Park F 栋 2 楼</p>
+      <p class="foot-addr">深圳市龙岗区星河 COCO Park F栋2楼</p>
       <p><a href="https://beian.miit.gov.cn/" rel="noopener noreferrer">粤ICP备2026098929号</a></p>
     </footer>
   </div>
