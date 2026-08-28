@@ -219,19 +219,25 @@ async function bootstrap() {
   }
 
   // 文旅票务 Demo：本地静态目录（不进 COS，管理台媒体库不可见）
-  // 访问 https://xinghegogo.cn/travel_demo → 自动补尾斜杠，保证相对资源路径正确
+  // 注意：不可用 app.get('/travel_demo') 做 302——Express 默认非严格路由会把
+  // /travel_demo/ 也匹配上，造成「重定向到自身」死循环。
   const travelDemoDir = publicDirs
     .map((dir) => path.join(dir, 'travel_demo'))
     .find((fullPath) => fs.existsSync(path.join(fullPath, 'index.html')))
   if (travelDemoDir) {
-    expressApp.get('/travel_demo', (_req, res) => {
-      res.redirect(302, '/travel_demo/')
+    expressApp.use((req, res, next) => {
+      if ((req.method === 'GET' || req.method === 'HEAD') && req.path === '/travel_demo') {
+        const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
+        res.redirect(301, `/travel_demo/${qs}`)
+        return
+      }
+      next()
     })
     expressApp.use(
       '/travel_demo',
       express.static(travelDemoDir, {
         index: 'index.html',
-        fallthrough: false,
+        redirect: false,
         maxAge: '5m',
       }),
     )
