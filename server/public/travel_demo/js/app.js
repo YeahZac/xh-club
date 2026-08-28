@@ -78,10 +78,11 @@
     tabs.querySelectorAll(".tab").forEach((t) => {
       t.classList.toggle("on", t.dataset.tab === name);
     });
-    const hide =
-      ["detail", "event", "pkg", "checkout", "pay", "order"].includes(route.page) ||
-      route.page === "scenic";
-    tabs.style.display = hide ? "none" : "grid";
+    // 仅五大主 Tab 显示底栏；首页模块进入的二级页（list/详情/结算等）一律隐藏
+    const rootTabs = new Set(["home", "packages", "member", "cart", "mine"]);
+    const show = rootTabs.has(route.page);
+    tabs.style.display = show ? "grid" : "none";
+    document.body.classList.toggle("hide-tabs", !show);
   }
 
   function shell(title, body, opts = {}) {
@@ -127,8 +128,8 @@
         <div class="cats">
           <button class="cat" data-go="#/list/scenic"><div class="ic">🏔</div>景区门票</button>
           <button class="cat" data-go="#/list/event"><div class="ic">🎎</div>汉服活动</button>
-          <button class="cat" data-go="#/packages"><div class="ic">🎁</div>超值套票</button>
-          <button class="cat" data-go="#/member"><div class="ic">🏅</div>同袍会</button>
+          <button class="cat" data-go="#/list/packages"><div class="ic">🎁</div>超值套票</button>
+          <button class="cat" data-go="#/list/member"><div class="ic">🏅</div>同袍会</button>
         </div>
         <div class="sec-h"><h2>热门景区</h2><a data-go="#/list/scenic">全部</a></div>
         <div class="grid">
@@ -183,7 +184,9 @@
   }
 
   function pageList(kind) {
-    setTab(kind === "event" ? "home" : "home");
+    if (kind === "packages") return pagePackages({ secondary: true });
+    if (kind === "member") return pageMember({ secondary: true });
+    setTab("home");
     const title = kind === "event" ? "汉服活动" : "景区门票";
     const items = kind === "event" ? D.events : D.scenics;
     const path = kind === "event" ? "event" : "scenic";
@@ -356,7 +359,8 @@
     };
   }
 
-  function pagePackages() {
+  function pagePackages(opts = {}) {
+    const secondary = !!opts.secondary;
     setTab("packages");
     view.innerHTML = shell(
       "超值套票",
@@ -375,7 +379,7 @@
         </a>`
         )
         .join("") + '<p class="hint">套票可一次结算，模拟组合优惠。</p>',
-      { back: false }
+      { back: secondary }
     );
   }
 
@@ -425,7 +429,8 @@
     };
   }
 
-  function pageMember() {
+  function pageMember(opts = {}) {
+    const secondary = !!opts.secondary;
     setTab("member");
     const tiers = D.membership?.tiers || [];
     const badges = D.membership?.badges || [];
@@ -442,7 +447,7 @@
 
     const render = () => {
       const { t, sum } = calc();
-      view.innerHTML = `
+      const body = `
         <div class="hero member-tab-hero">
           <div class="brand-row">
             <div class="logo">袍</div>
@@ -498,15 +503,23 @@
           </div>
           <p class="hint">在本页完成档位与徽章选择，无需进入二级页。</p>
         </div>
-        <div class="buybar above-tabs">
+        <div class="buybar${secondary ? "" : " above-tabs"}">
           <div class="sum">${money(sum)}</div>
           <button class="btn primary" id="buyMem" style="flex:1">确认开通 / 升级</button>
         </div>
       `;
+      view.innerHTML = secondary ? shell("同袍会", body) : body;
+      if (secondary) {
+        view.querySelector("[data-back]")?.addEventListener("click", () => history.back());
+      }
     };
 
     render();
     view.onclick = (e) => {
+      if (e.target.closest("[data-back]")) {
+        history.back();
+        return;
+      }
       const tier = e.target.closest("[data-tier]");
       if (tier) {
         tierId = tier.dataset.tier;

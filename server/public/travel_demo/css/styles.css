@@ -37,6 +37,8 @@ button { cursor: pointer; }
 }
 
 #view { min-height: 100dvh; padding-bottom: calc(var(--tab) + var(--safe) + 8px); }
+body.hide-tabs #view { padding-bottom: calc(var(--safe) + 24px); }
+body.hide-tabs .tabs { display: none !important; }
 
 .top {
   position: sticky; top: 0; z-index: 30;
