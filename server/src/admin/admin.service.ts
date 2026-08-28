@@ -1921,7 +1921,7 @@ export class AdminService {
       let ownerMemberId = await this.resolveMallOwnerMemberId(dto.owner_member_id)
       const projectId = await this.resolveMallProjectId(dto.project_id)
       if (!ownerMemberId && projectId) {
-        const project = await queryOne<{ submitter_id: number | null }>(
+        const project = await queryOne<RowDataPacket & { submitter_id?: number | null }>(
           'SELECT submitter_id FROM projects WHERE id = ? LIMIT 1',
           [projectId],
         )
@@ -1979,7 +1979,7 @@ export class AdminService {
         const projectId = await this.resolveMallProjectId(dto.project_id)
         assign('project_id', projectId)
         if (dto.owner_member_id === undefined && projectId) {
-          const project = await queryOne<{ submitter_id: number | null }>(
+          const project = await queryOne<RowDataPacket & { submitter_id?: number | null }>(
             'SELECT submitter_id FROM projects WHERE id = ? LIMIT 1',
             [projectId],
           )

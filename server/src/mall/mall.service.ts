@@ -70,7 +70,7 @@ export class MallService {
     if (String(ownerId) === String(payload.buyerMemberId)) return
 
     try {
-      const buyer = await queryOne<{ name: string | null }>(
+      const buyer = await queryOne<MemberRow>(
         'SELECT name FROM members WHERE id = ? LIMIT 1',
         [payload.buyerMemberId],
       )
