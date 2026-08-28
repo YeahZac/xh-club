@@ -23,7 +23,6 @@ import { resolveEventStatus } from '@/common/event-status'
 import {
   ADMIN_ARTICLE_LIST_COLUMNS,
   ADMIN_EVENT_LIST_COLUMNS,
-  ADMIN_MALL_PRODUCT_LIST_COLUMNS,
   ADMIN_MEMBER_LIST_COLUMNS,
 } from '@/common/admin-list-columns'
 import { emptyAdminPage, parseAdminPage } from '@/common/admin-pagination'
@@ -1821,25 +1820,34 @@ export class AdminService {
       const where: string[] = []
       const params: any[] = []
       if (query?.category) {
-        where.push('category = ?')
+        where.push('p.category = ?')
         params.push(String(query.category))
       }
       // 列表页默认隐藏已下架；下拉可传 include_inactive=1
       if (String(query?.include_inactive || '') !== '1') {
-        where.push(`(status IS NULL OR status <> 'inactive')`)
+        where.push(`(p.status IS NULL OR p.status <> 'inactive')`)
       }
       if (query?.status) {
-        where.push('status = ?')
+        where.push('p.status = ?')
         params.push(String(query.status))
       }
       const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
       const totalRow = await queryOne(
-        `SELECT COUNT(*) AS total FROM mall_products ${whereSql}`,
+        `SELECT COUNT(*) AS total FROM mall_products p ${whereSql}`,
         params,
       )
       const rows = await queryRows(
-        `SELECT ${ADMIN_MALL_PRODUCT_LIST_COLUMNS} FROM mall_products ${whereSql}
-         ORDER BY created_at DESC
+        `SELECT p.id, p.name, p.image_url, p.video_url, p.points_price, p.cash_price, p.stock,
+                p.category, p.status, p.sort_order, p.sales_count, p.view_count,
+                p.enable_distribution, p.distribution_rate, p.owner_member_id, p.project_id,
+                p.created_at, p.updated_at,
+                m.name AS owner_name, m.company_name AS owner_company_name,
+                pr.title AS project_title
+         FROM mall_products p
+         LEFT JOIN members m ON m.id = p.owner_member_id
+         LEFT JOIN projects pr ON pr.id = p.project_id
+         ${whereSql}
+         ORDER BY p.created_at DESC
          LIMIT ? OFFSET ?`,
         [...params, pageSize, offset],
       )
@@ -1861,7 +1869,14 @@ export class AdminService {
 
   async getMallProductById(id: string) {
     try {
-      const row = await queryOne('SELECT * FROM mall_products WHERE id = ?', [id])
+      const row = await queryOne(
+        `SELECT p.*, m.name AS owner_name, m.company_name AS owner_company_name, pr.title AS project_title
+         FROM mall_products p
+         LEFT JOIN members m ON m.id = p.owner_member_id
+         LEFT JOIN projects pr ON pr.id = p.project_id
+         WHERE p.id = ?`,
+        [id],
+      )
       if (!row) throw new HttpException('商品不存在', HttpStatus.NOT_FOUND)
       return this.uploadService.signDetailMediaFields(
         row,
@@ -1876,14 +1891,45 @@ export class AdminService {
   }
 
   /** ====== 商品管理 ====== */
+  private async resolveMallOwnerMemberId(raw: unknown): Promise<number | null> {
+    if (raw === null || raw === undefined || raw === '') return null
+    const id = Number.parseInt(String(raw), 10)
+    if (!Number.isFinite(id) || id <= 0) {
+      throw new HttpException('项目负责人无效', HttpStatus.BAD_REQUEST)
+    }
+    const owner = await queryOne('SELECT id FROM members WHERE id = ? LIMIT 1', [id])
+    if (!owner) throw new HttpException('项目负责人不存在', HttpStatus.BAD_REQUEST)
+    return id
+  }
+
+  private async resolveMallProjectId(raw: unknown): Promise<number | null> {
+    if (raw === null || raw === undefined || raw === '') return null
+    const id = Number.parseInt(String(raw), 10)
+    if (!Number.isFinite(id) || id <= 0) {
+      throw new HttpException('关联项目无效', HttpStatus.BAD_REQUEST)
+    }
+    const project = await queryOne('SELECT id FROM projects WHERE id = ? LIMIT 1', [id])
+    if (!project) throw new HttpException('关联项目不存在', HttpStatus.BAD_REQUEST)
+    return id
+  }
+
   async createMallProduct(dto: any) {
     try {
       await ensureSchemaColumns()
       const imageUrl = assertCloudStorageImageUrl(dto.image_url || dto.cover_image)
       const videoUrl = normalizeOptionalVideoUrl(dto.video_url)
+      let ownerMemberId = await this.resolveMallOwnerMemberId(dto.owner_member_id)
+      const projectId = await this.resolveMallProjectId(dto.project_id)
+      if (!ownerMemberId && projectId) {
+        const project = await queryOne<{ submitter_id: number | null }>(
+          'SELECT submitter_id FROM projects WHERE id = ? LIMIT 1',
+          [projectId],
+        )
+        if (project?.submitter_id) ownerMemberId = Number(project.submitter_id)
+      }
       const result = await queryExecute(
-        `INSERT INTO mall_products (name, description, points_price, stock, image_url, video_url, status, category)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO mall_products (name, description, points_price, stock, image_url, video_url, status, category, owner_member_id, project_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           dto.name,
           dto.description || null,
@@ -1893,6 +1939,8 @@ export class AdminService {
           videoUrl,
           dto.status || 'active',
           dto.category || 'gift',
+          ownerMemberId,
+          projectId,
         ],
       )
       return await this.getMallProductById(String(result.insertId))
@@ -1923,6 +1971,20 @@ export class AdminService {
       }
       if (dto.video_url !== undefined) {
         assign('video_url', normalizeOptionalVideoUrl(dto.video_url))
+      }
+      if (dto.owner_member_id !== undefined) {
+        assign('owner_member_id', await this.resolveMallOwnerMemberId(dto.owner_member_id))
+      }
+      if (dto.project_id !== undefined) {
+        const projectId = await this.resolveMallProjectId(dto.project_id)
+        assign('project_id', projectId)
+        if (dto.owner_member_id === undefined && projectId) {
+          const project = await queryOne<{ submitter_id: number | null }>(
+            'SELECT submitter_id FROM projects WHERE id = ? LIMIT 1',
+            [projectId],
+          )
+          if (project?.submitter_id) assign('owner_member_id', Number(project.submitter_id))
+        }
       }
       if (!updates.length) throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
       updates.push('updated_at = NOW()')

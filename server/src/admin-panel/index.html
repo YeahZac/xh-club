@@ -4791,6 +4791,69 @@ async function deleteBanner(id, closeModalAfter = false) {
 }
 
 // ===== 积分商城 =====
+let _mallProjects = []
+
+function renderMallProjectOptions(selectedId = '') {
+  const select = document.getElementById('mlProject')
+  if (!select) return
+  const current = String(selectedId || select.value || '')
+  const options = ['<option value="">不关联项目</option>']
+  ;(_mallProjects || []).forEach((p) => {
+    if (!p?.id) return
+    const label = `${p.title || '未命名项目'}${p.company_name ? ' · ' + p.company_name : ''}`
+    options.push(`<option value="${p.id}">${escapeHtml(label)}</option>`)
+  })
+  select.innerHTML = options.join('')
+  if (current) select.value = current
+}
+
+function filterMallOwnerOptions() {
+  const keyword = String(document.getElementById('mlOwnerSearch')?.value || '').trim().toLowerCase()
+  const select = document.getElementById('mlOwner')
+  if (!select) return
+  const current = String(select.value || '')
+  const options = ['<option value="">请选择负责人</option>']
+  let list = (_pjOwnerMembers || []).slice()
+  if (keyword) {
+    list = list.filter((m) => {
+      const hay = `${m.name || ''} ${m.company_name || ''} ${m.phone || ''}`.toLowerCase()
+      return hay.includes(keyword)
+    })
+  }
+  list.forEach((m) => {
+    const label = `${m.name || '未命名'}${m.company_name ? ' · ' + m.company_name : ''}`
+    options.push(`<option value="${m.id}">${escapeHtml(label)}</option>`)
+  })
+  select.innerHTML = options.join('')
+  if (current && list.some((m) => String(m.id) === current)) select.value = current
+}
+
+function onMallProjectChange() {
+  const projectId = String(document.getElementById('mlProject')?.value || '').trim()
+  if (!projectId) return
+  const project = (_mallProjects || []).find((p) => String(p.id) === projectId)
+  const ownerId = project?.submitter_id ? String(project.submitter_id) : ''
+  if (!ownerId) return
+  filterMallOwnerOptions()
+  const ownerSelect = document.getElementById('mlOwner')
+  if (ownerSelect) ownerSelect.value = ownerId
+}
+
+async function ensureMallFormOptions(product = null) {
+  await ensureProjectOwnerOptions()
+  if (!_mallProjects.length) {
+    const res = await api('/admin/projects').catch(() => ({ code: 0, data: [] }))
+    const list = Array.isArray(res.data) ? res.data : (res.data?.list || [])
+    _mallProjects = (list || []).filter((p) => p && p.id != null)
+  }
+  renderMallProjectOptions(product?.project_id ? String(product.project_id) : '')
+  filterMallOwnerOptions()
+  if (product?.owner_member_id) {
+    const ownerSelect = document.getElementById('mlOwner')
+    if (ownerSelect) ownerSelect.value = String(product.owner_member_id)
+  }
+}
+
 async function loadMallProducts() {
   const cat = document.getElementById('mallFilter').value
   const qs = new URLSearchParams({
@@ -4821,6 +4884,7 @@ async function loadMallProducts() {
           <span class="text-brand-600 font-bold">${p.points_price} 积分</span>
           <span class="text-xs text-gray-400">库存 ${p.stock}</span>
         </div>
+        ${p.owner_name ? `<p class="text-xs text-emerald-700 mt-2">负责人：${escapeHtml(p.owner_name)}${p.owner_company_name ? ' · ' + escapeHtml(p.owner_company_name) : ''}</p>` : '<p class="text-xs text-amber-600 mt-2">未设置负责人</p>'}
         <div class="mt-3 flex items-center justify-end gap-2">
           <button type="button" onclick="showMallModal('${p.id}')" class="px-3 py-1.5 text-xs rounded-lg bg-navy-50 text-navy-700 hover:bg-navy-100">编辑</button>
           <button type="button" onclick="deleteMallProduct('${p.id}', '${escapeHtml(p.name || '')}')" class="px-3 py-1.5 text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100">删除</button>
@@ -4869,6 +4933,29 @@ async function showMallModal(id) {
           <div><label class="block text-sm font-medium text-gray-700 mb-1">积分价格</label><input id="mlPoints" type="number" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" value="${escapeHtml(product?.points_price ?? '')}"></div>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">库存</label><input id="mlStock" type="number" value="${escapeHtml(product?.stock ?? 100)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"></div>
         </div>
+        <div class="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 space-y-4">
+          <div>
+            <p class="text-sm font-semibold text-navy-800">关联项目与负责人</p>
+            <p class="text-xs text-gray-400 mt-1">选择关联项目后自动带出项目负责人；也可手动指定。会员兑换后将通知负责人。</p>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">关联项目</label>
+              <select id="mlProject" onchange="onMallProjectChange()" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white">
+                <option value="">不关联项目</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">项目负责人 <span class="text-red-500">*</span></label>
+              <div class="flex gap-2">
+                <input id="mlOwnerSearch" oninput="filterMallOwnerOptions()" class="w-28 px-3 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white" placeholder="搜索">
+                <select id="mlOwner" class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white">
+                  <option value="">请选择负责人</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="flex justify-between gap-3 pt-4">
           <div>
             ${isEdit ? `<button type="button" onclick="deleteMallProduct('${product.id}', '${escapeHtml(product?.name || '')}')" class="px-5 py-2.5 border border-red-200 text-red-600 rounded-xl text-sm hover:bg-red-50">删除商品</button>` : ''}
@@ -4882,10 +4969,17 @@ async function showMallModal(id) {
     </div>
   `, { wide: true })
   initRichEditor('mlDescEditor', product?.description || '')
+  try {
+    await ensureMallFormOptions(product)
+  } catch (error) {
+    toast(error.message || '加载项目/负责人失败', 'error')
+  }
 }
 
 async function saveMallProduct(id) {
   if (!assertNoUploading()) return
+  const ownerMemberId = String(document.getElementById('mlOwner')?.value || '').trim()
+  const projectId = String(document.getElementById('mlProject')?.value || '').trim()
   const body = {
     name: document.getElementById('mlName').value,
     image_url: document.getElementById('mlCover').value,
@@ -4893,10 +4987,13 @@ async function saveMallProduct(id) {
     description: getRichEditorHtml('mlDescEditor'),
     points_price: parseInt(document.getElementById('mlPoints').value) || 100,
     stock: parseInt(document.getElementById('mlStock').value) || 100,
-    status: 'active'
+    status: 'active',
+    owner_member_id: ownerMemberId || null,
+    project_id: projectId || null,
   }
   if (!body.name.trim()) return toast('请输入商品名称', 'error')
   if (!body.image_url.trim()) return toast('商品图片为必填项', 'error')
+  if (!body.owner_member_id) return toast('请选择项目负责人', 'error')
   const res = id
     ? await api(`/admin/mall-products/${id}`, { method: 'PUT', body })
     : await api('/admin/mall-products', { method: 'POST', body })

@@ -75,6 +75,8 @@ export const ADMIN_MALL_PRODUCT_LIST_COLUMNS = [
   'view_count',
   'enable_distribution',
   'distribution_rate',
+  'owner_member_id',
+  'project_id',
   'created_at',
   'updated_at',
 ].join(', ')

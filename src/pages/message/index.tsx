@@ -37,6 +37,7 @@ const BIZ_LABEL: Record<string, string> = {
   member_audit: '会员审核',
   event_register: '活动报名',
   roadshow_register: '路演报名',
+  mall_order: '商城兑换',
 }
 
 const notifIconMap: Record<string, typeof Bell> = {
@@ -59,6 +60,7 @@ const bizIconMap: Record<string, typeof Bell> = {
   deal_application: Handshake,
   event_register: Clock,
   roadshow_register: Clock,
+  mall_order: Gift,
 }
 
 const MessagePage = () => {

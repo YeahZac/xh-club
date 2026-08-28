@@ -78,6 +78,8 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['mall_products', 'enable_distribution', 'TINYINT(1) NOT NULL DEFAULT 0'],
   ['mall_products', 'distribution_rate', 'DECIMAL(5,2) DEFAULT 0'],
   ['mall_products', 'sales_count', 'INT NOT NULL DEFAULT 0'],
+  ['mall_products', 'owner_member_id', 'INT NULL COMMENT \'项目负责人(会员ID)\''],
+  ['mall_products', 'project_id', 'INT NULL COMMENT \'关联项目ID\''],
   ['events', 'description', 'LONGTEXT NULL'],
   ['events', 'content', 'LONGTEXT NULL'],
   ['events', 'view_count', 'INT NOT NULL DEFAULT 0'],

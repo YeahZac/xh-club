@@ -7,6 +7,7 @@ import { UploadService } from '@/upload/upload.service';
 import { PointsEngineService } from '@/points/points-engine.service';
 import { InvitationEngineService } from '@/invitation/invitation-engine.service';
 import { wantsListFields } from '@/common/list-fields';
+import { createNotification } from '@/common/notify';
 export interface ProductRow extends RowDataPacket {
   id: string;
   name: string;
@@ -21,6 +22,8 @@ export interface ProductRow extends RowDataPacket {
   enable_distribution: boolean;
   distribution_rate: string;
   sort_order: number;
+  owner_member_id: number | null;
+  project_id: number | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -50,6 +53,51 @@ export class MallService {
         referenceId,
       })
       .catch((err) => this.logger.warn(`invitee_mall_order reward failed: ${err?.message || err}`))
+  }
+
+  private async notifyProductOwnerOnRedemption(payload: {
+    ownerMemberId: number | string | null | undefined;
+    buyerMemberId: string | number;
+    product: Pick<ProductRow, 'id' | 'name'>;
+    orderId: string | number;
+    quantity: number;
+    pointsUsed: number;
+    contactName?: string;
+    contactPhone?: string;
+  }) {
+    const ownerId = payload.ownerMemberId
+    if (ownerId == null || ownerId === '') return
+    if (String(ownerId) === String(payload.buyerMemberId)) return
+
+    try {
+      const buyer = await queryOne<{ name: string | null }>(
+        'SELECT name FROM members WHERE id = ? LIMIT 1',
+        [payload.buyerMemberId],
+      )
+      const buyerName = String(buyer?.name || '会员').trim()
+      const qty = Math.max(1, Number(payload.quantity) || 1)
+      const points = Number(payload.pointsUsed) || 0
+      const contactHint = [payload.contactName, payload.contactPhone]
+        .map((v) => String(v || '').trim())
+        .filter(Boolean)
+        .join(' ')
+      const content = contactHint
+        ? `${buyerName} 使用 ${points} 积分兑换了「${payload.product.name}」x${qty}，收货人：${contactHint}，请及时跟进发货。`
+        : `${buyerName} 使用 ${points} 积分兑换了「${payload.product.name}」x${qty}，请及时跟进发货。`
+
+      await createNotification({
+        memberId: ownerId,
+        type: 'system',
+        title: '积分商城有新兑换',
+        content,
+        link: '/pages/message/index',
+        bizType: 'mall_order',
+        bizId: payload.orderId,
+        result: 'pending',
+      })
+    } catch (err) {
+      this.logger.warn(`mall owner notify failed: ${(err as Error)?.message || err}`)
+    }
   }
 
   // ==================== 商品管理 ====================
@@ -344,8 +392,19 @@ export class MallService {
           'SELECT * FROM mall_orders WHERE id = ?',
           [orderResult.insertId],
         );
-        return { code: 200, msg: '支付成功，等待发货', data: this.formatOrder(orderRows[0] || null) };
-      }).then(async (result) => {
+        return {
+          code: 200,
+          msg: '支付成功，等待发货',
+          data: this.formatOrder(orderRows[0] || null),
+          _notify: {
+            ownerMemberId: product.owner_member_id,
+            productId: product.id,
+            productName: product.name,
+            quantity: data.quantity,
+            pointsUsed: pointsNeeded,
+          },
+        };
+      }).then(async (result: any) => {
         if (result?.code === 200) {
           void this.pointsEngine
             .evaluate(data.member_id, 'mall_exchange', {
@@ -355,7 +414,21 @@ export class MallService {
             })
             .catch((err) => this.logger.warn(`mall_exchange points failed: ${err?.message || err}`))
           this.grantInviteMallReward(data.member_id, result.data?.id)
+          const notifyMeta = result._notify
+          if (notifyMeta) {
+            void this.notifyProductOwnerOnRedemption({
+              ownerMemberId: notifyMeta.ownerMemberId,
+              buyerMemberId: data.member_id,
+              product: { id: notifyMeta.productId, name: notifyMeta.productName },
+              orderId: result.data?.id,
+              quantity: notifyMeta.quantity,
+              pointsUsed: notifyMeta.pointsUsed,
+              contactName: contactName,
+              contactPhone: contactPhone,
+            })
+          }
         }
+        if (result && '_notify' in result) delete result._notify
         return result
       })
     } catch (error) {
@@ -511,6 +584,14 @@ export class MallService {
 
         let balance = available
         const orders: any[] = []
+        const notifyQueue: Array<{
+          ownerMemberId: number | null
+          productId: string
+          productName: string
+          quantity: number
+          pointsUsed: number
+          orderId: string | number
+        }> = []
         for (const row of prepared) {
           balance -= row.pointsNeeded
           const orderNo = `ORD${Date.now()}${Math.random().toString(36).substring(2, 8).toUpperCase()}`
@@ -564,7 +645,16 @@ export class MallService {
             'SELECT * FROM mall_orders WHERE id = ?',
             [orderResult.insertId],
           )
-          orders.push(this.formatOrder(orderRows[0] || null))
+          const formatted = this.formatOrder(orderRows[0] || null)
+          orders.push(formatted)
+          notifyQueue.push({
+            ownerMemberId: row.product.owner_member_id ?? null,
+            productId: row.product.id,
+            productName: row.product.name,
+            quantity: row.quantity,
+            pointsUsed: row.pointsNeeded,
+            orderId: formatted?.id ?? orderResult.insertId,
+          })
         }
 
         await connection.query(
@@ -580,8 +670,9 @@ export class MallService {
             points_used: totalPointsNeeded,
             available_points: balance,
           },
+          _notifyQueue: notifyQueue,
         }
-      }).then(async (result) => {
+      }).then(async (result: any) => {
         if (result?.code === 200) {
           void this.pointsEngine
             .evaluate(data.member_id, 'mall_exchange', {
@@ -591,7 +682,20 @@ export class MallService {
             })
             .catch((err) => this.logger.warn(`mall_exchange points failed: ${err?.message || err}`))
           this.grantInviteMallReward(data.member_id, result.data?.orders?.[0]?.id)
+          for (const item of result._notifyQueue || []) {
+            void this.notifyProductOwnerOnRedemption({
+              ownerMemberId: item.ownerMemberId,
+              buyerMemberId: data.member_id,
+              product: { id: item.productId, name: item.productName },
+              orderId: item.orderId,
+              quantity: item.quantity,
+              pointsUsed: item.pointsUsed,
+              contactName: contactName,
+              contactPhone: contactPhone,
+            })
+          }
         }
+        if (result && '_notifyQueue' in result) delete result._notifyQueue
         return result
       })
     } catch (error) {
