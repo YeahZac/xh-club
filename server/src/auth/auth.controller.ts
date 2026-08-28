@@ -83,7 +83,10 @@ export class AuthController {
         console.warn('[AuthController] wx-login business error:', status, msg)
         return { code: status, msg, data: null }
       }
-      throw error
+      const msg = String((error as Error)?.message || '登录失败，请稍后重试')
+      console.error('[AuthController] wx-login unexpected error:', error)
+      // 统一 HTTP 200，避免 callContainer 把 5xx 打成「加载失败」
+      return { code: 500, msg: msg.slice(0, 80), data: null }
     }
   }
 
@@ -102,10 +105,27 @@ export class AuthController {
       || headers['X-WX-FROM-OPENID']
       || req?.headers?.['x-wx-openid']
 
-    const data = await this.authService.wxPrecheck({
-      code: dto.code,
-      openidFromHeader: openidHeader ? String(openidHeader) : '',
-    })
-    return { code: 200, msg: 'success', data }
+    try {
+      const data = await this.authService.wxPrecheck({
+        code: dto.code,
+        openidFromHeader: openidHeader ? String(openidHeader) : '',
+      })
+      return { code: 200, msg: 'success', data }
+    } catch (error) {
+      console.warn('[AuthController] wx-precheck failed:', (error as Error)?.message || error)
+      return {
+        code: 200,
+        msg: 'success',
+        data: {
+          registered: false,
+          can_fill_invite: true,
+          can_quick_login: false,
+          openid: '',
+          name: '',
+          avatar: '',
+          phone_masked: '',
+        },
+      }
+    }
   }
 }
