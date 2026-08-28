@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#0f766e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>袍旅 · 文旅票务 Demo</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="view"></div>
+    <nav class="tabs" id="tabs">
+      <button class="tab on" data-tab="home"><span class="i">🏠</span>首页</button>
+      <button class="tab" data-tab="packages"><span class="i">🎁</span>套票</button>
+      <button class="tab" data-tab="member"><span class="i">🏅</span>同袍会</button>
+      <button class="tab" data-tab="cart"><span class="i">🛒</span>购物车<span class="dot" id="cartDot" hidden></span></button>
+      <button class="tab" data-tab="mine"><span class="i">👤</span>我的</button>
+    </nav>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

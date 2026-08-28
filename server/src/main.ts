@@ -218,6 +218,26 @@ async function bootstrap() {
     console.log(`[启动] 静态根目录: ${dir}`)
   }
 
+  // 文旅票务 Demo：本地静态目录（不进 COS，管理台媒体库不可见）
+  // 访问 https://xinghegogo.cn/travel_demo → 自动补尾斜杠，保证相对资源路径正确
+  const travelDemoDir = publicDirs
+    .map((dir) => path.join(dir, 'travel_demo'))
+    .find((fullPath) => fs.existsSync(path.join(fullPath, 'index.html')))
+  if (travelDemoDir) {
+    expressApp.get('/travel_demo', (_req, res) => {
+      res.redirect(302, '/travel_demo/')
+    })
+    expressApp.use(
+      '/travel_demo',
+      express.static(travelDemoDir, {
+        index: 'index.html',
+        fallthrough: false,
+        maxAge: '5m',
+      }),
+    )
+    console.log(`[启动] 文旅 Demo: /travel_demo/ -> ${travelDemoDir}`)
+  }
+
   try {
     const { getPublicHttpsBaseUrl } = await import('@/utils/public-base-url')
     const publicBase = getPublicHttpsBaseUrl()
