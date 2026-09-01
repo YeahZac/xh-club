@@ -127,7 +127,7 @@ function projectToolbarHtml(id: string, q: MpToolbarQuery): string {
 <div class="xh-mp-toolbar" role="navigation" aria-label="项目操作">
   <button type="button" class="xh-mp-btn xh-mp-btn-gold" onclick="window.__xhMpGo('${escapeJs(scoreUrl)}')">${escapeHtml(scoreLabel)}</button>
   <button type="button" class="xh-mp-btn xh-mp-btn-brand" onclick="window.__xhMpGo('${escapeJs(shareUrl)}')">分享</button>
-  <button type="button" class="xh-mp-btn xh-mp-btn-outline" onclick="window.__xhMpGo('${escapeJs(dealUrl)}')">申请成交记录</button>
+  <button type="button" class="xh-mp-btn xh-mp-btn-outline" onclick="window.__xhMpGo('${escapeJs(dealUrl)}')">资源引荐</button>
 </div>`
 }
 

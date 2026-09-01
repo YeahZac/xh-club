@@ -162,6 +162,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['talent_applications', 'apply_type', 'VARCHAR(32) NULL'],
   ['talent_applications', 'payment_method', 'VARCHAR(32) NULL'],
   ['talent_applications', 'payment_amount', 'DECIMAL(12,2) NULL'],
+  ['talent_applications', 'wechat_id', 'VARCHAR(128) NULL COMMENT \'微信号\''],
   // 商机评论：旧库仅有 user_id，新库使用 member_id + parent_id
   ['business_opportunity_comments', 'parent_id', 'INT NULL'],
   ['business_opportunity_comments', 'member_id', 'INT NULL'],
@@ -967,6 +968,7 @@ const TABLES_TO_ENSURE: Array<{ name: string; sql: string }> = [
       experience TEXT NULL,
       company_name TEXT NULL,
       job_title VARCHAR(100) NULL,
+      wechat_id VARCHAR(128) NULL COMMENT '微信号',
       card_image_url VARCHAR(500) NULL,
       avatar_url VARCHAR(500) NULL,
       status VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'pending|approved|rejected',

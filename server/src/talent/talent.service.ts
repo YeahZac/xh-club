@@ -270,7 +270,7 @@ export class TalentService {
       values,
     )
     const selectSql = listFields
-      ? `SELECT t.id, t.member_id, t.real_name, t.contact, t.company_name, t.job_title,
+      ? `SELECT t.id, t.member_id, t.real_name, t.contact, t.company_name, t.job_title, t.wechat_id,
                 t.experience, t.photo_url, t.avatar_url,
                 t.industry_tags, t.status, t.is_featured, t.sort_order, t.reviewed_at,
                 t.updated_at, t.created_at, t.admin_operated_at, t.payment_expire_at,
@@ -435,12 +435,19 @@ export class TalentService {
    */
   private async syncMemberProfileFromTalent(
     memberId: string | number | null | undefined,
-    opts: { company_name?: string | null; job_title?: string | null },
+    opts: {
+      company_name?: string | null
+      job_title?: string | null
+      wechat_id?: string | null
+    },
   ) {
     if (memberId == null || memberId === '') return
     const company = String(opts.company_name || '').trim().slice(0, 100)
     const jobTitle = String(opts.job_title || '').trim().slice(0, 128)
-    if (!company && !jobTitle) return
+    const wechatId = opts.wechat_id !== undefined
+      ? String(opts.wechat_id || '').trim().slice(0, 128) || null
+      : undefined
+    if (!company && !jobTitle && wechatId === undefined) return
 
     const sets: string[] = []
     const params: any[] = []
@@ -452,6 +459,11 @@ export class TalentService {
       sets.push('company_position = ?')
       params.push(jobTitle)
     }
+    if (wechatId !== undefined) {
+      sets.push('wechat_id = ?')
+      params.push(wechatId)
+    }
+    if (!sets.length) return
     params.push(memberId)
     try {
       await queryExecute(
@@ -468,6 +480,7 @@ export class TalentService {
     const contact = dto.contact !== undefined ? String(dto.contact || '').trim() : undefined
     const companyName = dto.company_name !== undefined ? String(dto.company_name || '').trim() : undefined
     const jobTitle = dto.job_title !== undefined ? String(dto.job_title || '').trim() : undefined
+    const wechatId = dto.wechat_id !== undefined ? String(dto.wechat_id || '').trim().slice(0, 128) : undefined
     const tags = dto.industry_tags !== undefined ? parseIndustryTags(dto.industry_tags) : undefined
 
     if (!partial || dto.real_name !== undefined) {
@@ -491,6 +504,7 @@ export class TalentService {
       contact,
       company_name: companyName,
       job_title: jobTitle || null,
+      wechat_id: wechatId !== undefined ? (wechatId || null) : undefined,
       industry_tags: tags,
       experience: dto.experience !== undefined ? String(dto.experience || '').trim() || null : undefined,
       photo_url: dto.photo_url !== undefined ? normalizeOptionalImage(dto.photo_url) : undefined,
@@ -509,15 +523,16 @@ export class TalentService {
     const avatarUrl = payload.avatar_url || payload.photo_url || null
     await queryExecute(
       `INSERT INTO talent_applications
-        (member_id, real_name, contact, company_name, job_title, photo_url, industry_tags, experience,
+        (member_id, real_name, contact, company_name, job_title, wechat_id, photo_url, industry_tags, experience,
          card_image_url, avatar_url, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
       [
         memberId,
         payload.real_name,
         payload.contact,
         payload.company_name,
         payload.job_title,
+        payload.wechat_id || null,
         payload.photo_url,
         JSON.stringify(payload.industry_tags),
         payload.experience || null,
@@ -528,6 +543,7 @@ export class TalentService {
     await this.syncMemberProfileFromTalent(memberId, {
       company_name: payload.company_name,
       job_title: payload.job_title,
+      wechat_id: payload.wechat_id,
     })
     return this.getMine(memberId)
   }
@@ -584,7 +600,7 @@ export class TalentService {
     if (existing) {
       await queryExecute(
         `UPDATE talent_applications SET
-           real_name = ?, contact = ?, company_name = ?, job_title = ?, photo_url = ?,
+           real_name = ?, contact = ?, company_name = ?, job_title = ?, wechat_id = ?, photo_url = ?,
            industry_tags = ?, experience = ?, card_image_url = ?, avatar_url = ?,
            apply_type = ?, payment_status = ?, payment_method = ?,
            status = 'pending', reject_reason = NULL, reviewed_at = NULL, reviewed_by = NULL,
@@ -595,6 +611,7 @@ export class TalentService {
           payload.contact,
           payload.company_name,
           payload.job_title,
+          payload.wechat_id || null,
           payload.photo_url,
           JSON.stringify(payload.industry_tags),
           payload.experience || null,
@@ -609,15 +626,16 @@ export class TalentService {
     } else {
       await queryExecute(
         `INSERT INTO talent_applications
-          (member_id, real_name, contact, company_name, job_title, photo_url, industry_tags, experience,
+          (member_id, real_name, contact, company_name, job_title, wechat_id, photo_url, industry_tags, experience,
            card_image_url, avatar_url, apply_type, payment_status, payment_method, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
         [
           memberId,
           payload.real_name,
           payload.contact,
           payload.company_name,
           payload.job_title,
+          payload.wechat_id || null,
           payload.photo_url,
           JSON.stringify(payload.industry_tags),
           payload.experience || null,
@@ -633,6 +651,7 @@ export class TalentService {
     await this.syncMemberProfileFromTalent(memberId, {
       company_name: payload.company_name,
       job_title: payload.job_title,
+      wechat_id: payload.wechat_id,
     })
 
     await createNotification({
@@ -658,6 +677,7 @@ export class TalentService {
       contact: dto.contact !== undefined ? dto.contact : existing.contact,
       company_name: dto.company_name !== undefined ? dto.company_name : existing.company_name,
       job_title: dto.job_title !== undefined ? dto.job_title : existing.job_title,
+      wechat_id: dto.wechat_id !== undefined ? dto.wechat_id : existing.wechat_id,
       photo_url: dto.photo_url !== undefined ? dto.photo_url : existing.photo_url,
       industry_tags: dto.industry_tags !== undefined ? dto.industry_tags : existing.industry_tags,
       experience: dto.experience !== undefined ? dto.experience : existing.experience,
@@ -671,6 +691,7 @@ export class TalentService {
       contact: payload.contact,
       company_name: payload.company_name,
       job_title: payload.job_title,
+      wechat_id: payload.wechat_id || null,
       photo_url: payload.photo_url,
       industry_tags: payload.industry_tags,
       experience: payload.experience || null,
@@ -691,7 +712,7 @@ export class TalentService {
 
     await queryExecute(
       `UPDATE talent_applications SET
-        real_name = ?, contact = ?, company_name = ?, job_title = ?, photo_url = ?, industry_tags = ?, experience = ?,
+        real_name = ?, contact = ?, company_name = ?, job_title = ?, wechat_id = ?, photo_url = ?, industry_tags = ?, experience = ?,
         card_image_url = ?, avatar_url = ?, status = 'pending', reject_reason = NULL,
         reviewed_at = NULL, reviewed_by = NULL
        WHERE member_id = ?`,
@@ -700,6 +721,7 @@ export class TalentService {
         payload.contact,
         payload.company_name,
         payload.job_title,
+        payload.wechat_id || null,
         payload.photo_url,
         JSON.stringify(payload.industry_tags),
         payload.experience || null,
@@ -711,6 +733,7 @@ export class TalentService {
     await this.syncMemberProfileFromTalent(memberId, {
       company_name: payload.company_name,
       job_title: payload.job_title,
+      wechat_id: payload.wechat_id,
     })
     return this.getMine(memberId)
   }
@@ -752,12 +775,13 @@ export class TalentService {
     }
     if (query.keyword) {
       where.push(`(
-        t.real_name LIKE ? OR t.contact LIKE ? OR CAST(t.member_id AS CHAR) LIKE ?
+        t.real_name LIKE ? OR t.contact LIKE ? OR t.wechat_id LIKE ? OR CAST(t.member_id AS CHAR) LIKE ?
         OR JSON_UNQUOTE(JSON_EXTRACT(t.pending_data, '$.real_name')) LIKE ?
         OR JSON_UNQUOTE(JSON_EXTRACT(t.pending_data, '$.contact')) LIKE ?
+        OR JSON_UNQUOTE(JSON_EXTRACT(t.pending_data, '$.wechat_id')) LIKE ?
       )`)
       const kw = `%${query.keyword}%`
-      values.push(kw, kw, kw, kw, kw)
+      values.push(kw, kw, kw, kw, kw, kw, kw)
     }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
     const rows = await queryRows(
@@ -812,6 +836,7 @@ export class TalentService {
         contact: dto.contact || member.phone,
         company_name: dto.company_name,
         job_title: dto.job_title,
+        wechat_id: dto.wechat_id,
         industry_tags: dto.industry_tags,
         experience: dto.experience,
         photo_url: dto.photo_url,
@@ -837,16 +862,17 @@ export class TalentService {
 
     const result = await queryExecute(
       `INSERT INTO talent_applications
-        (member_id, real_name, contact, company_name, job_title, photo_url, industry_tags, experience,
+        (member_id, real_name, contact, company_name, job_title, wechat_id, photo_url, industry_tags, experience,
          card_image_url, avatar_url, status, reject_reason, is_featured, sort_order,
          reviewed_at, reviewed_by, admin_operated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${status === 'pending' ? 'NULL' : 'NOW()'}, ?, NOW())`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${status === 'pending' ? 'NULL' : 'NOW()'}, ?, NOW())`,
       [
         memberId,
         payload.real_name,
         payload.contact,
         payload.company_name,
         payload.job_title,
+        payload.wechat_id || null,
         payload.photo_url,
         JSON.stringify(payload.industry_tags),
         payload.experience || null,
@@ -865,6 +891,7 @@ export class TalentService {
     await this.syncMemberProfileFromTalent(memberId, {
       company_name: payload.company_name,
       job_title: payload.job_title,
+      wechat_id: payload.wechat_id,
     })
 
     // 缴费信息复用 update 逻辑
@@ -924,7 +951,7 @@ export class TalentService {
       if (dto.status === 'approved') {
         await queryExecute(
           `UPDATE talent_applications SET
-             real_name = ?, contact = ?, company_name = ?, job_title = ?,
+             real_name = ?, contact = ?, company_name = ?, job_title = ?, wechat_id = ?,
              photo_url = ?, industry_tags = ?, experience = ?,
              card_image_url = ?, avatar_url = ?,
              pending_data = NULL, update_status = NULL, update_reject_reason = NULL,
@@ -937,6 +964,7 @@ export class TalentService {
             pendingData.contact,
             pendingData.company_name,
             pendingData.job_title || null,
+            pendingData.wechat_id || null,
             pendingData.photo_url || null,
             JSON.stringify(parseIndustryTags(pendingData.industry_tags)),
             pendingData.experience || null,
@@ -949,6 +977,7 @@ export class TalentService {
         await this.syncMemberProfileFromTalent(memberId, {
           company_name: pendingData.company_name,
           job_title: pendingData.job_title,
+          wechat_id: pendingData.wechat_id,
         })
       } else {
         await queryExecute(
@@ -993,6 +1022,7 @@ export class TalentService {
     if (dto.contact !== undefined) assign('contact', String(dto.contact || '').trim())
     if (dto.company_name !== undefined) assign('company_name', String(dto.company_name || '').trim())
     if (dto.job_title !== undefined) assign('job_title', String(dto.job_title || '').trim() || null)
+    if (dto.wechat_id !== undefined) assign('wechat_id', String(dto.wechat_id || '').trim().slice(0, 128) || null)
     if (dto.experience !== undefined) assign('experience', String(dto.experience || '').trim() || null)
     if (dto.industry_tags !== undefined) {
       const tags = parseIndustryTags(dto.industry_tags)
@@ -1090,12 +1120,14 @@ export class TalentService {
       && (
         dto.company_name !== undefined
         || dto.job_title !== undefined
+        || dto.wechat_id !== undefined
         || dto.status === 'approved'
       )
     ) {
       await this.syncMemberProfileFromTalent(memberId, {
         company_name: (result as any).company_name,
         job_title: (result as any).job_title,
+        wechat_id: (result as any).wechat_id,
       })
     }
     if (

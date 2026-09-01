@@ -232,7 +232,7 @@ export class DealApplicationsService {
     )
     if (!project) throw new HttpException('所选项目不存在', HttpStatus.BAD_REQUEST)
     if (project.submitter_id && String(project.submitter_id) === String(memberId)) {
-      throw new HttpException('不能为自己发布的项目申请成交记录', HttpStatus.BAD_REQUEST)
+      throw new HttpException('不能为自己发布的项目做资源引荐', HttpStatus.BAD_REQUEST)
     }
     const owner = await queryOne(
       `SELECT id, name FROM members WHERE id = ? AND ${this.ownerMemberStatusSql}`,
