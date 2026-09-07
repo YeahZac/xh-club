@@ -1,10 +1,12 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
+import { InvitationEngineService } from './invitation-engine.service'
 
 const normalizePhone = (value: unknown) => String(value || '').replace(/\D/g, '')
 
 @Injectable()
 export class MemberInvitationService {
+  constructor(private readonly invitationEngine: InvitationEngineService) {}
   async previewByInviteCode(inviteCodeRaw: string) {
     const inviteCode = String(inviteCodeRaw || '').trim().toUpperCase()
     if (!inviteCode) {
@@ -82,6 +84,15 @@ export class MemberInvitationService {
         registered?.id || null,
       ],
     )
+
+    // 线索对应会员已注册且尚未绑定推荐人时，立即建立推荐关系
+    if (registered?.id) {
+      try {
+        await this.invitationEngine.bindReferrerOnLogin(registered.id, inviteCode)
+      } catch (error) {
+        console.warn('[MemberInvitationService] bind referrer from lead skipped:', error)
+      }
+    }
 
     return {
       id: result.insertId,

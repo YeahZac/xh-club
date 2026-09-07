@@ -133,11 +133,21 @@ export class InvitationController {
 @Controller('admin/member-invitations')
 @UseGuards(AdminAuthGuard)
 export class AdminMemberInvitationController {
-  constructor(private readonly memberInvitationService: MemberInvitationService) {}
+  constructor(
+    private readonly memberInvitationService: MemberInvitationService,
+    private readonly invitationEngine: InvitationEngineService,
+  ) {}
 
   @Get()
   async list(@Query() query: any) {
     const data = await this.memberInvitationService.adminList(query)
     return { code: 200, msg: 'success', data }
+  }
+
+  /** 用线索表回填历史邀请人↔被邀请人关系（不补发奖励） */
+  @Post('backfill-referrals')
+  async backfillReferrals() {
+    const data = await this.invitationEngine.backfillReferralsFromLeads()
+    return { code: 200, msg: '回填完成', data }
   }
 }

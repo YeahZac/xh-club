@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
 import { RowDataPacket } from 'mysql2'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
 import { UploadService } from '@/upload/upload.service'
@@ -11,10 +11,25 @@ import {
 } from './invitation-rule.util'
 
 @Injectable()
-export class InvitationEngineService {
+export class InvitationEngineService implements OnModuleInit {
   private readonly logger = new Logger(InvitationEngineService.name)
 
   constructor(private readonly uploadService: UploadService) {}
+
+  async onModuleInit() {
+    // 部署后自动补关联历史线索（幂等，仅补无推荐人记录）
+    setTimeout(() => {
+      void this.backfillReferralsFromLeads()
+        .then((result) => {
+          this.logger.log(
+            `[startup backfill] scanned=${result.scanned} linked=${result.linked} skipped=${result.skipped}`,
+          )
+        })
+        .catch((error) => {
+          this.logger.warn(`[startup backfill] skipped: ${(error as Error)?.message || error}`)
+        })
+    }, 12000)
+  }
 
   /** 小程序端读取启用中的邀请规则（含图文说明、条件、多奖励） */
   async getActiveRulesForClient() {
@@ -44,9 +59,11 @@ export class InvitationEngineService {
   async bindReferrerOnLogin(
     inviteeId: string | number,
     inviteCodeRaw: string,
+    options?: { grantRewards?: boolean },
   ): Promise<{ bound: boolean; inviterId?: string; reason?: string }> {
     const inviteCode = String(inviteCodeRaw || '').trim().toUpperCase()
     if (!inviteCode) return { bound: false, reason: 'empty_code' }
+    const grantRewards = options?.grantRewards !== false
 
     const invitee = await queryOne<RowDataPacket>(
       'SELECT id, referrer_id FROM members WHERE id = ?',
@@ -100,11 +117,93 @@ export class InvitationEngineService {
       recordId = (insert as any)?.insertId || null
     }
 
-    if (recordId) {
+    if (recordId && grantRewards) {
       await this.grantRegisterLoginRewards(String(inviter.id), String(inviteeId), recordId, inviteCode)
     }
 
     return { bound: true, inviterId: String(inviter.id) }
+  }
+
+  /**
+   * 历史补关联：用 member_invitations 线索（邀请人 + 被邀请人手机号）回填 members.referrer_id。
+   * 不补发奖励，仅建立关系。
+   */
+  async backfillReferralsFromLeads(): Promise<{
+    scanned: number
+    linked: number
+    skipped: number
+    details: Array<{ invitee_id: string; inviter_id: string; invite_code: string }>
+  }> {
+    const rows = await queryRows(
+      `SELECT mi.id AS lead_id, mi.inviter_id, mi.invite_code, mi.invitee_phone,
+              mi.registered_member_id,
+              m.id AS matched_member_id, m.referrer_id AS matched_referrer_id
+       FROM member_invitations mi
+       LEFT JOIN members m ON (
+         m.id = mi.registered_member_id
+         OR REPLACE(REPLACE(REPLACE(IFNULL(m.phone,''),' ',''),'-',''),'+','')
+            = REPLACE(REPLACE(REPLACE(IFNULL(mi.invitee_phone,''),' ',''),'-',''),'+','')
+       )
+       WHERE mi.inviter_id IS NOT NULL
+         AND mi.invitee_phone IS NOT NULL
+         AND TRIM(mi.invitee_phone) <> ''
+       ORDER BY mi.id ASC
+       LIMIT 2000`,
+    )
+
+    let scanned = 0
+    let linked = 0
+    let skipped = 0
+    const details: Array<{ invitee_id: string; inviter_id: string; invite_code: string }> = []
+
+    for (const row of rows || []) {
+      scanned += 1
+      const inviteeId = row.matched_member_id || row.registered_member_id
+      const inviterId = row.inviter_id
+      const inviteCode = String(row.invite_code || '').trim().toUpperCase()
+      if (!inviteeId || !inviterId || !inviteCode) {
+        skipped += 1
+        continue
+      }
+      if (String(inviteeId) === String(inviterId)) {
+        skipped += 1
+        continue
+      }
+      if (row.matched_referrer_id) {
+        // 已有推荐人：仍补齐线索上的 registered_member_id
+        if (!row.registered_member_id) {
+          await queryExecute(
+            `UPDATE member_invitations
+             SET is_registered = 1, registered_member_id = ?
+             WHERE id = ? AND (registered_member_id IS NULL OR registered_member_id = 0)`,
+            [inviteeId, row.lead_id],
+          ).catch(() => undefined)
+        }
+        skipped += 1
+        continue
+      }
+
+      const result = await this.bindReferrerOnLogin(inviteeId, inviteCode, { grantRewards: false })
+      if (result.bound) {
+        linked += 1
+        details.push({
+          invitee_id: String(inviteeId),
+          inviter_id: String(result.inviterId || inviterId),
+          invite_code: inviteCode,
+        })
+        await queryExecute(
+          `UPDATE member_invitations
+           SET is_registered = 1, registered_member_id = ?
+           WHERE id = ?`,
+          [inviteeId, row.lead_id],
+        ).catch(() => undefined)
+      } else {
+        skipped += 1
+      }
+    }
+
+    this.logger.log(`[backfillReferralsFromLeads] scanned=${scanned} linked=${linked} skipped=${skipped}`)
+    return { scanned, linked, skipped, details }
   }
 
   private ruleMatchesCondition(rule: RowDataPacket, conditionCode: string): boolean {

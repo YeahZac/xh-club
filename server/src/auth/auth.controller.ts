@@ -6,8 +6,10 @@ import {
   HttpException,
   Req,
   Headers,
+  UseGuards,
 } from '@nestjs/common'
 import { AuthService } from './auth.service'
+import { MemberAuthGuard } from './auth.guard'
 
 @Controller('auth')
 export class AuthController {
@@ -126,6 +128,35 @@ export class AuthController {
           phone_masked: '',
         },
       }
+    }
+  }
+
+  /** 已登录用户绑定邀请码（扫码进入且本地已登录） */
+  @Post('bind-invite')
+  @HttpCode(200)
+  @UseGuards(MemberAuthGuard)
+  async bindInvite(
+    @Body() dto: { inviteCode?: string },
+    @Req() request: any,
+  ) {
+    try {
+      const data = await this.authService.bindInviteCodeForMember(
+        request.user.sub,
+        dto?.inviteCode || '',
+      )
+      return {
+        code: 200,
+        msg: data.bound ? '推荐关系已绑定' : (data.reason === 'already_has_referrer' ? '已绑定过推荐人' : '未完成绑定'),
+        data,
+      }
+    } catch (error) {
+      if (error instanceof HttpException) {
+        const status = error.getStatus()
+        const msg = this.httpExceptionMessage(error)
+        return { code: status, msg, data: null }
+      }
+      const msg = String((error as Error)?.message || '绑定失败')
+      return { code: 500, msg: msg.slice(0, 80), data: null }
     }
   }
 }

@@ -64,7 +64,7 @@ export class AuthService {
         [openid],
       )
 
-      // 老用户一键登录：仅凭 openid 签发登录态，无需重复授权手机号/头像/昵称
+      // 老用户一键登录：仅凭 openid 签发登录态；若携带邀请码且尚未绑定推荐人，则补绑
       if (existing && (mode === 'quick' || (!input.phoneCode && !input.phoneCloudId))) {
         const memberId = (existing as any).id
         try {
@@ -78,7 +78,11 @@ export class AuthService {
         if (safeAvatar && !(existing as any).avatar) {
           await queryExecute('UPDATE members SET avatar = ? WHERE id = ?', [safeAvatar, memberId]).catch(() => undefined)
         }
-        return this.buildLoginResult(memberId, openid, { isNewMember: false, canBindInvite: false })
+        const bind = await this.tryBindInviteCode(memberId, input.inviteCode)
+        return this.buildLoginResult(memberId, openid, {
+          isNewMember: false,
+          inviteBound: !!bind?.bound,
+        })
       }
 
       if (mode === 'quick' && !existing) {
@@ -127,7 +131,11 @@ export class AuthService {
 
         params.push(memberId)
         await queryExecute(`UPDATE members SET ${updates.join(', ')} WHERE id = ?`, params)
-        return this.buildLoginResult(memberId, openid, { isNewMember: false, canBindInvite: false })
+        const bind = await this.tryBindInviteCode(memberId, input.inviteCode)
+        return this.buildLoginResult(memberId, openid, {
+          isNewMember: false,
+          inviteBound: !!bind?.bound,
+        })
       }
 
       // 若手机号已被旧账号占用：仅在对方未绑定微信时合并；已绑定其他微信则拒绝，避免账号接管
@@ -144,10 +152,15 @@ export class AuthService {
           [openid, safeName || '微信用户', safeAvatar || null, memberId],
         )
         const merged = await queryOne('SELECT referrer_id FROM members WHERE id = ?', [memberId])
+        let inviteBound = false
         if (!(merged as any)?.referrer_id) {
-          await this.tryBindInviteCode(memberId, input.inviteCode)
+          const bind = await this.tryBindInviteCode(memberId, input.inviteCode)
+          inviteBound = !!bind?.bound
         }
-        return this.buildLoginResult(memberId, openid, { isNewMember: false, canBindInvite: false })
+        return this.buildLoginResult(memberId, openid, {
+          isNewMember: false,
+          inviteBound,
+        })
       }
 
       await queryExecute(
@@ -162,12 +175,14 @@ export class AuthService {
 
       const newMember = await queryOne('SELECT id, wx_openid FROM members WHERE wx_openid = ?', [openid])
       const memberId = (newMember as any)?.id
+      let inviteBound = false
       if (memberId) {
-        await this.tryBindInviteCode(memberId, input.inviteCode)
+        const bind = await this.tryBindInviteCode(memberId, input.inviteCode)
+        inviteBound = !!bind?.bound
       }
       return this.buildLoginResult(memberId, (newMember as any)?.wx_openid, {
         isNewMember: true,
-        canBindInvite: true,
+        inviteBound,
       })
     } catch (error) {
       console.error('[AuthService] wxLogin error:', JSON.stringify(error))
@@ -199,18 +214,39 @@ export class AuthService {
       [openid],
     )
     const registered = !!existing
+    const hasReferrer = !!(existing as any)?.referrer_id
     const phone = String((existing as any)?.phone || '')
     const phoneMasked = phone
       ? `${phone.slice(0, 3)}****${phone.slice(-4)}`
       : ''
     return {
       registered,
-      can_fill_invite: !registered,
+      // 未绑定推荐人时仍可填写/携带邀请码（含老用户一键登录补绑）
+      can_fill_invite: !hasReferrer,
       can_quick_login: registered,
+      has_referrer: hasReferrer,
       openid,
       name: registered ? String((existing as any)?.name || '') : '',
       avatar: registered ? String((existing as any)?.avatar || '') : '',
       phone_masked: phoneMasked,
+    }
+  }
+
+  /** 已登录会员主动绑定邀请码（扫码进入且本地已有登录态） */
+  async bindInviteCodeForMember(memberId: string | number, inviteCodeRaw?: string) {
+    const member = await queryOne('SELECT id, referrer_id FROM members WHERE id = ?', [memberId])
+    if (!member) {
+      throw new HttpException('会员不存在', HttpStatus.NOT_FOUND)
+    }
+    if ((member as any).referrer_id) {
+      return { bound: false, reason: 'already_has_referrer', has_referrer: true }
+    }
+    const result = await this.tryBindInviteCode(memberId, inviteCodeRaw)
+    return {
+      bound: !!result?.bound,
+      reason: result?.reason || (result?.bound ? undefined : 'bind_failed'),
+      has_referrer: !!result?.bound || !!(member as any).referrer_id,
+      inviter_id: result?.inviterId || null,
     }
   }
 
@@ -228,7 +264,7 @@ export class AuthService {
   private async buildLoginResult(
     memberId: string,
     openid: string,
-    flags?: { isNewMember?: boolean; canBindInvite?: boolean },
+    flags?: { isNewMember?: boolean; inviteBound?: boolean },
   ) {
     if (memberId) {
       void this.pointsEngine
@@ -238,10 +274,11 @@ export class AuthService {
 
     const profile = await queryOne(
       `SELECT id, name, avatar, phone, wx_openid, membership_level, member_type, status,
-              available_points, total_points, credit_score, company_name, company_position
+              available_points, total_points, credit_score, company_name, company_position, referrer_id
        FROM members WHERE id = ?`,
       [memberId],
     )
+    const hasReferrer = !!(profile as any)?.referrer_id
 
     return {
       member_id: memberId,
@@ -249,7 +286,9 @@ export class AuthService {
       token: signAuthToken({ sub: String(memberId), type: 'member' }),
       profile: profile || null,
       is_new_member: !!flags?.isNewMember,
-      can_bind_invite: !!flags?.canBindInvite,
+      invite_bound: !!flags?.inviteBound,
+      has_referrer: hasReferrer,
+      can_bind_invite: !hasReferrer,
     }
   }
 
