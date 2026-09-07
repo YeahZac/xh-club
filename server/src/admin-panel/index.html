@@ -1070,7 +1070,8 @@
       <div class="bg-gradient-to-r from-navy-800 to-navy-700 rounded-2xl p-5 mb-6 text-white">
         <h3 class="font-bold text-lg">会员邀请记录</h3>
         <p class="text-sm text-white/80 mt-2 leading-relaxed">
-          记录小程序「邀请新会员」分享表单提交的信息：邀请人、被邀请人、邀请时间、表单内容，以及手机号是否已注册小程序。
+          汇总两类邀请：① 小程序邀请表单提交的线索；② 好友扫码 / 填写邀请码完成注册或绑定后的推荐关系。
+          可查看邀请人、被邀请人、推荐码、来源与是否已注册。
         </p>
       </div>
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -1080,8 +1081,14 @@
             <option value="1">已注册</option>
             <option value="0">未注册</option>
           </select>
+          <select id="memberInviteSourceFilter" onchange="loadMemberInvitations()" class="px-4 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+            <option value="">全部来源</option>
+            <option value="qr_login">扫码/邀请码</option>
+            <option value="form">邀请表单</option>
+          </select>
           <input id="memberInviteKeyword" onkeydown="if(event.key==='Enter')loadMemberInvitations()" placeholder="搜索姓名、手机号、推荐码、邀请人" class="px-4 py-2 border border-gray-200 rounded-xl text-sm w-80 outline-none">
           <button onclick="loadMemberInvitations()" class="px-4 py-2 bg-navy-100 text-navy-700 rounded-xl text-sm">搜索</button>
+          <button onclick="backfillMemberInvitations()" class="px-4 py-2 bg-brand-50 text-brand-700 rounded-xl text-sm">同步历史绑定</button>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
@@ -1092,12 +1099,13 @@
                 <th class="py-3 pr-3 font-medium">单位 / 职位</th>
                 <th class="py-3 pr-3 font-medium">邀请人</th>
                 <th class="py-3 pr-3 font-medium">推荐码</th>
+                <th class="py-3 pr-3 font-medium">来源</th>
                 <th class="py-3 pr-3 font-medium">注册状态</th>
                 <th class="py-3 font-medium">邀请时间</th>
               </tr>
             </thead>
             <tbody id="memberInvitationsTableBody" class="divide-y divide-gray-50">
-              <tr><td colspan="7" class="py-8 text-center text-gray-400">加载中...</td></tr>
+              <tr><td colspan="8" class="py-8 text-center text-gray-400">加载中...</td></tr>
             </tbody>
           </table>
         </div>
@@ -7284,21 +7292,26 @@ async function deleteInvitationRule(id) {
 async function loadMemberInvitations() {
   const keyword = document.getElementById('memberInviteKeyword')?.value || ''
   const registered = document.getElementById('memberInviteRegisteredFilter')?.value || ''
+  const source = document.getElementById('memberInviteSourceFilter')?.value || ''
   const qs = new URLSearchParams()
   if (keyword.trim()) qs.set('keyword', keyword.trim())
   if (registered !== '') qs.set('is_registered', registered)
+  if (source) qs.set('source', source)
   const res = await api(`/admin/member-invitations?${qs.toString()}`)
   const body = document.getElementById('memberInvitationsTableBody')
   if (!body) return
   const list = Array.isArray(res?.data) ? res.data : []
   if (!list.length) {
-    body.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-400">暂无邀请记录</td></tr>'
+    body.innerHTML = '<tr><td colspan="8" class="py-8 text-center text-gray-400">暂无邀请记录</td></tr>'
     return
   }
   body.innerHTML = list.map((item) => {
     const registeredLabel = item.is_registered
       ? `<span class="px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700">已注册${item.registered_member_name ? ` · ${escapeHtml(item.registered_member_name)}` : ''}</span>`
       : '<span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">未注册</span>'
+    const sourceLabel = item.source === 'qr_login'
+      ? '<span class="px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700">扫码/邀请码</span>'
+      : '<span class="px-2 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700">邀请表单</span>'
     const companyPos = [item.company_name, item.position].filter(Boolean).map(escapeHtml).join(' / ') || '-'
     return `<tr>
       <td class="py-3 pr-3 text-navy-800 font-medium">${escapeHtml(item.invitee_name || '-')}</td>
@@ -7306,10 +7319,23 @@ async function loadMemberInvitations() {
       <td class="py-3 pr-3 text-gray-600">${companyPos}</td>
       <td class="py-3 pr-3 text-gray-600">${escapeHtml(item.inviter_name || '-')}${item.inviter_phone ? `<div class="text-xs text-gray-400">${escapeHtml(item.inviter_phone)}</div>` : ''}</td>
       <td class="py-3 pr-3 text-gray-600">${escapeHtml(item.invite_code || '-')}</td>
+      <td class="py-3 pr-3">${sourceLabel}</td>
       <td class="py-3 pr-3">${registeredLabel}</td>
       <td class="py-3 text-gray-500">${item.created_at ? escapeHtml(new Date(item.created_at).toLocaleString('zh-CN')) : '-'}</td>
     </tr>`
   }).join('')
+}
+
+async function backfillMemberInvitations() {
+  if (!confirm('将把扫码/邀请码已绑定的历史推荐关系同步到本列表，并刷新注册状态。是否继续？')) return
+  const res = await api('/admin/member-invitations/backfill-referrals', { method: 'POST' })
+  if (res.code === 200) {
+    const d = res.data || {}
+    toast(`同步完成：关联 ${d.linked || 0}，写入列表 ${d.synced_logs || 0}`)
+    loadMemberInvitations()
+  } else {
+    toast(res.msg || '同步失败', 'error')
+  }
 }
 
 // ===== 积分规则 =====

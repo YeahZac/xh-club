@@ -22,7 +22,7 @@ export class InvitationEngineService implements OnModuleInit {
       void this.backfillReferralsFromLeads()
         .then((result) => {
           this.logger.log(
-            `[startup backfill] scanned=${result.scanned} linked=${result.linked} skipped=${result.skipped}`,
+            `[startup backfill] scanned=${result.scanned} linked=${result.linked} synced_logs=${result.synced_logs} skipped=${result.skipped}`,
           )
         })
         .catch((error) => {
@@ -121,16 +121,114 @@ export class InvitationEngineService implements OnModuleInit {
       await this.grantRegisterLoginRewards(String(inviter.id), String(inviteeId), recordId, inviteCode)
     }
 
+    // 同步到后台「会员邀请」列表（扫码/填码绑定以前只写 referrer，后台看不到）
+    await this.syncAdminInviteLog({
+      inviterId: inviter.id,
+      inviteeId,
+      inviteCode,
+      source: 'qr_login',
+      boundAt: new Date(),
+    }).catch((error) => {
+      this.logger.warn(`syncAdminInviteLog failed: ${(error as Error)?.message || error}`)
+    })
+
     return { bound: true, inviterId: String(inviter.id) }
   }
 
+  /** 将扫码/填码绑定关系写入 member_invitations，供管理台「会员邀请」展示 */
+  async syncAdminInviteLog(input: {
+    inviterId: string | number
+    inviteeId: string | number
+    inviteCode: string
+    source?: string
+    boundAt?: Date
+  }) {
+    const invitee = await queryOne<RowDataPacket>(
+      `SELECT id, name, phone, company_name, company_position
+       FROM members WHERE id = ? LIMIT 1`,
+      [input.inviteeId],
+    )
+    if (!invitee) return { synced: false, reason: 'invitee_not_found' }
+
+    const phone = String(invitee.phone || '').replace(/\D/g, '')
+    const name = String(invitee.name || '').trim() || '微信用户'
+    const inviteCode = String(input.inviteCode || '').trim().toUpperCase()
+    const source = String(input.source || 'qr_login')
+
+    const existing = await queryOne<RowDataPacket>(
+      `SELECT id, source FROM member_invitations
+       WHERE inviter_id = ?
+         AND (
+           registered_member_id = ?
+           OR (
+             ? <> ''
+             AND REPLACE(REPLACE(REPLACE(IFNULL(invitee_phone,''),' ',''),'-',''),'+','') = ?
+           )
+         )
+       ORDER BY id DESC
+       LIMIT 1`,
+      [input.inviterId, input.inviteeId, phone, phone],
+    )
+
+    if (existing?.id) {
+      await queryExecute(
+        `UPDATE member_invitations
+         SET invitee_name = COALESCE(NULLIF(invitee_name, ''), ?),
+             invitee_phone = CASE
+               WHEN invitee_phone IS NULL OR invitee_phone = '' OR invitee_phone = '未填写' THEN ?
+               ELSE invitee_phone
+             END,
+             company_name = COALESCE(company_name, ?),
+             position = COALESCE(position, ?),
+             is_registered = 1,
+             registered_member_id = ?,
+             invite_code = COALESCE(NULLIF(invite_code, ''), ?),
+             source = CASE WHEN source IS NULL OR source = '' THEN ? ELSE source END
+         WHERE id = ?`,
+        [
+          name,
+          phone || '未填写',
+          invitee.company_name || null,
+          invitee.company_position || null,
+          input.inviteeId,
+          inviteCode,
+          source,
+          existing.id,
+        ],
+      )
+      return { synced: true, id: existing.id, updated: true }
+    }
+
+    const insert = await queryExecute(
+      `INSERT INTO member_invitations
+        (inviter_id, invite_code, invitee_name, invitee_phone, company_name, position,
+         is_registered, registered_member_id, source, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+      [
+        input.inviterId,
+        inviteCode,
+        name,
+        phone || '未填写',
+        invitee.company_name || null,
+        invitee.company_position || null,
+        input.inviteeId,
+        source,
+        input.boundAt || new Date(),
+      ],
+    )
+    return { synced: true, id: (insert as any)?.insertId, updated: false }
+  }
+
   /**
-   * 历史补关联：用 member_invitations 线索（邀请人 + 被邀请人手机号）回填 members.referrer_id。
-   * 不补发奖励，仅建立关系。
+   * 历史补关联：
+   * 1) 线索表 → 绑定 referrer_id
+   * 2) invitation_records / members.referrer_id → 同步到会员邀请后台列表
+   * 不补发奖励。
    */
   async backfillReferralsFromLeads(): Promise<{
     scanned: number
     linked: number
+    synced_logs: number
     skipped: number
     details: Array<{ invitee_id: string; inviter_id: string; invite_code: string }>
   }> {
@@ -153,6 +251,7 @@ export class InvitationEngineService implements OnModuleInit {
 
     let scanned = 0
     let linked = 0
+    let syncedLogs = 0
     let skipped = 0
     const details: Array<{ invitee_id: string; inviter_id: string; invite_code: string }> = []
 
@@ -170,12 +269,11 @@ export class InvitationEngineService implements OnModuleInit {
         continue
       }
       if (row.matched_referrer_id) {
-        // 已有推荐人：仍补齐线索上的 registered_member_id
-        if (!row.registered_member_id) {
+        if (!row.registered_member_id || Number(row.registered_member_id) !== Number(inviteeId)) {
           await queryExecute(
             `UPDATE member_invitations
              SET is_registered = 1, registered_member_id = ?
-             WHERE id = ? AND (registered_member_id IS NULL OR registered_member_id = 0)`,
+             WHERE id = ?`,
             [inviteeId, row.lead_id],
           ).catch(() => undefined)
         }
@@ -193,7 +291,7 @@ export class InvitationEngineService implements OnModuleInit {
         })
         await queryExecute(
           `UPDATE member_invitations
-           SET is_registered = 1, registered_member_id = ?
+           SET is_registered = 1, registered_member_id = ?, source = COALESCE(NULLIF(source,''), 'form')
            WHERE id = ?`,
           [inviteeId, row.lead_id],
         ).catch(() => undefined)
@@ -202,8 +300,53 @@ export class InvitationEngineService implements OnModuleInit {
       }
     }
 
-    this.logger.log(`[backfillReferralsFromLeads] scanned=${scanned} linked=${linked} skipped=${skipped}`)
-    return { scanned, linked, skipped, details }
+    // 把已绑定推荐关系但未出现在会员邀请表的记录补进后台
+    const boundRows = await queryRows(
+      `SELECT m.id AS invitee_id, m.referrer_id AS inviter_id, m.created_at AS bound_at,
+              COALESCE(NULLIF(ir.invitation_code, ''), inv.invite_code, '') AS invite_code
+       FROM members m
+       LEFT JOIN members inv ON inv.id = m.referrer_id
+       LEFT JOIN invitation_records ir ON ir.invitee_id = m.id
+       WHERE m.referrer_id IS NOT NULL
+       ORDER BY m.id DESC
+       LIMIT 3000`,
+    )
+    for (const row of boundRows || []) {
+      const inviteCode = String(row.invite_code || '').trim().toUpperCase()
+      if (!row.invitee_id || !row.inviter_id || !inviteCode) continue
+      const synced = await this.syncAdminInviteLog({
+        inviterId: row.inviter_id,
+        inviteeId: row.invitee_id,
+        inviteCode,
+        source: 'qr_login',
+        boundAt: row.bound_at ? new Date(row.bound_at) : new Date(),
+      }).catch(() => null)
+      if (synced?.synced && !synced.updated) syncedLogs += 1
+      else if (synced?.synced) syncedLogs += 1
+    }
+
+    await this.refreshLeadRegistrationStatus()
+
+    this.logger.log(
+      `[backfillReferralsFromLeads] scanned=${scanned} linked=${linked} synced_logs=${syncedLogs} skipped=${skipped}`,
+    )
+    return { scanned, linked, synced_logs: syncedLogs, skipped, details }
+  }
+
+  /** 刷新线索「是否已注册」（手机号已能匹配会员却仍显示未注册） */
+  async refreshLeadRegistrationStatus() {
+    await queryExecute(
+      `UPDATE member_invitations mi
+       INNER JOIN members m
+         ON m.id = mi.registered_member_id
+         OR REPLACE(REPLACE(REPLACE(IFNULL(m.phone,''),' ',''),'-',''),'+','')
+            = REPLACE(REPLACE(REPLACE(IFNULL(mi.invitee_phone,''),' ',''),'-',''),'+','')
+       SET mi.is_registered = 1,
+           mi.registered_member_id = COALESCE(mi.registered_member_id, m.id)
+       WHERE mi.is_registered = 0`,
+    ).catch((error) => {
+      this.logger.warn(`refresh lead registration failed: ${(error as Error)?.message || error}`)
+    })
   }
 
   private ruleMatchesCondition(rule: RowDataPacket, conditionCode: string): boolean {

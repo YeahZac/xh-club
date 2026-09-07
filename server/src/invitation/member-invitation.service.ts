@@ -69,8 +69,8 @@ export class MemberInvitationService {
     const result = await queryExecute(
       `INSERT INTO member_invitations
         (inviter_id, invite_code, invitee_name, invitee_phone, company_name, position,
-         photo_url, industry_tags, is_registered, registered_member_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         photo_url, industry_tags, is_registered, registered_member_id, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'form')`,
       [
         inviter.id,
         String(inviter.invite_code || inviteCode),
@@ -126,20 +126,32 @@ export class MemberInvitationService {
   }
 
   async adminList(query: any = {}) {
+    // 轻量刷新注册状态；全量扫码绑定同步走启动任务 /「同步历史绑定」按钮
+    try {
+      await this.invitationEngine.refreshLeadRegistrationStatus()
+    } catch (error) {
+      console.warn('[MemberInvitationService] adminList refresh skipped:', error)
+    }
+
     const where: string[] = []
     const values: any[] = []
     const keyword = String(query.keyword || '').trim()
     if (keyword) {
       where.push(
         `(mi.invitee_name LIKE ? OR mi.invitee_phone LIKE ? OR mi.company_name LIKE ?
-          OR inv.name LIKE ? OR inv.phone LIKE ? OR mi.invite_code LIKE ?)`,
+          OR inv.name LIKE ? OR inv.phone LIKE ? OR mi.invite_code LIKE ?
+          OR rm.name LIKE ? OR rm.phone LIKE ?)`,
       )
       const like = `%${keyword}%`
-      values.push(like, like, like, like, like, like)
+      values.push(like, like, like, like, like, like, like, like)
     }
     if (query.is_registered === '1' || query.is_registered === '0') {
       where.push('mi.is_registered = ?')
       values.push(Number(query.is_registered))
+    }
+    if (query.source === 'form' || query.source === 'qr_login') {
+      where.push(`COALESCE(NULLIF(mi.source, ''), 'form') = ?`)
+      values.push(query.source)
     }
     const rows = await queryRows(
       `SELECT mi.*,
@@ -151,8 +163,8 @@ export class MemberInvitationService {
        LEFT JOIN members inv ON inv.id = mi.inviter_id
        LEFT JOIN members rm ON rm.id = mi.registered_member_id
        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-       ORDER BY mi.created_at DESC
-       LIMIT 500`,
+       ORDER BY mi.created_at DESC, mi.id DESC
+       LIMIT 800`,
       values,
     )
     return rows.map((row) => this.formatRow(row))
@@ -175,10 +187,13 @@ export class MemberInvitationService {
 
   private formatRow(row: any) {
     if (!row) return row
+    const source = String(row.source || 'form')
     return {
       ...row,
       is_registered: Number(row.is_registered) === 1,
       is_registered_label: Number(row.is_registered) === 1 ? '已注册' : '未注册',
+      source,
+      source_label: source === 'qr_login' ? '扫码/邀请码' : '邀请表单',
     }
   }
 }

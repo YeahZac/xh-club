@@ -51,6 +51,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   // 会员推荐线索：职业照与行业标签（登录后自动入驻人才）
   ['member_invitations', 'photo_url', 'VARCHAR(500) NULL'],
   ['member_invitations', 'industry_tags', 'JSON NULL'],
+  ['member_invitations', 'source', 'VARCHAR(32) NULL DEFAULT \'form\' COMMENT \'form=表单线索 qr_login=扫码/邀请码绑定\''],
   ['articles', 'subtitle', 'VARCHAR(255) NULL'],
   ['articles', 'video_url', 'VARCHAR(500) NULL'],
   ['articles', 'category', `VARCHAR(50) DEFAULT 'news'`],
