@@ -17,6 +17,7 @@ import { resolveEventStatus } from '@/common/event-status'
 import {
   normalizePromoCoopMode,
   promoCoopModeLabel,
+  stripCommissionMentions,
 } from '@/common/project-promo'
 import { userCategoryLabel, normalizeUserCategory } from '@/common/user-category'
 import { wantsListFields } from '@/common/list-fields'
@@ -637,6 +638,7 @@ export class EventsService {
     }
 
     const signedPayload: Record<string, any> = { ...signed }
+    const hasProjectCommission = Boolean(String((data as any).project_commission || '').trim())
     if (!canViewPromo) {
       delete signedPayload.project_commission
       delete signedPayload.promo_coop_mode
@@ -644,6 +646,15 @@ export class EventsService {
       delete signedPayload.promo_amount_wan
       delete signedPayload.promo_remark
       delete signedPayload.promo_share_count
+      // 已配置推广员佣金时，正文里含「佣金」的内容也不对普通用户展示
+      if (hasProjectCommission) {
+        if (typeof signedPayload.description === 'string') {
+          signedPayload.description = stripCommissionMentions(signedPayload.description)
+        }
+        if (typeof signedPayload.content === 'string') {
+          signedPayload.content = stripCommissionMentions(signedPayload.content)
+        }
+      }
     }
 
     return {
