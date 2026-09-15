@@ -1402,16 +1402,38 @@ function isFullHtmlDocument(html) {
   if (!v) return false
   if (/<!DOCTYPE\s+html/i.test(v) || /<html[\s>]/i.test(v)) return true
   if (/<style[\s>]/i.test(v) && /<\/style>/i.test(v) && v.length > 600) return true
+  if (/<head[\s>]/i.test(v) && /<body[\s>]/i.test(v)) return true
   return false
 }
 
-/** 完整页 / 复杂 HTML / 上次停在源码：打开时优先进源码，避免保存后再打开退回可视化 */
+/**
+ * 是否为 Quill 可视化可编辑的普通富文本（文字/图片/基础排版）。
+ * 多图商品详情也属于此类，不应被当成「完整 HTML 源码」。
+ */
+function isVisualRichContent(html) {
+  const raw = String(html || '').trim()
+  if (!raw) return true
+  if (isFullHtmlDocument(raw)) return false
+  if (/<\/?(style|script|link|meta|html|head|body)[\s>]/i.test(raw)) return false
+  const leftover = raw
+    .replace(
+      /<\/?(?:p|div|br|img|span|strong|em|b|i|u|s|a|ul|ol|li|h[1-6]|blockquote|font|sub|sup)(?:\s[^>]*)?\/?>/gi,
+      ' ',
+    )
+    .replace(/&[a-z#0-9]+;/gi, ' ')
+    .trim()
+  return !/<[a-z][\s\S]*>/i.test(leftover)
+}
+
+/** 仅完整 H5 / 含文档级标签时进源码；普通富文本（含多图）一律可视化 */
 function shouldOpenRichEditorInSource(editorId, html) {
   const raw = String(html || '').trim()
+  if (!raw) return false
   if (isFullHtmlDocument(raw)) return true
-  if (/<\/?(style|script|section|header|footer|nav|main|article|link|meta)[\s>]/i.test(raw)) return true
-  if (raw.length > 800 && (raw.match(/<[a-z][a-z0-9]*\b/gi) || []).length >= 12) return true
-  return recalledRichEditorMode(editorId) === 'source'
+  if (/<\/?(style|script|link|meta|html|head|body)[\s>]/i.test(raw)) return true
+  if (isVisualRichContent(raw)) return false
+  // 其它复杂片段：源码更安全，避免 Quill 破坏结构
+  return true
 }
 
 /** 从完整 HTML 或源码中提取可供 Quill 可视化的正文（保留文字、图片、基础排版） */
@@ -1875,13 +1897,12 @@ function initRichEditor(editorId, html) {
       quill.root.innerHTML = initialHtml
       meta.sourceEl.value = initialHtml
       meta.sourceMode = false
+      meta.rawPreferred = false
       rememberRichEditorMode(editorId, 'visual')
     }
   } else {
-    rememberRichEditorMode(editorId, recalledRichEditorMode(editorId) === 'source' ? 'source' : 'visual')
-    if (recalledRichEditorMode(editorId) === 'source') {
-      setRichEditorSourceMode(editorId, true, { silent: true })
-    }
+    // 新建内容默认可视化，不沿用其它条目的「源码」记忆
+    rememberRichEditorMode(editorId, 'visual')
   }
   syncRichEditorModeButtons(editorId)
 
