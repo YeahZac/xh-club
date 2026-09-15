@@ -1310,7 +1310,12 @@ export class AdminService {
          ORDER BY sort_order ASC, id ASC`,
         [id],
       )
-      const signed = await this.uploadService.signRowFields(row, ['cover_image', 'video_url'])
+      // 富文本 description 内的 img 也需预签名，否则私有桶在管理台编辑器里裂图
+      const signed = await this.uploadService.signDetailMediaFields(
+        row,
+        ['cover_image', 'video_url'],
+        ['description', 'content'],
+      )
       const galleryImages = await this.uploadService.signMediaUrls(
         parseJsonUrlList((row as any).gallery_images),
       )
@@ -1421,7 +1426,9 @@ export class AdminService {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, NOW())`,
         [
           dto.title,
-          dto.description || null,
+          dto.description
+            ? this.uploadService.canonicalizeHtmlMedia(dto.description)
+            : null,
           coverImage,
           videoUrl,
           serializeJsonUrlList(galleryImages),
@@ -1468,7 +1475,14 @@ export class AdminService {
       }
 
       if (dto.title !== undefined) assign('title', dto.title)
-      if (dto.description !== undefined) assign('description', dto.description || null)
+      if (dto.description !== undefined) {
+        assign(
+          'description',
+          dto.description
+            ? this.uploadService.canonicalizeHtmlMedia(dto.description)
+            : null,
+        )
+      }
       if (dto.cover_image !== undefined) assign('cover_image', assertCloudStorageImageUrl(dto.cover_image))
       if (dto.video_url !== undefined) assign('video_url', normalizeOptionalVideoUrl(dto.video_url))
       if (dto.gallery_images !== undefined) {

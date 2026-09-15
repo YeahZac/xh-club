@@ -380,9 +380,43 @@ export class UploadService {
   }
 
   /**
-   * 为富文本 HTML 内的 COS / cloud:// 媒体地址生成预签名 URL
-   * （私有桶下未签名的 img/src 在小程序端会加载失败）
+   * 落库前去掉 HTML 内 COS 预签名查询串，只保留对象 canonical URL，
+   * 避免过期签名被写回 description/content。
    */
+  canonicalizeHtmlMedia(html: unknown): string {
+    if (typeof html !== 'string' || !html.trim()) {
+      return typeof html === 'string' ? html : '';
+    }
+
+    const candidates = new Set<string>();
+    html.replace(/(?:src|href)=["']([^"']+)["']/gi, (_m, url: string) => {
+      const value = String(url || '').trim();
+      if (
+        value
+        && (
+          value.startsWith('cloud://')
+          || /(?:\.myqcloud\.com|\.tcb\.qcloud\.la)/i.test(value)
+          || /^images\//i.test(value)
+          || /^uploads\//i.test(value)
+        )
+      ) {
+        candidates.add(value);
+      }
+      return _m;
+    });
+
+    if (!candidates.size) return html;
+
+    let next = html;
+    for (const url of candidates) {
+      const canonical = canonicalizeCloudStorageUrl(url) || normalizeMediaUrl(url);
+      if (canonical && canonical !== url) {
+        next = next.split(url).join(canonical);
+      }
+    }
+    return next;
+  }
+
   async signHtmlMedia(html: unknown, maxAge?: number): Promise<string> {
     if (typeof html !== 'string' || !html.trim()) {
       return typeof html === 'string' ? html : '';

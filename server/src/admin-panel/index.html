@@ -1894,7 +1894,12 @@ function initRichEditor(editorId, html) {
         '<p>【已保存完整 HTML 源码】请继续用「HTML 源码」编辑；勿在可视化中改写整页。</p>',
       )
     } else {
-      quill.root.innerHTML = initialHtml
+      // 用 pasteHTML 写入，保证 img（含预签名 query）被 Quill 识别为图片嵌入
+      quill.setText('')
+      quill.clipboard.dangerouslyPasteHTML(
+        0,
+        extractEditableHtmlFromSource(initialHtml) || '<p><br></p>',
+      )
       meta.sourceEl.value = initialHtml
       meta.sourceMode = false
       meta.rawPreferred = false
