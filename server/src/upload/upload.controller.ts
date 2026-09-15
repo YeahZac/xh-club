@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
   HttpCode,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadService, IMAGE_UPLOAD_MAX_BYTES, DOCUMENT_UPLOAD_MAX_BYTES } from './upload.service';
@@ -204,7 +205,7 @@ export class InviteUploadController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: IMAGE_UPLOAD_MAX_BYTES } }))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new Error('No file uploaded');
+      throw new BadRequestException('请选择要上传的文件');
     }
     const result = await this.uploadService.uploadImage(file, 'invite');
     return {
@@ -225,7 +226,7 @@ export class MemberUploadController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: IMAGE_UPLOAD_MAX_BYTES } }))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new Error('No file uploaded');
+      throw new BadRequestException('请选择要上传的文件');
     }
     const result = await this.uploadService.uploadImage(file, 'member');
     return {
@@ -239,7 +240,7 @@ export class MemberUploadController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 200 * 1024 * 1024 } }))
   async uploadVideo(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new Error('No file uploaded');
+      throw new BadRequestException('请选择要上传的文件');
     }
     const result = await this.uploadService.uploadVideo(file, 'member');
     return {
@@ -253,7 +254,7 @@ export class MemberUploadController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: DOCUMENT_UPLOAD_MAX_BYTES } }))
   async uploadDocument(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new Error('No file uploaded');
+      throw new BadRequestException('请选择要上传的文件');
     }
     const result = await this.uploadService.uploadDocument(file, 'member', DOCUMENT_UPLOAD_MAX_BYTES);
     return {
@@ -271,7 +272,7 @@ export class MemberUploadController {
   @HttpCode(200)
   async fromCloud(@Body() body: { fileID?: string; filename?: string }) {
     if (!body?.fileID?.trim()) {
-      throw new Error('fileID is required');
+      throw new BadRequestException('fileID 不能为空');
     }
     const result = await this.uploadService.registerCloudFile(body.fileID.trim(), body.filename);
     return {

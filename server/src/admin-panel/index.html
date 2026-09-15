@@ -1541,6 +1541,25 @@ function getRichEditorHtml(editorId) {
   return html === '<p><br></p>' ? '' : html
 }
 
+/** 在富文本源码 textarea 光标处插入片段 */
+function insertHtmlIntoRichSource(editorId, snippet) {
+  const meta = richEditorMeta[editorId]
+  const el = meta?.sourceEl
+  if (!el) return false
+  const start = Number(el.selectionStart || 0)
+  const end = Number(el.selectionEnd || 0)
+  const val = String(el.value || '')
+  const insert = String(snippet || '')
+  el.value = val.slice(0, start) + insert + val.slice(end)
+  const pos = start + insert.length
+  try {
+    el.focus()
+    el.setSelectionRange(pos, pos)
+  } catch (_) { /* ignore */ }
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+  return true
+}
+
 function copyRichEditorHtml(editorId) {
   const html = getRichEditorHtml(editorId)
   const done = () => toast('HTML 已复制到剪贴板')
@@ -1733,16 +1752,18 @@ function initRichEditor(editorId, html) {
         ],
         handlers: {
           image() {
-            const meta = richEditorMeta[editorId]
-            if (meta?.sourceMode) {
-              toast('请先切回可视化，或在源码中手动写入 <img> 标签', 'error')
-              return
-            }
             openMediaLibrary({
               type: 'image',
               onSelect: (item) => {
+                const src = item.canonicalUrl || item.previewUrl || item.url
+                const meta = richEditorMeta[editorId]
+                if (meta?.sourceMode && meta.sourceEl) {
+                  insertHtmlIntoRichSource(editorId, `<img src="${src}" alt="" style="max-width:100%;height:auto;" />`)
+                  toast('图片已插入源码')
+                  return
+                }
                 const range = quill.getSelection(true)
-                quill.insertEmbed(range.index, 'image', item.previewUrl || item.url, 'user')
+                quill.insertEmbed(range.index, 'image', item.previewUrl || src, 'user')
                 quill.setSelection(range.index + 1)
                 toast('图片已插入')
               },
@@ -1779,17 +1800,18 @@ function initRichEditor(editorId, html) {
             pop.style.display = pop.style.display === 'block' ? 'none' : 'block'
           },
           attachment() {
-            const meta = richEditorMeta[editorId]
-            if (meta?.sourceMode) {
-              toast('请先切回可视化，或在源码中手动写入链接', 'error')
-              return
-            }
             openMediaLibrary({
               type: 'document',
               onSelect: (item) => {
-                const range = quill.getSelection(true)
                 const name = item.fileName || '附件'
-                const href = item.previewUrl || item.url
+                const href = item.canonicalUrl || item.previewUrl || item.url
+                const meta = richEditorMeta[editorId]
+                if (meta?.sourceMode && meta.sourceEl) {
+                  insertHtmlIntoRichSource(editorId, `<a href="${href}" target="_blank" rel="noopener">${name}</a>`)
+                  toast('附件已插入源码')
+                  return
+                }
+                const range = quill.getSelection(true)
                 quill.insertText(range.index, name, 'link', href, 'user')
                 quill.setSelection(range.index + name.length)
                 toast('附件已插入')
@@ -5568,34 +5590,57 @@ async function uploadToMediaLibrary(input) {
       xhr.open('POST', `/api${endpoint}`)
       if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
       xhr.onload = () => {
-        try { resolve(JSON.parse(xhr.responseText || '{}')) }
-        catch (e) { reject(e) }
+        let parsed = {}
+        try {
+          parsed = JSON.parse(xhr.responseText || '{}')
+        } catch (_) {
+          parsed = {}
+        }
+        if (xhr.status === 401) {
+          reject(new Error('登录已过期，请重新登录'))
+          return
+        }
+        if (xhr.status === 413) {
+          reject(new Error('文件过大，网关拒绝接收，请压缩后重试'))
+          return
+        }
+        if (xhr.status < 200 || xhr.status >= 300) {
+          reject(new Error(parsed.msg || parsed.message || `上传失败(${xhr.status})`))
+          return
+        }
+        resolve(parsed)
       }
       xhr.onerror = () => reject(new Error('网络异常'))
       xhr.send(formData)
     })
-    if (xhrRes.code !== 200 || !xhrRes.data) throw new Error(xhrRes.msg || '上传失败')
-    toast(xhrRes.data.reused ? '检测到相同文件，已复用现有资源' : '上传成功')
-    mediaLibraryState.page = 1
-    await loadMediaLibrary()
+    if (xhrRes.code !== 200 || !xhrRes.data) {
+      throw new Error(xhrRes.msg || xhrRes.message || '上传失败')
+    }
+    const data = xhrRes.data
+    const canonicalUrl = data.canonicalUrl || data.url
+    const previewUrl = data.url || data.canonicalUrl
+    if (!canonicalUrl) throw new Error('上传成功但未返回文件地址')
+
     const uploadedKey = (() => {
       try {
-        const u = new URL(xhrRes.data.canonicalUrl || xhrRes.data.url)
+        const u = new URL(canonicalUrl)
         return decodeURIComponent(u.pathname.replace(/^\//, ''))
       } catch (_) {
-        return ''
+        return String(data.fileId || '').replace(/^cloud:\/\//, '') || ''
       }
     })()
-    if (uploadedKey) {
-      selectMediaLibraryItem(uploadedKey)
-      const item = mediaLibraryState.list.find((x) => x.key === uploadedKey)
-      if (item) applyMediaSelection({
-        ...item,
-        canonicalUrl: xhrRes.data.canonicalUrl || item.canonicalUrl,
-        previewUrl: xhrRes.data.url || item.previewUrl,
-        fileName: xhrRes.data.fileName || item.fileName,
-      })
-    }
+
+    toast(data.reused ? '检测到相同文件，已复用现有资源' : '上传成功')
+    // 直接用上传回包回填，避免 COS 列表短暂未同步导致“上传成功但选不上”
+    applyMediaSelection({
+      key: uploadedKey,
+      canonicalUrl,
+      previewUrl,
+      url: canonicalUrl,
+      fileName: data.fileName || file.name,
+    })
+    mediaLibraryState.page = 1
+    loadMediaLibrary().catch(() => {})
   } catch (e) {
     toast(e.message || '上传失败', 'error')
   }
