@@ -250,6 +250,18 @@ export class AuthService {
     }
   }
 
+  /** 续期会员登录 Token */
+  async refreshMemberToken(memberId: string | number) {
+    const member = await queryOne('SELECT id FROM members WHERE id = ? LIMIT 1', [memberId])
+    if (!member) {
+      throw new HttpException('会员不存在', HttpStatus.NOT_FOUND)
+    }
+    return {
+      member_id: String(memberId),
+      token: signAuthToken({ sub: String(memberId), type: 'member' }),
+    }
+  }
+
   private async tryBindInviteCode(memberId: string | number, inviteCodeRaw?: string) {
     const inviteCode = String(inviteCodeRaw || '').trim()
     if (!inviteCode || !memberId) return null

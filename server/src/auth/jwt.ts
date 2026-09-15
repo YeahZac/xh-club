@@ -62,7 +62,8 @@ function getVerifySecrets(): string[] {
 }
 
 export function signAuthToken(principal: AuthPrincipal): string {
-  return jwt.sign(principal, getSigningSecret(), { expiresIn: '7d' })
+  // 会员登录态长期有效，仅用户主动退出时清除本地凭证
+  return jwt.sign(principal, getSigningSecret(), { expiresIn: '3650d' })
 }
 
 export function verifyAuthToken(token: string): AuthPrincipal {

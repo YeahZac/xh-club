@@ -3,8 +3,8 @@ import { View, Text, Image } from "@tarojs/components"
 import Taro, { useDidShow } from "@tarojs/taro"
 import {
   User, TrendingUp,
-  Users, Wallet, CalendarDays, Coins,
-  DollarSign, BadgeCheck, SquarePen, MessageSquare, LogOut, Bell,
+  Users, CalendarDays, Coins,
+  BadgeCheck, SquarePen, MessageSquare, LogOut, Bell,
 } from "lucide-react-taro"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -20,13 +20,13 @@ import {
   SoftCard,
 } from "@/components/brand-ui"
 import { Network } from "@/network"
-import {
+  import {
   AUTH_LOGGED_IN_EVENT,
   AUTH_LOGGED_OUT_EVENT,
-  clearMemberSession,
   ensureLogin,
   isLoggedIn,
   logoutMember,
+  maybeRefreshMemberToken,
 } from "@/lib/auth"
 import { useTabShareAppMessage } from "@/lib/mini-program-share"
 import { userCategoryLabel } from "@/lib/user-category"
@@ -62,15 +62,6 @@ interface MemberProfile {
   created_at?: string
 }
 
-interface DistributionStats {
-  total_earnings: number
-  pending_earnings: number
-  settled_earnings: number
-  subordinate_count: number
-  direct_count: number
-  indirect_count: number
-}
-
 const levelMap: Record<string, { label: string; badgeVariant: "soft" | "gold" | "navy" }> = {
   normal: { label: "普通会员", badgeVariant: "soft" },
   silver: { label: "银卡会员", badgeVariant: "soft" },
@@ -80,7 +71,6 @@ const levelMap: Record<string, { label: string; badgeVariant: "soft" | "gold" | 
 
 const ProfilePage = () => {
   const [profile, setProfile] = useState<MemberProfile | null>(null)
-  const [distStats, setDistStats] = useState<DistributionStats | null>(null)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const refreshSeq = useRef(0)
   const lastRefreshAt = useRef(0)
@@ -97,7 +87,7 @@ const ProfilePage = () => {
     const seq = ++refreshSeq.current
     await loadProfile(seq)
     if (seq !== refreshSeq.current) return
-    await Promise.all([loadDistributionStats(seq), loadUnreadNotifications(seq)])
+    await loadUnreadNotifications(seq)
   }
 
   useEffect(() => {
@@ -105,7 +95,6 @@ const ProfilePage = () => {
     const onLogin = () => { void refreshAll({ force: true }) }
     const onLogout = () => {
       setProfile(null)
-      setDistStats(null)
       lastRefreshAt.current = 0
     }
     Taro.eventCenter.on(AUTH_LOGGED_IN_EVENT, onLogin)
@@ -131,27 +120,26 @@ const ProfilePage = () => {
       if (seq !== refreshSeq.current || !isLoggedIn()) return
       if (res?.data?.data) {
         setProfile(res.data.data)
+        maybeRefreshMemberToken()
         return
       }
-      const code = res?.data?.code
-      if (code === 401 || code === 403 || code === 404 || res?.statusCode === 401) {
-        clearMemberSession()
+      const code = Number(res?.data?.code)
+      // 仅 Token 失效或会员已删除时退出；其它错误保留登录态
+      if (code === 401 || code === 404 || res?.statusCode === 401) {
+        logoutMember()
         setProfile(null)
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("[我的页] 加载失败:", err)
-    }
-  }
-
-  const loadDistributionStats = async (seq = refreshSeq.current) => {
-    try {
-      if (!isLoggedIn()) return
-      const memberId = Taro.getStorageSync("member_id")
-      const res = await Network.request({ url: `/api/mall/distribution/stats/${memberId}` })
-      if (seq !== refreshSeq.current || !isLoggedIn()) return
-      if (res?.data?.data) setDistStats(res.data.data)
-    } catch (err) {
-      console.error("[我的页] 加载分销统计失败:", err)
+      const status = Number(err?.statusCode || err?.status || 0)
+      const msg = String(err?.message || err?.errMsg || "")
+      if (status === 401 || msg.includes("登录已失效") || msg.includes("登录凭证无效")) {
+        logoutMember()
+        setProfile(null)
+      } else if (status === 404 || msg.includes("会员不存在")) {
+        logoutMember()
+        setProfile(null)
+      }
     }
   }
 
@@ -166,12 +154,23 @@ const ProfilePage = () => {
   }
 
   const openProfileEdit = async () => {
-    if (!isLoggedIn() || !profile) {
-      if (isLoggedIn() && !profile) {
-        clearMemberSession()
-      }
+    if (!isLoggedIn()) {
       const ok = await ensureLogin("", true)
       if (ok) await refreshAll()
+      return
+    }
+    if (!profile) {
+      await loadProfile()
+      // loadProfile 异步 setState，再读一次会话；资料仍空则提示重试，绝不因加载失败清登录
+      if (!isLoggedIn()) {
+        const ok = await ensureLogin("", true)
+        if (ok) await refreshAll()
+        return
+      }
+      Taro.navigateTo({
+        url: "/pages/profile-edit/index",
+        fail: () => Taro.showToast({ title: "暂时无法打开，请稍后重试", icon: "none" }),
+      })
       return
     }
     Taro.navigateTo({ url: "/pages/profile-edit/index" })
@@ -199,10 +198,6 @@ const ProfilePage = () => {
   }
 
   const handleMenuAction = async (action: string) => {
-    if (action === "coming-soon") {
-      Taro.showToast({ title: "该功能暂未开通", icon: "none" })
-      return
-    }
     if (action === "logout") {
       if (!isLoggedIn()) {
         await ensureLogin("")
@@ -266,8 +261,6 @@ const ProfilePage = () => {
           action: "points-records",
           iconColor: brandColors.gold,
         },
-        { icon: DollarSign, label: "分销收益", badge: distStats?.total_earnings ? `¥${distStats.total_earnings.toFixed(0)}` : "", action: "coming-soon", iconColor: brandColors.success },
-        { icon: Wallet, label: "收益管理", action: "coming-soon", iconColor: brandColors.gold },
       ],
     },
   ]

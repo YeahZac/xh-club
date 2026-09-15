@@ -159,4 +159,23 @@ export class AuthController {
       return { code: 500, msg: msg.slice(0, 80), data: null }
     }
   }
+
+  /** 续期登录凭证（保持登录态，直至用户主动退出） */
+  @Post('refresh')
+  @HttpCode(200)
+  @UseGuards(MemberAuthGuard)
+  async refresh(@Req() request: any) {
+    try {
+      const data = await this.authService.refreshMemberToken(request.user.sub)
+      return { code: 200, msg: 'success', data }
+    } catch (error) {
+      if (error instanceof HttpException) {
+        const status = error.getStatus()
+        const msg = this.httpExceptionMessage(error)
+        return { code: status, msg, data: null }
+      }
+      const msg = String((error as Error)?.message || '续期失败')
+      return { code: 500, msg: msg.slice(0, 80), data: null }
+    }
+  }
 }
