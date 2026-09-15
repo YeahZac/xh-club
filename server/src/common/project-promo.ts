@@ -30,7 +30,8 @@ export function promoCoopModeLabel(value: unknown): string {
 }
 
 /**
- * 对非推广员/会员单位隐藏正文中含「佣金」的片段（纯文本按行；HTML 按块/行内节点）。
+ * 对非推广员/会员单位隐藏正文中含「佣金」的片段。
+ * 仅移除段落/列表等小块，避免误删完整 H5 外层导致整页变空。
  */
 export function stripCommissionMentions(input: unknown): string {
   const raw = String(input ?? '')
@@ -47,24 +48,25 @@ export function stripCommissionMentions(input: unknown): string {
   }
 
   let out = raw
-  // 含「佣金」的常见块级节点整段移除
-  out = out.replace(
-    /<(p|div|li|tr|section|article|blockquote|h[1-6])(\s[^>]*)?>[\s\S]*?佣金[\s\S]*?<\/\1>/gi,
-    '',
-  )
-  // 含「佣金」的行内节点移除
+  const blockRe =
+    /<(p|li|tr|blockquote|h[1-6])(\s[^>]*)?>[\s\S]*?佣金[\s\S]*?<\/\1>/gi
+  let prev = ''
+  while (prev !== out) {
+    prev = out
+    out = out.replace(blockRe, '')
+  }
   out = out.replace(
     /<(span|strong|em|b|i|u|font|a|label)(\s[^>]*)?>[^<]*佣金[^<]*<\/\1>/gi,
     '',
   )
-  // 按 <br> 拆行，去掉含「佣金」的行
   out = out
     .split(/<br\s*\/?>/i)
     .filter((part) => !part.includes('佣金'))
     .join('<br/>')
-  // 兜底：去掉仍残留的含「佣金」纯文本片段
   if (out.includes('佣金')) {
-    out = out.replace(/[^<>\n]*佣金[^<>\n]*/g, '')
+    out = out.replace(/>([^<]*佣金[^<]*)</g, (full, text: string) =>
+      String(text).includes('佣金') ? '><' : full,
+    )
   }
   return out
     .replace(/(<br\s*\/?>\s*){3,}/gi, '<br/><br/>')
