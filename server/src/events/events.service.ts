@@ -510,11 +510,21 @@ export class EventsService {
     const signFields = listFields ? ['cover_image'] : ['cover_image', 'video_url']
     const list = await this.uploadService.signRowsFields(rows || [], signFields)
     return {
-      list: (list || []).map((item: any) => ({
-        ...item,
-        avg_score: Number(item.avg_score || 0),
-        score_count: Number(item.score_count || 0),
-      })),
+      list: (list || []).map((item: any) => {
+        const next = {
+          ...item,
+          avg_score: Number(item.avg_score || 0),
+          score_count: Number(item.score_count || 0),
+        }
+        // 列表不对外暴露推广佣金字段（详情按身份返回）
+        delete next.project_commission
+        delete next.promo_coop_mode
+        delete next.promo_commission_rate
+        delete next.promo_amount_wan
+        delete next.promo_remark
+        delete next.promo_share_count
+        return next
+      }),
       total: Number(countRow?.total || 0),
       page,
       pageSize,
@@ -617,8 +627,27 @@ export class EventsService {
     }
 
     const promoMode = normalizePromoCoopMode((data as any).promo_coop_mode)
+    let canViewPromo = false
+    if (memberId) {
+      const viewer = await queryOne('SELECT user_category FROM members WHERE id = ? LIMIT 1', [
+        memberId,
+      ])
+      const category = normalizeUserCategory(viewer?.user_category)
+      canViewPromo = category === 'promoter' || category === 'member_unit'
+    }
+
+    const signedPayload: Record<string, any> = { ...signed }
+    if (!canViewPromo) {
+      delete signedPayload.project_commission
+      delete signedPayload.promo_coop_mode
+      delete signedPayload.promo_commission_rate
+      delete signedPayload.promo_amount_wan
+      delete signedPayload.promo_remark
+      delete signedPayload.promo_share_count
+    }
+
     return {
-      ...signed,
+      ...signedPayload,
       gallery_images: galleryImages,
       file_urls: fileUrls,
       view_count:
@@ -634,16 +663,20 @@ export class EventsService {
       company_name: companyName,
       owner_user_category: ownerUserCategory,
       owner_user_category_label: ownerUserCategory ? userCategoryLabel(ownerUserCategory) : null,
-      promo_coop_mode: promoMode,
-      promo_coop_mode_label: promoMode ? promoCoopModeLabel(promoMode) : null,
+      promo_coop_mode: canViewPromo ? promoMode : null,
+      promo_coop_mode_label: canViewPromo && promoMode ? promoCoopModeLabel(promoMode) : null,
       promo_commission_rate:
-        (data as any).promo_commission_rate != null
+        canViewPromo && (data as any).promo_commission_rate != null
           ? Number((data as any).promo_commission_rate)
           : null,
       promo_amount_wan: null,
       amount_max: null,
-      promo_remark: (data as any).promo_remark || null,
-      promo_share_count: Number((data as any).promo_share_count || 0),
+      promo_remark: canViewPromo ? (data as any).promo_remark || null : null,
+      promo_share_count: canViewPromo ? Number((data as any).promo_share_count || 0) : 0,
+      project_commission: canViewPromo
+        ? String((data as any).project_commission || '').trim() || null
+        : null,
+      can_view_promo_commission: canViewPromo,
       member_state: {
         has_scored: hasScored,
         can_score: !hasScored && (dimensions || []).length > 0,

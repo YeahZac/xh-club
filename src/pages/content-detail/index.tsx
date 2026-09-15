@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { View, Text, ScrollView, Image, Video } from '@tarojs/components'
 import Taro, { useLoad, useDidShow } from '@tarojs/taro'
 import { useDetailPageShare } from '@/lib/mini-program-share'
-import { Clock, MapPin, Users, Eye, FileText } from 'lucide-react-taro'
+import { Clock, MapPin, Users, Eye, FileText, MessageCircle } from 'lucide-react-taro'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,9 +21,13 @@ import {
 import { isDisplayableImageUrl } from '@/lib/media-url'
 import { maskPhone } from '@/lib/mask-phone'
 import { useMediaRefresh } from '@/lib/use-media-refresh'
-import { Network } from '@/network'
+import { Network, getFriendlyNetworkMessage } from '@/network'
 import { ensureLogin, getMemberSession, isLoggedIn } from '@/lib/auth'
-import { ensurePromoterOrMemberUnit } from '@/lib/member-access'
+import {
+  canViewPromoCommission,
+  ensurePromoterOrMemberUnit,
+  fetchMemberUserCategory,
+} from '@/lib/member-access'
 import { openRegisterPage } from '@/lib/register-form'
 import { formatProjectStage } from '@/lib/project-stage'
 import { previewRemoteDocument, isPdfUrl } from '@/lib/open-document'
@@ -74,6 +78,24 @@ const formatDetailTime = (dateStr?: string | null) => {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
+
+const formatRelativeTime = (dateStr?: string | null) => {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return String(dateStr)
+  const diff = Date.now() - d.getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '刚刚'
+  if (mins < 60) return `${mins}分钟前`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}小时前`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}天前`
+  return formatDetailTime(dateStr)
+}
+
+const countBusinessComments = (items: BusinessComment[]): number =>
+  items.reduce((sum, item) => sum + 1 + countBusinessComments(item.replies || []), 0)
 
 const unwrapDetail = (payload: unknown): Record<string, any> | null => {
   let current: unknown = payload
@@ -133,11 +155,26 @@ const ContentDetailPage = () => {
   const [h5Surface, setH5Surface] = useState<'loading' | 'webview' | 'fallback'>('loading')
   const [businessComments, setBusinessComments] = useState<BusinessComment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(false)
+  const [commentsError, setCommentsError] = useState('')
   const [commentText, setCommentText] = useState('')
   const [replyTarget, setReplyTarget] = useState<{ id: string; name: string } | null>(null)
   const [commentSubmitting, setCommentSubmitting] = useState(false)
+  const [showPromoCommission, setShowPromoCommission] = useState(false)
   const skipFirstShowRef = useRef(true)
   const loadDetailSeq = useRef(0)
+
+  const refreshPromoCommissionVisibility = async () => {
+    if (!isLoggedIn()) {
+      setShowPromoCommission(false)
+      return
+    }
+    try {
+      const category = await fetchMemberUserCategory()
+      setShowPromoCommission(canViewPromoCommission(category))
+    } catch {
+      setShowPromoCommission(false)
+    }
+  }
 
   const initRoadshowScoreDraft = (payload: Record<string, any>) => {
     const next: Record<string, number> = {}
@@ -150,6 +187,7 @@ const ContentDetailPage = () => {
 
   const loadBusinessComments = async (businessId: string) => {
     setCommentsLoading(true)
+    setCommentsError('')
     try {
       const res = await Network.request({ url: `/api/business/${businessId}/comments` })
       const list = Array.isArray(res?.data?.data) ? res.data.data : []
@@ -157,6 +195,7 @@ const ContentDetailPage = () => {
     } catch (error) {
       console.warn('[商机评论] 加载失败:', error)
       setBusinessComments([])
+      setCommentsError('评论加载失败')
     } finally {
       setCommentsLoading(false)
     }
@@ -241,9 +280,17 @@ const ContentDetailPage = () => {
       }).catch(() => undefined)
     }
     void loadDetail(type, id)
+    if (type === 'project') {
+      void refreshPromoCommissionVisibility()
+    } else {
+      setShowPromoCommission(false)
+    }
   })
 
   useDidShow(() => {
+    if (contentType === 'project') {
+      void refreshPromoCommissionVisibility()
+    }
     if (skipFirstShowRef.current) {
       skipFirstShowRef.current = false
       return
@@ -400,11 +447,11 @@ const ContentDetailPage = () => {
   }
 
   const openDealApplication = async () => {
-    if (!detail?.id || !(await ensureLogin('请先登录后申请成交记录'))) return
+    if (!detail?.id || !(await ensureLogin('请先登录后进行资源引荐'))) return
     const session = getMemberSession()
     const ownerId = detail.owner_member_id || detail.submitter_id
     if (session && ownerId && String(session.memberId) === String(ownerId)) {
-      Taro.showToast({ title: '不能为自己发布的项目申请成交记录', icon: 'none' })
+      Taro.showToast({ title: '不能为自己发布的项目做资源引荐', icon: 'none' })
       return
     }
     if (!(await ensurePromoterOrMemberUnit('项目成交申请'))) return
@@ -445,10 +492,6 @@ const ContentDetailPage = () => {
     || (detail.status === 'ended' ? '已结束' : detail.status === 'full' ? '已满员' : detail.status === 'draft' ? '活动未开放' : '暂不可报名')
   const showProjectBar = contentType === 'project'
   const showBusinessCommentBar = isBusinessCommentable
-  const bottomPadding =
-    contentType === 'event' || showRoadshowBar || showProjectBar || showBusinessCommentBar
-      ? 'mb-32 pb-8'
-      : 'mb-8'
   const projectBodyText = contentType === 'project'
     ? String(detail?.description || detail?.content || '').trim()
     : ''
@@ -500,76 +543,116 @@ const ContentDetailPage = () => {
       }
     } catch (error) {
       console.error('[商机评论] 发送失败:', error)
-      Taro.showToast({ title: '发送失败', icon: 'none' })
+      Taro.showToast({ title: getFriendlyNetworkMessage(error, '发送失败'), icon: 'none' })
     } finally {
       setCommentSubmitting(false)
     }
   }
 
-  const renderBusinessCommentItem = (item: BusinessComment, depth = 0) => (
-    <View key={String(item.id)} className={depth > 0 ? 'mt-3 ml-4 border-l border-border pl-3' : ''}>
-      <View className="flex flex-row items-start gap-2">
-        <View className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-muted">
-          <Text className="block text-xs font-semibold text-foreground">
-            {(item.member_name || '?')[0]}
-          </Text>
-        </View>
-        <View className="min-w-0 flex-1">
-          <View className="flex flex-row items-center justify-between gap-2">
-            <Text className="block text-sm font-medium text-foreground">{item.member_name || '用户'}</Text>
-            <Text className="block text-xs text-muted-foreground">{formatDetailTime(item.created_at)}</Text>
+  const businessOwnerId = String(detail?.user_id || detail?.submitter_id || '')
+  const businessCommentTotal = countBusinessComments(businessComments)
+
+  const startReply = (item: BusinessComment) => {
+    if (!isLoggedIn()) {
+      void ensureLogin()
+      return
+    }
+    setReplyTarget({ id: String(item.id), name: item.member_name || '用户' })
+  }
+
+  const renderBusinessCommentItem = (item: BusinessComment, depth = 0) => {
+    const isAuthor = businessOwnerId && String(item.member_id || '') === businessOwnerId
+    const avatarUrl = item.member_avatar
+    return (
+      <View key={String(item.id)} className={depth > 0 ? 'mt-3 pl-10' : 'mt-4'}>
+        <View className="flex flex-row items-start gap-3">
+          {isDisplayableImageUrl(avatarUrl) ? (
+            <Image src={avatarUrl} mode="aspectFill" className="h-8 w-8 flex-shrink-0 rounded-full bg-muted" />
+          ) : (
+            <View className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-muted">
+              <Text className="block text-xs font-semibold text-muted-foreground">
+                {(item.member_name || '?')[0]}
+              </Text>
+            </View>
+          )}
+          <View className="min-w-0 flex-1">
+            <View className="flex flex-row flex-wrap items-center gap-2">
+              <Text className="block text-xs text-muted-foreground">{item.member_name || '用户'}</Text>
+              {isAuthor ? (
+                <View className="rounded bg-rose-50 px-1.5 py-0.5">
+                  <Text className="block text-xs text-rose-500">作者</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text className="mt-1 block text-sm leading-relaxed text-foreground">{item.content}</Text>
+            <View className="mt-2 flex flex-row items-center gap-3">
+              <Text className="block text-xs text-muted-foreground">{formatRelativeTime(item.created_at)}</Text>
+              <Text className="block text-xs text-muted-foreground" onClick={() => startReply(item)}>
+                回复
+              </Text>
+            </View>
           </View>
-          <Text className="mt-1 block text-sm leading-relaxed text-foreground">{item.content}</Text>
-          {depth === 0 ? (
-            <Text
-              className="mt-2 block text-xs text-primary"
-              onClick={() => {
-                if (!isLoggedIn()) {
-                  void ensureLogin()
-                  return
-                }
-                setReplyTarget({ id: String(item.id), name: item.member_name || '用户' })
-              }}
-            >
-              回复
-            </Text>
-          ) : null}
         </View>
+        {(item.replies || []).length > 0 ? (
+          <View className="mt-1 border-l border-border/80 pl-3">
+            {(item.replies || []).map((reply) => renderBusinessCommentItem(reply, depth + 1))}
+          </View>
+        ) : null}
       </View>
-      {(item.replies || []).map((reply) => renderBusinessCommentItem(reply, depth + 1))}
-    </View>
-  )
+    )
+  }
 
   const renderBusinessCommentBar = () => (
-    <FixedBottomBar mode={bottomBarMode} className="flex-col gap-2">
+    <View
+      style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        padding: '10px 16px',
+        paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
+        backgroundColor: '#ffffff',
+        borderTop: '1px solid #EEF0F5',
+        zIndex: 100,
+        boxShadow: '0 -4px 20px rgba(27,42,74,0.06)',
+      }}
+    >
       {replyTarget ? (
-        <View className="flex flex-row items-center justify-between rounded-xl bg-muted px-3 py-2">
+        <View className="flex flex-row items-center justify-between rounded-full bg-field px-3 py-1.5">
           <Text className="block text-xs text-muted-foreground">回复 {replyTarget.name}</Text>
           <Text className="block text-xs text-primary" onClick={() => setReplyTarget(null)}>取消</Text>
         </View>
       ) : null}
-      <View style={{ display: 'flex', flexDirection: 'row', gap: '8px', alignItems: 'center' }}>
-        <View className="min-w-0 flex-1 rounded-xl bg-field px-3 py-2">
+      <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px' }}>
+        <View className="min-w-0 flex-1 rounded-full bg-field px-4 py-2">
           <Input
-            style={{ width: '100%' }}
+            style={{ width: '100%', fontSize: '14px' }}
             value={commentText}
-            placeholder={replyTarget ? '写下回复...' : '写下评论（仅文字）'}
+            placeholder={replyTarget ? `回复 ${replyTarget.name}` : '说点什么...'}
             maxlength={500}
+            confirmType="send"
             onInput={(e) => setCommentText(e.detail.value)}
             onConfirm={() => void submitBusinessComment()}
           />
         </View>
+        <View className="flex flex-shrink-0 flex-col items-center justify-center" style={{ minWidth: '36px' }}>
+          <MessageCircle size={icon.lg} color={brandColors.muted} strokeWidth={icon.stroke} />
+          <Text className="mt-0.5 block text-xs text-muted-foreground">{businessCommentTotal}</Text>
+        </View>
         <Button
           variant="brand"
           size="sm"
-          className="h-10 px-4"
+          className="h-9 rounded-full px-4"
           disabled={commentSubmitting || !commentText.trim()}
           onClick={() => void submitBusinessComment()}
         >
-          <Text className="block text-xs text-primary-foreground">发送</Text>
+          <Text className="block text-xs text-primary-foreground">{commentSubmitting ? '发送中' : '发送'}</Text>
         </Button>
       </View>
-    </FixedBottomBar>
+    </View>
   )
 
   const h5RenderType: HtmlRenderType | null =
@@ -590,6 +673,7 @@ const ContentDetailPage = () => {
     isFullHtmlDocument(html)
     && h5RenderType
     && !talentSplitH5
+    && !isBusinessCommentable
     && (contentType === 'project'
       || contentType === 'event'
       || contentType === 'article'
@@ -599,6 +683,13 @@ const ContentDetailPage = () => {
   /** web-view 成功时底栏由 html-render 注入；降级预览时仍用原生 FixedBottomBar */
   const showNativeBottomBar = !useEmbeddedFullH5 || h5Surface !== 'webview'
   const bottomBarMode: 'fixed' | 'dock' = useEmbeddedFullH5 && h5Surface === 'fallback' ? 'dock' : 'fixed'
+  /** 非分栏/非整页 H5 时用页面原生滚动，避免 ScrollView 高度裁切导致滚不到底 */
+  const useNativePageScroll = !talentSplitH5 && !(useEmbeddedFullH5 && h5RenderType)
+  const scrollBottomInset = showBusinessCommentBar
+    ? 'calc(6.5rem + env(safe-area-inset-bottom))'
+    : showEventBar || showRoadshowBar || showProjectBar
+      ? 'calc(5.5rem + env(safe-area-inset-bottom))'
+      : 'calc(1.25rem + env(safe-area-inset-bottom))'
 
   const h5ToolbarExtra =
     contentType === 'project'
@@ -642,7 +733,7 @@ const ContentDetailPage = () => {
         variant="outline"
         onClick={() => void openDealApplication()}
       >
-        <Text>申请成交记录</Text>
+        <Text>资源引荐</Text>
       </Button>
     </FixedBottomBar>
   )
@@ -701,11 +792,28 @@ const ContentDetailPage = () => {
     </FixedBottomBar>
   )
 
+  const DetailScrollWrapper = useNativePageScroll ? View : ScrollView
+  const detailScrollWrapperProps = useNativePageScroll
+    ? { className: 'box-border', style: { paddingBottom: scrollBottomInset } }
+    : {
+        scrollY: true as const,
+        enhanced: true,
+        showScrollbar: true,
+        className: 'box-border',
+        style: talentSplitH5
+          ? { flexShrink: 0, maxHeight: '46%', minHeight: 0 }
+          : { flex: 1, height: 0, minHeight: 0 },
+      }
+
   return (
-    <PageShell scroll={false}>
+    <PageShell scroll={useNativePageScroll ? 'page' : false}>
       <View
         className="box-border"
-        style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}
+        style={
+          useNativePageScroll
+            ? undefined
+            : { flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }
+        }
       >
       {useEmbeddedFullH5 && h5RenderType ? (
         <HtmlDetailFrame
@@ -718,19 +826,13 @@ const ContentDetailPage = () => {
       ) : (
       <View
         className="box-border"
-        style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}
-      >
-      <ScrollView
-        scrollY
-        enhanced
-        showScrollbar
-        className="box-border"
         style={
-          talentSplitH5
-            ? { flexShrink: 0, maxHeight: '46%', minHeight: 0 }
-            : { flex: 1, height: '100%', minHeight: 0 }
+          useNativePageScroll
+            ? undefined
+            : { flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }
         }
       >
+      <DetailScrollWrapper {...(detailScrollWrapperProps as any)}>
         <View className="px-4 pt-4">
           {isDisplayableImageUrl(cover) ? (
             <CoverThumb aspect="video" className="w-full">
@@ -851,6 +953,11 @@ const ContentDetailPage = () => {
                     手机号：{maskPhone(detail.phone)}
                   </Text>
                 )}
+                {detail.wechat_id ? (
+                  <Text className="mt-1 block text-xs text-muted-foreground">
+                    微信号：{detail.wechat_id}
+                  </Text>
+                ) : null}
                 {detail.membership_active && detail.payment_expire_at ? (
                   <Text className="mt-1 block text-xs text-muted-foreground">
                     会员有效期至 {String(detail.payment_expire_at).slice(0, 10)}
@@ -1072,9 +1179,10 @@ const ContentDetailPage = () => {
           </SoftCard>
         ) : null}
 
-        {contentType === 'project' && isLoggedIn() && (
+        {contentType === 'project' && showPromoCommission && (
           detail.promo_coop_mode
           || detail.promo_commission_rate != null
+          || detail.project_commission
           || detail.promo_share_count
           || detail.promo_remark
         ) ? (
@@ -1091,6 +1199,11 @@ const ContentDetailPage = () => {
                   分成比例：{Number(detail.promo_commission_rate)}%
                 </Text>
               ) : null}
+              {detail.project_commission ? (
+                <Text className="block text-xs text-muted-foreground">
+                  推广员佣金：{detail.project_commission}
+                </Text>
+              ) : null}
               <Text className="block text-xs text-muted-foreground">
                 推广次数：{Number(detail.promo_share_count || 0)}
               </Text>
@@ -1103,24 +1216,7 @@ const ContentDetailPage = () => {
           </SoftCard>
         ) : null}
 
-        {isBusinessCommentable ? (
-          <SoftCard className="mx-4 mt-3 px-4 py-4">
-            <Text className="mb-3 block text-sm font-semibold text-foreground">
-              评论与回复{businessComments.length ? `（${businessComments.length}）` : ''}
-            </Text>
-            {commentsLoading ? (
-              <Text className="block text-sm text-muted-foreground">加载中...</Text>
-            ) : businessComments.length === 0 ? (
-              <Text className="block text-sm text-muted-foreground">暂无评论，来抢沙发吧</Text>
-            ) : (
-              <View className="flex flex-col gap-4">
-                {businessComments.map((item) => renderBusinessCommentItem(item))}
-              </View>
-            )}
-          </SoftCard>
-        ) : null}
-
-        <SoftCard className={`mx-4 mt-3 px-4 py-4 ${talentSplitH5 ? 'mb-3' : bottomPadding}`}>
+        <SoftCard className={`mx-4 mt-3 px-4 py-4 ${talentSplitH5 ? 'mb-3' : ''}`}>
           <Text className="mb-3 block text-sm font-semibold text-foreground">
             {contentType === 'talent' ? '过往经历' : contentType === 'event' ? '活动详情' : '详细内容'}
           </Text>
@@ -1152,7 +1248,36 @@ const ContentDetailPage = () => {
             />
           )}
         </SoftCard>
-      </ScrollView>
+
+        {isBusinessCommentable ? (
+          <SoftCard className="mx-4 mt-3 px-4 py-4">
+            <View className="mb-1 flex flex-row items-center justify-between">
+              <Text className="block text-base font-semibold text-foreground">
+                共 {businessCommentTotal} 条评论
+              </Text>
+            </View>
+            {commentsLoading ? (
+              <Text className="mt-3 block text-sm text-muted-foreground">加载中...</Text>
+            ) : commentsError ? (
+              <View className="mt-3">
+                <Text className="block text-sm text-muted-foreground">{commentsError}</Text>
+                <Text
+                  className="mt-2 block text-sm text-primary"
+                  onClick={() => detail?.id && void loadBusinessComments(String(detail.id))}
+                >
+                  点击重试
+                </Text>
+              </View>
+            ) : businessComments.length === 0 ? (
+              <Text className="mt-3 block text-sm text-muted-foreground">暂无评论，来抢沙发吧</Text>
+            ) : (
+              <View>
+                {businessComments.map((item) => renderBusinessCommentItem(item))}
+              </View>
+            )}
+          </SoftCard>
+        ) : null}
+      </DetailScrollWrapper>
       {talentSplitH5 ? (
         <View
           className="box-border min-h-0 w-full"
