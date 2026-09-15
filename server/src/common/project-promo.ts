@@ -31,7 +31,7 @@ export function promoCoopModeLabel(value: unknown): string {
 
 /**
  * 对非推广员/会员单位隐藏正文中含「佣金」的片段。
- * 仅移除段落/列表等小块，避免误删完整 H5 外层导致整页变空。
+ * 只删同一标签内含佣金的小段，避免跨标签误删整页。
  */
 export function stripCommissionMentions(input: unknown): string {
   const raw = String(input ?? '')
@@ -49,7 +49,7 @@ export function stripCommissionMentions(input: unknown): string {
 
   let out = raw
   const blockRe =
-    /<(p|li|tr|blockquote|h[1-6])(\s[^>]*)?>[\s\S]*?佣金[\s\S]*?<\/\1>/gi
+    /<(p|li|tr|blockquote|h[1-6])(\s[^>]*)?>[^<]*佣金[^<]*<\/\1>/gi
   let prev = ''
   while (prev !== out) {
     prev = out
@@ -64,9 +64,7 @@ export function stripCommissionMentions(input: unknown): string {
     .filter((part) => !part.includes('佣金'))
     .join('<br/>')
   if (out.includes('佣金')) {
-    out = out.replace(/>([^<]*佣金[^<]*)</g, (full, text: string) =>
-      String(text).includes('佣金') ? '><' : full,
-    )
+    out = out.replace(/>([^<]*佣金[^<]*)</g, '><')
   }
   return out
     .replace(/(<br\s*\/?>\s*){3,}/gi, '<br/><br/>')
