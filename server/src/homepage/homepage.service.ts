@@ -462,11 +462,13 @@ export class HomepageService {
 
   async updateItem(id: string, dto: { sort_order?: number; is_active?: boolean }) {
     const sortOrder = Number(dto.sort_order)
+    const orderValue = Number.isFinite(sortOrder) ? sortOrder : 0
+    const isActive = dto.is_active !== false && dto.is_active !== 0 && dto.is_active !== '0'
     const result = await queryExecute(
       `UPDATE homepage_items
        SET sort_order = ?, is_active = ?, updated_at = NOW()
        WHERE id = ?`,
-      [Number.isFinite(sortOrder) ? sortOrder : 0, dto.is_active !== false, id],
+      [orderValue, isActive ? 1 : 0, id],
     )
     if (result.affectedRows === 0) throw new NotFoundException('首页内容不存在')
 
@@ -482,7 +484,22 @@ export class HomepageService {
         await this.updateSettings({ sort_mode: 'custom' })
       }
     }
-    return { success: true, sort_mode: 'custom' }
+
+    const saved = await queryOne<{ id: number; sort_order: number; is_active: number }>(
+      'SELECT id, sort_order, is_active FROM homepage_items WHERE id = ? LIMIT 1',
+      [id],
+    )
+    return {
+      success: true,
+      sort_mode: 'custom',
+      item: saved
+        ? {
+            id: saved.id,
+            sort_order: Number(saved.sort_order) || 0,
+            is_active: Boolean(saved.is_active),
+          }
+        : null,
+    }
   }
 
   async removeItem(id: string) {

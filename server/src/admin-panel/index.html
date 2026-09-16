@@ -2265,8 +2265,19 @@ function renderHomepageSection(section) {
     `<option value="${escapeHtml(item.id)}">${escapeHtml(formatHomepageCandidateLabel(section.section, item))}</option>`
   ).join('')
   const showCustomSort = homepageSortMode === 'custom'
-  const rows = (section.items || []).map(item => {
+  // 展示层按排序值排列，避免保存后视觉顺序与数字不一致
+  const sortedItems = [...(section.items || [])].sort((a, b) => {
+    const ao = Number(a.sort_order)
+    const bo = Number(b.sort_order)
+    const aOrder = Number.isFinite(ao) ? ao : 0
+    const bOrder = Number.isFinite(bo) ? bo : 0
+    if (aOrder !== bOrder) return aOrder - bOrder
+    return Number(a.id) - Number(b.id)
+  })
+  const rows = sortedItems.map(item => {
     const content = candidateMap.get(String(item.item_id))
+    const orderVal = Number(item.sort_order)
+    const orderText = Number.isFinite(orderVal) ? String(orderVal) : '0'
     return `
       <tr class="border-t border-gray-100">
         <td class="px-4 py-3">
@@ -2274,10 +2285,10 @@ function renderHomepageSection(section) {
           <p class="text-xs text-gray-400">ID: ${escapeHtml(item.item_id)}${section.section === 'articles' && content?.status ? ` · ${escapeHtml(({ draft: '草稿', published: '已发布', archived: '已归档' })[content.status] || content.status)}` : ''}${content?.view_count != null ? ` · 浏览 ${content.view_count}` : ''}</p>
         </td>
         <td class="px-4 py-3 w-32 ${showCustomSort ? '' : 'opacity-40'}">
-          <input id="home-order-${item.id}" type="number" value="${Number(item.sort_order) || 0}" class="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm" ${showCustomSort ? '' : 'disabled'}>
+          <input id="home-order-${item.id}" type="number" value="${escapeHtml(orderText)}" class="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm" ${showCustomSort ? '' : 'disabled'} onchange="saveHomepageItem('${item.id}')" onkeydown="if(event.key==='Enter'){event.preventDefault();saveHomepageItem('${item.id}')}">
         </td>
         <td class="px-4 py-3 w-28 text-center">
-          <input id="home-active-${item.id}" type="checkbox" ${item.is_active ? 'checked' : ''} class="w-4 h-4 accent-brand-500">
+          <input id="home-active-${item.id}" type="checkbox" ${item.is_active ? 'checked' : ''} class="w-4 h-4 accent-brand-500" onchange="saveHomepageItem('${item.id}')">
         </td>
         <td class="px-4 py-3 w-40 text-right">
           <button onclick="saveHomepageItem('${item.id}')" class="text-brand-600 hover:text-brand-800 text-sm mr-4">保存</button>
@@ -2292,7 +2303,7 @@ function renderHomepageSection(section) {
       <div class="p-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h3 class="font-bold text-navy-800">${escapeHtml(section.display_name)}</h3>
-          <p class="text-xs text-gray-400 mt-1">当前全局排序：${HOMEPAGE_SORT_LABEL[homepageSortMode] || homepageSortMode}</p>
+          <p class="text-xs text-gray-400 mt-1">当前全局排序：${HOMEPAGE_SORT_LABEL[homepageSortMode] || homepageSortMode} · 数字越小越靠前</p>
         </div>
         <div class="flex flex-wrap items-center gap-4">
           <label class="flex items-center gap-2 text-sm text-gray-600">
@@ -2304,6 +2315,7 @@ function renderHomepageSection(section) {
             <input id="home-limit-${section.section}" type="number" min="1" max="50" value="${Number(section.item_limit) || 8}" class="w-20 px-3 py-2 border border-gray-200 rounded-lg">
           </label>
           <button onclick="saveHomepageSection('${section.section}')" class="px-4 py-2 bg-navy-700 text-white text-sm rounded-lg hover:bg-navy-800">保存模块</button>
+          <button onclick="saveHomepageSectionOrders('${section.section}')" class="px-4 py-2 border border-navy-700 text-navy-700 text-sm rounded-lg hover:bg-navy-50">保存本栏排序</button>
         </div>
       </div>
       <div class="p-4 bg-gray-50 flex flex-wrap items-center gap-3">
@@ -2325,12 +2337,46 @@ function renderHomepageSection(section) {
   `
 }
 
+/** 读取页面上尚未点「保存」的排序/显示状态，写回内存并批量落库 */
+async function persistHomepageItemInputs(sectionKey) {
+  const sections = sectionKey
+    ? homepageSectionsData.filter((s) => s.section === sectionKey)
+    : homepageSectionsData
+  const tasks = []
+  for (const section of sections) {
+    for (const item of section.items || []) {
+      const orderEl = document.getElementById(`home-order-${item.id}`)
+      const activeEl = document.getElementById(`home-active-${item.id}`)
+      if (!orderEl && !activeEl) continue
+      const nextOrder = orderEl ? Number(orderEl.value) : Number(item.sort_order)
+      const nextActive = activeEl ? !!activeEl.checked : !!item.is_active
+      const orderValue = Number.isFinite(nextOrder) ? nextOrder : 0
+      const changed =
+        Number(item.sort_order) !== orderValue || Boolean(item.is_active) !== nextActive
+      item.sort_order = orderValue
+      item.is_active = nextActive
+      if (changed) {
+        tasks.push(
+          api(`/admin/homepage/items/${item.id}`, {
+            method: 'PUT',
+            body: { sort_order: orderValue, is_active: nextActive },
+          }),
+        )
+      }
+    }
+  }
+  if (tasks.length) await Promise.all(tasks)
+  return tasks.length
+}
+
 async function saveHomepageSortMode() {
   const sortMode = document.getElementById('homeSortMode')?.value || 'custom'
   try {
+    // 先落库页面上已改但未点行内保存的数字，避免重渲染冲掉
+    await persistHomepageItemInputs()
     await api('/admin/homepage/settings', { method: 'PUT', body: { sort_mode: sortMode } })
     homepageSortMode = sortMode
-    toast('排序设置已保存')
+    toast(sortMode === 'custom' ? '已保存为自定义排序（数字越小越靠前）' : '排序设置已保存')
     renderAllHomepageSections()
   } catch (error) {
     toast(error.message, 'error')
@@ -2359,6 +2405,7 @@ async function saveHomepageSection(section) {
   const itemLimit = Number(document.getElementById(`home-limit-${section}`).value)
   const isEnabled = document.getElementById(`home-enabled-${section}`).checked
   try {
+    const changedOrders = await persistHomepageItemInputs(section)
     await api(`/admin/homepage/sections/${section}`, {
       method: 'PUT',
       body: { item_limit: itemLimit, is_enabled: isEnabled }
@@ -2368,7 +2415,24 @@ async function saveHomepageSection(section) {
       sectionData.item_limit = itemLimit
       sectionData.is_enabled = isEnabled
     }
-    toast('模块设置已保存')
+    toast(changedOrders ? `模块设置已保存（含 ${changedOrders} 条排序）` : '模块设置已保存')
+    refreshHomepageSection(section)
+  } catch (error) {
+    toast(error.message, 'error')
+  }
+}
+
+async function saveHomepageSectionOrders(section) {
+  try {
+    if (homepageSortMode !== 'custom') {
+      await api('/admin/homepage/settings', { method: 'PUT', body: { sort_mode: 'custom' } })
+      homepageSortMode = 'custom'
+      const sortEl = document.getElementById('homeSortMode')
+      if (sortEl) sortEl.value = 'custom'
+    }
+    const changed = await persistHomepageItemInputs(section)
+    toast(changed ? `已保存 ${changed} 条排序` : '排序无变更')
+    refreshHomepageSection(section)
   } catch (error) {
     toast(error.message, 'error')
   }
@@ -2382,6 +2446,8 @@ async function addHomepageItem(section) {
   }
   const itemId = select.value
   try {
+    // 加入前先保存当前栏未提交的排序，避免刷新冲掉
+    await persistHomepageItemInputs(section)
     const res = await api('/admin/homepage/items', {
       method: 'POST',
       body: { section, item_id: itemId }
@@ -2404,32 +2470,45 @@ async function addHomepageItem(section) {
 }
 
 async function saveHomepageItem(id) {
-  const sortOrder = Number(document.getElementById(`home-order-${id}`).value)
-  const isActive = document.getElementById(`home-active-${id}`).checked
+  const orderEl = document.getElementById(`home-order-${id}`)
+  const activeEl = document.getElementById(`home-active-${id}`)
+  if (!orderEl || !activeEl) {
+    toast('找不到对应排序输入框', 'error')
+    return
+  }
+  const sortOrder = Number(orderEl.value)
+  const isActive = !!activeEl.checked
+  const orderValue = Number.isFinite(sortOrder) ? sortOrder : 0
   try {
     const res = await api(`/admin/homepage/items/${id}`, {
       method: 'PUT',
       body: {
-        sort_order: Number.isFinite(sortOrder) ? sortOrder : 0,
+        sort_order: orderValue,
         is_active: isActive,
       }
     })
+    if (res.code && res.code !== 200) {
+      throw new Error(res.msg || '保存失败')
+    }
     const sectionData = findHomepageSectionByItemId(id)
     const item = sectionData?.items?.find(i => String(i.id) === String(id))
     if (item) {
-      item.sort_order = Number.isFinite(sortOrder) ? sortOrder : 0
-      item.is_active = isActive
+      item.sort_order = Number(res?.data?.item?.sort_order ?? orderValue)
+      item.is_active = res?.data?.item?.is_active ?? isActive
+      // 输入框与库内值对齐，防止显示残留
+      orderEl.value = String(item.sort_order)
+      activeEl.checked = !!item.is_active
     }
     if (homepageSortMode !== 'custom') {
       homepageSortMode = 'custom'
       const sortEl = document.getElementById('homeSortMode')
       if (sortEl) sortEl.value = 'custom'
-      toast('已自动切换为「自定义排序」，数字越小越靠前')
-      renderAllHomepageSections()
+      toast('已自动切换为「自定义排序」并保存')
     } else {
-      toast('内容设置已保存')
+      toast('排序已保存')
     }
     if (res?.data?.sort_mode === 'custom') homepageSortMode = 'custom'
+    if (sectionData?.section) refreshHomepageSection(sectionData.section)
   } catch (error) {
     toast(error.message, 'error')
   }
