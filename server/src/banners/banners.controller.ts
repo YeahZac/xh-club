@@ -28,7 +28,7 @@ export class BannersController {
          WHERE is_active = 1
            AND (start_time IS NULL OR start_time <= NOW())
            AND (end_time IS NULL OR end_time >= NOW())
-         ORDER BY sort_order ASC`
+         ORDER BY sort_order ASC, id ASC`
       )
       const data = await Promise.all(
         rows.map(async (row: any) => ({

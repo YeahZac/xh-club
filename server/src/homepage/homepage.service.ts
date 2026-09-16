@@ -109,7 +109,7 @@ export class HomepageService {
       await queryExecute(
         `INSERT INTO homepage_sections (section, display_name, is_enabled, item_limit, sort_order, sort_mode)
          VALUES (?, ?, 1, 8, ?, 'custom')
-         ON DUPLICATE KEY UPDATE display_name = VALUES(display_name), sort_order = VALUES(sort_order)`,
+         ON DUPLICATE KEY UPDATE display_name = VALUES(display_name)`,
         [section, meta.display_name, meta.sort_order],
       )
     }
@@ -461,15 +461,27 @@ export class HomepageService {
   }
 
   async updateItem(id: string, dto: { sort_order?: number; is_active?: boolean | number | string }) {
-    const sortOrder = Number(dto.sort_order)
-    const orderValue = Number.isFinite(sortOrder) ? sortOrder : 0
-    const rawActive = dto.is_active as unknown
-    const isActive = rawActive !== false && rawActive !== 0 && String(rawActive) !== '0'
+    const updates: string[] = []
+    const params: any[] = []
+    if (dto.sort_order !== undefined) {
+      const sortOrder = Number(dto.sort_order)
+      updates.push('sort_order = ?')
+      params.push(Number.isFinite(sortOrder) ? sortOrder : 0)
+    }
+    if (dto.is_active !== undefined) {
+      const rawActive = dto.is_active as unknown
+      const isActive = rawActive !== false && rawActive !== 0 && String(rawActive) !== '0'
+      updates.push('is_active = ?')
+      params.push(isActive ? 1 : 0)
+    }
+    if (!updates.length) {
+      throw new BadRequestException('没有可更新的字段')
+    }
+    updates.push('updated_at = NOW()')
+    params.push(id)
     const result = await queryExecute(
-      `UPDATE homepage_items
-       SET sort_order = ?, is_active = ?, updated_at = NOW()
-       WHERE id = ?`,
-      [orderValue, isActive ? 1 : 0, id],
+      `UPDATE homepage_items SET ${updates.join(', ')} WHERE id = ?`,
+      params,
     )
     if (result.affectedRows === 0) throw new NotFoundException('首页内容不存在')
 
@@ -486,13 +498,22 @@ export class HomepageService {
       }
     }
 
+    const orderValue =
+      dto.sort_order !== undefined && Number.isFinite(Number(dto.sort_order))
+        ? Number(dto.sort_order)
+        : undefined
+    const rawActive = dto.is_active as unknown
+    const isActive =
+      dto.is_active === undefined
+        ? undefined
+        : rawActive !== false && rawActive !== 0 && String(rawActive) !== '0'
     return {
       success: true,
       sort_mode: 'custom' as const,
       item: {
         id: Number(id),
-        sort_order: orderValue,
-        is_active: isActive,
+        ...(orderValue !== undefined ? { sort_order: orderValue } : {}),
+        ...(isActive !== undefined ? { is_active: isActive } : {}),
       },
     }
   }

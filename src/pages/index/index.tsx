@@ -184,6 +184,14 @@ const IndexPage = () => {
                 }
               }
               return { ...banner, link_config: linkConfig }
+            })
+            banners = [...banners].sort((a, b) => {
+              const ao = Number(a.sort_order)
+              const bo = Number(b.sort_order)
+              const aOrder = Number.isFinite(ao) ? ao : 0
+              const bOrder = Number.isFinite(bo) ? bo : 0
+              if (aOrder !== bOrder) return aOrder - bOrder
+              return Number(a.id) - Number(b.id)
             }).slice(0, 5)
           }
 
@@ -258,6 +266,7 @@ const IndexPage = () => {
   }, [loadHomeData, loadUnreadCount])
 
   useDidShow(() => {
+    void loadHomeData({ force: true })
     setTimeout(() => {
       void loadUnreadCount()
     }, 400)

@@ -293,7 +293,7 @@ export class AdminService {
   /** ====== Banner 管理 ====== */
   async getBanners() {
     try {
-      const rows = await queryRows('SELECT * FROM banners ORDER BY sort_order ASC')
+      const rows = await queryRows('SELECT * FROM banners ORDER BY sort_order ASC, id ASC')
       return Promise.all(rows.map((row) => this.normalizeBannerRow(row)))
     } catch (error) {
       console.error('[AdminService] getBanners error:', error)
@@ -309,7 +309,8 @@ export class AdminService {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [dto.title, imageUrl, dto.link_type || null, dto.link_id || null,
          dto.link_config ? JSON.stringify(dto.link_config) : null,
-         dto.sort_order || 0, dto.is_active !== false, dto.start_time || null, dto.end_time || null]
+         Number.isFinite(Number(dto.sort_order)) ? Number(dto.sort_order) : 0,
+         dto.is_active !== false, dto.start_time || null, dto.end_time || null]
       )
       return this.normalizeBannerRow(await queryOne('SELECT * FROM banners WHERE id = ?', [result.insertId]))
     } catch (error) {
@@ -328,6 +329,9 @@ export class AdminService {
           updates[field] = assertCloudStorageImageUrl(dto[field])
         } else if (field === 'link_config') {
           updates[field] = dto[field] ? JSON.stringify(dto[field]) : null
+        } else if (field === 'sort_order') {
+          const n = Number(dto[field])
+          updates[field] = Number.isFinite(n) ? n : 0
         } else {
           updates[field] = dto[field]
         }
@@ -1861,7 +1865,7 @@ export class AdminService {
          LEFT JOIN members m ON m.id = p.owner_member_id
          LEFT JOIN projects pr ON pr.id = p.project_id
          ${whereSql}
-         ORDER BY p.created_at DESC
+         ORDER BY p.sort_order ASC, p.id ASC
          LIMIT ? OFFSET ?`,
         [...params, pageSize, offset],
       )
@@ -1942,8 +1946,8 @@ export class AdminService {
         if (project?.submitter_id) ownerMemberId = Number(project.submitter_id)
       }
       const result = await queryExecute(
-        `INSERT INTO mall_products (name, description, points_price, stock, image_url, video_url, status, category, owner_member_id, project_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO mall_products (name, description, points_price, stock, image_url, video_url, status, category, owner_member_id, project_id, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           dto.name,
           dto.description || null,
@@ -1955,6 +1959,7 @@ export class AdminService {
           dto.category || 'gift',
           ownerMemberId,
           projectId,
+          Number.isFinite(Number(dto.sort_order)) ? Number(dto.sort_order) : 0,
         ],
       )
       return await this.getMallProductById(String(result.insertId))
@@ -1999,6 +2004,10 @@ export class AdminService {
           )
           if (project?.submitter_id) assign('owner_member_id', Number(project.submitter_id))
         }
+      }
+      if (dto.sort_order !== undefined) {
+        const n = Number(dto.sort_order)
+        assign('sort_order', Number.isFinite(n) ? n : 0)
       }
       if (!updates.length) throw new HttpException('没有可更新的字段', HttpStatus.BAD_REQUEST)
       updates.push('updated_at = NOW()')

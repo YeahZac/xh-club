@@ -112,7 +112,7 @@ export class MallService {
       const signFields = listFields ? ['image_url'] : ['image_url', 'video_url']
       if (category && category !== 'all') {
         const rows = await queryRows<ProductRow>(
-          `${selectSql} WHERE status = ? AND category = ? ORDER BY sort_order DESC`,
+          `${selectSql} WHERE status = ? AND category = ? ORDER BY sort_order ASC, id ASC`,
           ['active', category]
         );
         return {
@@ -122,7 +122,7 @@ export class MallService {
         };
       }
       const rows = await queryRows<ProductRow>(
-        `${selectSql} WHERE status = ? ORDER BY sort_order DESC`,
+        `${selectSql} WHERE status = ? ORDER BY sort_order ASC, id ASC`,
         ['active']
       );
       return {
@@ -168,6 +168,7 @@ export class MallService {
     category: string;
     enable_distribution?: boolean;
     distribution_rate?: string;
+    sort_order?: number;
   }) {
     if (!isCloudStorageUrl(data.image_url)) {
       return { code: 400, msg: '商品图片为必填项', data: null };
@@ -178,11 +179,12 @@ export class MallService {
     try {
       const result = await queryExecute(
         `INSERT INTO mall_products (name, description, image_url, video_url, points_price, cash_price, stock, category, enable_distribution, distribution_rate, status, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
         [data.name, data.description || null, canonicalizeCloudStorageUrl(data.image_url),
          data.video_url ? canonicalizeCloudStorageUrl(data.video_url) : null,
          data.points_price, data.cash_price || '0', data.stock, data.category,
-         data.enable_distribution || false, data.distribution_rate || '0']
+         data.enable_distribution || false, data.distribution_rate || '0',
+         Number.isFinite(Number(data.sort_order)) ? Number(data.sort_order) : 0]
       );
       const row = await queryOne<ProductRow>('SELECT * FROM mall_products WHERE id = ?', [result.insertId]);
       return {
