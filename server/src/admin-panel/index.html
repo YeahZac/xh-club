@@ -2407,20 +2407,29 @@ async function saveHomepageItem(id) {
   const sortOrder = Number(document.getElementById(`home-order-${id}`).value)
   const isActive = document.getElementById(`home-active-${id}`).checked
   try {
-    await api(`/admin/homepage/items/${id}`, {
+    const res = await api(`/admin/homepage/items/${id}`, {
       method: 'PUT',
       body: {
-        sort_order: sortOrder,
+        sort_order: Number.isFinite(sortOrder) ? sortOrder : 0,
         is_active: isActive,
       }
     })
     const sectionData = findHomepageSectionByItemId(id)
     const item = sectionData?.items?.find(i => String(i.id) === String(id))
     if (item) {
-      item.sort_order = sortOrder
+      item.sort_order = Number.isFinite(sortOrder) ? sortOrder : 0
       item.is_active = isActive
     }
-    toast('内容设置已保存')
+    if (homepageSortMode !== 'custom') {
+      homepageSortMode = 'custom'
+      const sortEl = document.getElementById('homeSortMode')
+      if (sortEl) sortEl.value = 'custom'
+      toast('已自动切换为「自定义排序」，数字越小越靠前')
+      renderAllHomepageSections()
+    } else {
+      toast('内容设置已保存')
+    }
+    if (res?.data?.sort_mode === 'custom') homepageSortMode = 'custom'
   } catch (error) {
     toast(error.message, 'error')
   }

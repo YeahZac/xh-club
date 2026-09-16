@@ -51,6 +51,7 @@ export interface HomepageFeedItem {
   section: HomepageSection
   item_id: string
   sort_order: number
+  section_sort?: number
   title: string
   cover_image: string | null
   view_count: number
@@ -177,8 +178,14 @@ export class HomepageService {
       if (!section.is_enabled) continue
       const limit = Math.max(1, Math.min(50, Number(section.item_limit) || 8))
       const sectionItems = (section.items || []).slice(0, limit)
+      const sectionSort = Number(section.sort_order) || 0
       const enriched = await this.enrichItemsBatch(section.section as HomepageSection, sectionItems)
-      cards.push(...enriched)
+      cards.push(
+        ...enriched.map((item) => ({
+          ...item,
+          section_sort: sectionSort,
+        })),
+      )
     }
 
     const sortMode = assertSortMode(config.sort_mode || 'custom')
@@ -189,16 +196,31 @@ export class HomepageService {
 
   private sortFeed(list: HomepageFeedItem[], mode: HomepageSortMode) {
     const next = [...list]
+    const orderAsc = (a: HomepageFeedItem, b: HomepageFeedItem) => {
+      const ao = Number(a.sort_order)
+      const bo = Number(b.sort_order)
+      const aOrder = Number.isFinite(ao) ? ao : 0
+      const bOrder = Number.isFinite(bo) ? bo : 0
+      if (aOrder !== bOrder) return aOrder - bOrder
+      const aSec = Number(a.section_sort) || 0
+      const bSec = Number(b.section_sort) || 0
+      if (aSec !== bSec) return aSec - bSec
+      return Number(a.id) - Number(b.id)
+    }
     if (mode === 'view_count') {
-      next.sort((a, b) => (b.view_count || 0) - (a.view_count || 0) || (b.sort_order || 0) - (a.sort_order || 0))
+      next.sort(
+        (a, b) =>
+          (Number(b.view_count) || 0) - (Number(a.view_count) || 0) || orderAsc(a, b),
+      )
     } else if (mode === 'time_desc') {
       next.sort((a, b) => {
         const ta = a.created_at ? new Date(a.created_at).getTime() : 0
         const tb = b.created_at ? new Date(b.created_at).getTime() : 0
-        return tb - ta || (a.sort_order || 0) - (b.sort_order || 0)
+        return tb - ta || orderAsc(a, b)
       })
     } else {
-      next.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || Number(a.id) - Number(b.id))
+      // custom：数字越小越靠前
+      next.sort(orderAsc)
     }
     return next
   }
@@ -439,14 +461,28 @@ export class HomepageService {
   }
 
   async updateItem(id: string, dto: { sort_order?: number; is_active?: boolean }) {
+    const sortOrder = Number(dto.sort_order)
     const result = await queryExecute(
       `UPDATE homepage_items
        SET sort_order = ?, is_active = ?, updated_at = NOW()
        WHERE id = ?`,
-      [Number(dto.sort_order) || 0, dto.is_active !== false, id],
+      [Number.isFinite(sortOrder) ? sortOrder : 0, dto.is_active !== false, id],
     )
     if (result.affectedRows === 0) throw new NotFoundException('首页内容不存在')
-    return { success: true }
+
+    // 改了排序数字却仍是时间/浏览排序时，数字不会生效；自动切到自定义
+    if (dto.sort_order !== undefined) {
+      const modeRow = await queryOne<{ sort_mode?: string }>(
+        `SELECT sort_mode FROM homepage_sections
+         WHERE section IN (${HOMEPAGE_SECTIONS.map(() => '?').join(',')})
+         ORDER BY sort_order ASC LIMIT 1`,
+        [...HOMEPAGE_SECTIONS],
+      )
+      if (modeRow?.sort_mode && modeRow.sort_mode !== 'custom') {
+        await this.updateSettings({ sort_mode: 'custom' })
+      }
+    }
+    return { success: true, sort_mode: 'custom' }
   }
 
   async removeItem(id: string) {
