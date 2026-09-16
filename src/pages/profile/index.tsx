@@ -20,16 +20,17 @@ import {
   SoftCard,
 } from "@/components/brand-ui"
 import { Network } from "@/network"
-  import {
+import {
   AUTH_LOGGED_IN_EVENT,
   AUTH_LOGGED_OUT_EVENT,
   ensureLogin,
   isLoggedIn,
   logoutMember,
   maybeRefreshMemberToken,
+  recoverMemberSession,
 } from "@/lib/auth"
 import { useTabShareAppMessage } from "@/lib/mini-program-share"
-import { userCategoryLabel } from "@/lib/user-category"
+import { normalizeUserCategory } from "@/lib/user-category"
 import { ensurePromoterOrMemberUnit } from "@/lib/member-access"
 import { fetchUnreadNotificationCount } from "@/lib/notifications"
 
@@ -62,11 +63,16 @@ interface MemberProfile {
   created_at?: string
 }
 
-const levelMap: Record<string, { label: string; badgeVariant: "soft" | "gold" | "navy" }> = {
-  normal: { label: "普通会员", badgeVariant: "soft" },
-  silver: { label: "银卡会员", badgeVariant: "soft" },
-  gold: { label: "金卡会员", badgeVariant: "gold" },
-  diamond: { label: "钻石会员", badgeVariant: "navy" },
+/** 个人中心只展示一个最终身份：推广员 > 会员 > 普通会员 */
+const resolveProfileIdentity = (profile: Pick<MemberProfile, "user_category"> | null) => {
+  const category = normalizeUserCategory(profile?.user_category)
+  if (category === "promoter") {
+    return { label: "推广员", badgeVariant: "gold" as const }
+  }
+  if (category === "member_unit") {
+    return { label: "会员", badgeVariant: "gold" as const }
+  }
+  return { label: "普通会员", badgeVariant: "soft" as const }
 }
 
 const ProfilePage = () => {
@@ -124,8 +130,18 @@ const ProfilePage = () => {
         return
       }
       const code = Number(res?.data?.code)
-      // 仅 Token 失效或会员已删除时退出；其它错误保留登录态
-      if (code === 401 || code === 404 || res?.statusCode === 401) {
+      // Token 失效：先静默恢复；会员已删除才真正退出
+      if (code === 401 || res?.statusCode === 401) {
+        const ok = await recoverMemberSession()
+        if (!ok) setProfile(null)
+        else {
+          const again = await Network.request({ url: `/api/members/profile/${Taro.getStorageSync('member_id')}` })
+          if (seq !== refreshSeq.current) return
+          if (again?.data?.data) setProfile(again.data.data)
+        }
+        return
+      }
+      if (code === 404) {
         logoutMember()
         setProfile(null)
       }
@@ -134,9 +150,11 @@ const ProfilePage = () => {
       const status = Number(err?.statusCode || err?.status || 0)
       const msg = String(err?.message || err?.errMsg || "")
       if (status === 401 || msg.includes("登录已失效") || msg.includes("登录凭证无效")) {
-        logoutMember()
-        setProfile(null)
-      } else if (status === 404 || msg.includes("会员不存在")) {
+        const ok = await recoverMemberSession()
+        if (!ok) setProfile(null)
+        return
+      }
+      if (status === 404 || msg.includes("会员不存在")) {
         logoutMember()
         setProfile(null)
       }
@@ -188,7 +206,7 @@ const ProfilePage = () => {
     })
   }
 
-  const currentLevel = levelMap[profile?.membership_level || "normal"] || levelMap.normal
+  const currentIdentity = resolveProfileIdentity(profile)
 
   const getRegisterDays = (createdAt?: string) => {
     if (!createdAt) return 0
@@ -291,10 +309,7 @@ const ProfilePage = () => {
                   {[profile.company_position, profile.company_name].filter(Boolean).join(" · ") || "点击编辑个人资料"}
                 </Text>
                 <View className="mt-2 flex flex-row flex-wrap items-center gap-2">
-                  <Badge variant={currentLevel.badgeVariant}>{currentLevel.label}</Badge>
-                  <Badge variant="soft">
-                    {profile.user_category_label || userCategoryLabel(profile.user_category)}
-                  </Badge>
+                  <Badge variant={currentIdentity.badgeVariant}>{currentIdentity.label}</Badge>
                 </View>
               </View>
             </View>

@@ -178,4 +178,33 @@ export class AuthController {
       return { code: 500, msg: msg.slice(0, 80), data: null }
     }
   }
+
+  /**
+   * 静默恢复登录态（无需有效 JWT）。
+   * 云托管 callContainer 会注入 x-wx-openid；也可传 wx.login code。
+   */
+  @Post('restore-session')
+  @HttpCode(200)
+  async restoreSession(
+    @Body() dto: { code?: string },
+    @Req() req: any,
+    @Headers() headers: Record<string, string>,
+  ) {
+    const openidHeader = this.readOpenidHeader(req, headers)
+    try {
+      const data = await this.authService.restoreSessionByOpenid({
+        code: dto?.code || '',
+        openidFromHeader: openidHeader ? String(openidHeader) : '',
+      })
+      return { code: 200, msg: 'success', data }
+    } catch (error) {
+      if (error instanceof HttpException) {
+        const status = error.getStatus()
+        const msg = this.httpExceptionMessage(error)
+        return { code: status, msg, data: null }
+      }
+      const msg = String((error as Error)?.message || '恢复登录失败')
+      return { code: 500, msg: msg.slice(0, 80), data: null }
+    }
+  }
 }

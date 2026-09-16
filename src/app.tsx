@@ -5,7 +5,7 @@ import '@/app.css'
 import { Toaster } from '@/components/ui/toast'
 import { PrivacyAuthorization } from '@/components/privacy-authorization'
 import { registerPrivacyAuthorizationListener } from '@/lib/privacy-authorization'
-import { isLoggedIn, maybeRefreshMemberToken } from '@/lib/auth'
+import { ensurePersistedSession } from '@/lib/auth'
 import { Preset } from './presets'
 
 const App = ({ children }: PropsWithChildren) => {
@@ -14,9 +14,7 @@ const App = ({ children }: PropsWithChildren) => {
   }, [])
 
   useDidShow(() => {
-    if (isLoggedIn()) {
-      maybeRefreshMemberToken()
-    }
+    ensurePersistedSession()
   })
 
   return (

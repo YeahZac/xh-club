@@ -262,6 +262,40 @@ export class AuthService {
     }
   }
 
+  /**
+   * 凭云托管注入的 openid（或 wx.login code）静默恢复登录态。
+   * 用于 JWT 过期 / 密钥轮换后，无需用户重新点登录。
+   */
+  async restoreSessionByOpenid(input: { code?: string; openidFromHeader?: string }) {
+    const openid =
+      String(input.openidFromHeader || '').trim()
+      || (input.code ? await this.exchangeCodeForOpenid(input.code) : '')
+
+    if (!openid) {
+      throw new HttpException(
+        '无法识别微信用户，请稍后重试',
+        HttpStatus.UNAUTHORIZED,
+      )
+    }
+
+    const existing = await queryOne(
+      'SELECT id FROM members WHERE wx_openid = ? LIMIT 1',
+      [openid],
+    )
+    if (!existing) {
+      throw new HttpException('账号未注册', HttpStatus.NOT_FOUND)
+    }
+
+    const memberId = String((existing as any).id)
+    try {
+      await queryExecute('UPDATE members SET updated_at = NOW() WHERE id = ?', [memberId])
+    } catch (error) {
+      console.warn('[AuthService] restoreSession touch updated_at skipped:', error)
+    }
+
+    return this.buildLoginResult(memberId, openid, { isNewMember: false })
+  }
+
   private async tryBindInviteCode(memberId: string | number, inviteCodeRaw?: string) {
     const inviteCode = String(inviteCodeRaw || '').trim()
     if (!inviteCode || !memberId) return null
