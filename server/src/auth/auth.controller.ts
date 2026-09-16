@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common'
 import { AuthService } from './auth.service'
 import { MemberAuthGuard } from './auth.guard'
+import { verifyAuthToken } from './jwt'
 
 @Controller('auth')
 export class AuthController {
@@ -160,14 +161,43 @@ export class AuthController {
     }
   }
 
-  /** 续期登录凭证（保持登录态，直至用户主动退出） */
+  /** 续期登录凭证：有效 JWT 优先；否则凭云托管 openid / wx.login code 静默恢复 */
   @Post('refresh')
   @HttpCode(200)
-  @UseGuards(MemberAuthGuard)
-  async refresh(@Req() request: any) {
+  async refresh(
+    @Body() dto: { code?: string },
+    @Req() req: any,
+    @Headers() headers: Record<string, string>,
+  ) {
     try {
-      const data = await this.authService.refreshMemberToken(request.user.sub)
-      return { code: 200, msg: 'success', data }
+      const authorization = String(req?.headers?.authorization || headers?.authorization || '')
+      const bearer = authorization.match(/^Bearer\s+(.+)$/i)?.[1]?.trim()
+      if (bearer) {
+        try {
+          const principal = verifyAuthToken(bearer)
+          if (principal?.type === 'member' && principal.sub) {
+            const data = await this.authService.refreshMemberToken(principal.sub)
+            return { code: 200, msg: 'success', data }
+          }
+        } catch {
+          // JWT 失效：走 openid 恢复
+        }
+      }
+
+      const openidHeader = this.readOpenidHeader(req, headers)
+      const restored = await this.authService.restoreSessionByOpenid({
+        code: dto?.code || '',
+        openidFromHeader: openidHeader ? String(openidHeader) : '',
+      })
+      return {
+        code: 200,
+        msg: 'success',
+        data: {
+          member_id: restored.member_id,
+          token: restored.token,
+          openid: restored.openid,
+        },
+      }
     } catch (error) {
       if (error instanceof HttpException) {
         const status = error.getStatus()

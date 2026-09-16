@@ -141,7 +141,7 @@ const ProfilePage = () => {
         }
         return
       }
-      if (code === 404) {
+      if (code === 404 && String(res?.data?.msg || "").includes("会员不存在")) {
         logoutMember()
         setProfile(null)
       }
@@ -149,12 +149,20 @@ const ProfilePage = () => {
       console.error("[我的页] 加载失败:", err)
       const status = Number(err?.statusCode || err?.status || 0)
       const msg = String(err?.message || err?.errMsg || "")
-      if (status === 401 || msg.includes("登录已失效") || msg.includes("登录凭证无效")) {
+      if (status === 401) {
         const ok = await recoverMemberSession()
         if (!ok) setProfile(null)
+        else if (isLoggedIn()) {
+          const again = await Network.request({
+            url: `/api/members/profile/${Taro.getStorageSync("member_id")}`,
+          }).catch(() => null)
+          if (seq !== refreshSeq.current) return
+          if (again?.data?.data) setProfile(again.data.data)
+        }
         return
       }
-      if (status === 404 || msg.includes("会员不存在")) {
+      // 禁止把任意 HTTP 404（接口不存在/部署中）当成删号退登
+      if (msg.includes("会员不存在") || msg.includes("账号未注册")) {
         logoutMember()
         setProfile(null)
       }

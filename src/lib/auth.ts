@@ -13,15 +13,27 @@ type LoginWaiter = {
   resolve: (ok: boolean) => void
 }
 
+type RestoreReason =
+  | 'restored'
+  | 'not_registered'
+  | 'no_openid'
+  | 'network'
+  | 'skipped'
+  | 'failed'
+
+type RestoreResult = {
+  ok: boolean
+  reason: RestoreReason
+}
+
 let loginWaiter: LoginWaiter | null = null
 /** 防止并发 ensureLogin 重复 navigateTo，触发微信 navigateTo:fail timeout */
 let loginNavigating = false
-/** 静默恢复会话互斥，避免 App/页面同时打 restore */
-let restoreInFlight: Promise<boolean> | null = null
+/** 静默恢复 / 续期互斥 */
+let sessionMaintainInFlight: Promise<boolean> | null = null
 
 const EXPLICIT_LOGOUT_KEY = 'member_explicit_logout'
 const TOKEN_REFRESHED_AT_KEY = 'member_token_refreshed_at'
-const TOKEN_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 export const isWeappEnv = () => Taro.getEnv() === Taro.ENV_TYPE.WEAPP
 
@@ -54,6 +66,7 @@ export const saveMemberSession = (data: {
   Taro.setStorageSync('member_token', data.token)
   if (data.openid) Taro.setStorageSync('openid', data.openid)
   clearExplicitLogout()
+  Taro.setStorageSync(TOKEN_REFRESHED_AT_KEY, Date.now())
 }
 
 export const clearMemberSession = () => {
@@ -69,96 +82,91 @@ export const logoutMember = () => {
   Taro.eventCenter.trigger(AUTH_LOGGED_OUT_EVENT)
 }
 
-const isAuthFailure = (error: any, code?: number) => {
-  const status = Number(error?.statusCode || error?.status || code || 0)
-  const msg = String(error?.message || error?.errMsg || error?.msg || '')
-  return (
-    status === 401
-    || msg.includes('登录已失效')
-    || msg.includes('登录凭证无效')
-    || msg.includes('缺少登录凭证')
-  )
-}
+/** 仅 HTTP 401 视为凭证失效；禁止靠文案误伤（网络层会把很多错误改写成「登录已失效」） */
+const isHttpUnauthorized = (error: any) => Number(error?.statusCode || error?.status || 0) === 401
 
-const isMemberGone = (error: any, code?: number) => {
-  const status = Number(error?.statusCode || error?.status || code || 0)
-  const msg = String(error?.message || error?.errMsg || error?.msg || '')
-  return status === 404 || msg.includes('会员不存在') || msg.includes('账号未注册')
-}
+const isDefiniteMemberGoneMessage = (msg: string) =>
+  msg.includes('会员不存在') || msg.includes('账号未注册') || msg.includes('账号已删除')
 
 /**
- * 凭微信 openid 静默换发 Token（JWT 过期 / 密钥变更后仍可恢复）。
+ * 凭微信 openid / 当前 JWT 静默换发 Token。
  * 用户主动退出后不会自动登回。
+ * 网络抖动、openid 暂不可用时：不清本地登录态。
  */
-export const trySilentRestoreSession = async (): Promise<boolean> => {
-  if (!isWeappEnv()) return false
-  if (hasExplicitLogout()) return false
-  if (restoreInFlight) return restoreInFlight
+export const trySilentRestoreSession = async (): Promise<RestoreResult> => {
+  if (!isWeappEnv()) return { ok: false, reason: 'skipped' }
+  if (hasExplicitLogout()) return { ok: false, reason: 'skipped' }
 
-  restoreInFlight = (async () => {
-    try {
-      const { Network } = await import('@/network')
-      const loginRes = await Taro.login().catch(() => null as any)
-      const res = await Network.request({
-        url: '/api/auth/restore-session',
-        method: 'POST',
-        data: { code: loginRes?.code || '' },
+  try {
+    const { Network } = await import('@/network')
+    const loginRes = await Taro.login().catch(() => null as any)
+    const res = await Network.request({
+      url: '/api/auth/restore-session',
+      method: 'POST',
+      data: { code: loginRes?.code || '' },
+    })
+    const body = res?.data
+    const data = body?.data
+    const code = Number(body?.code)
+    const token = String(data?.token || '').trim()
+
+    if (code === 200 && token && data?.member_id) {
+      saveMemberSession({
+        member_id: data.member_id,
+        token,
+        openid: data.openid || undefined,
       })
-      const body = res?.data
-      const data = body?.data
-      const token = String(data?.token || '').trim()
-      if (Number(body?.code) === 200 && token && data?.member_id) {
-        saveMemberSession({
-          member_id: data.member_id,
-          token,
-          openid: data.openid || undefined,
-        })
-        Taro.setStorageSync(TOKEN_REFRESHED_AT_KEY, Date.now())
-        return true
-      }
-      // 未注册 / 账号已删：清本地并标记退出，避免每次打开都打 restore
-      if (Number(body?.code) === 404) {
-        if (getMemberSession()) {
-          logoutMember()
-        } else {
-          markExplicitLogout()
-        }
-      }
-      return false
-    } catch (error: any) {
-      console.warn('[auth] silent restore failed', error)
-      return false
-    } finally {
-      restoreInFlight = null
+      return { ok: true, reason: 'restored' }
     }
-  })()
 
-  return restoreInFlight
+    if (code === 404 || isDefiniteMemberGoneMessage(String(body?.msg || ''))) {
+      return { ok: false, reason: 'not_registered' }
+    }
+
+    if (code === 401) {
+      // 无法识别微信用户：多为瞬时问题，保留本地态
+      return { ok: false, reason: 'no_openid' }
+    }
+
+    return { ok: false, reason: 'failed' }
+  } catch (error: any) {
+    console.warn('[auth] silent restore failed', error)
+    return { ok: false, reason: 'network' }
+  }
 }
 
 /**
- * 凭证失效时先静默恢复；仅恢复失败才退出。
- * 返回 true 表示最终仍保持登录。
+ * 凭证失效时先静默恢复。
+ * - 恢复成功：保持登录
+ * - 明确未注册：清本地
+ * - 网络 / openid 瞬时失败：保留本地，避免误下线
  */
 export const recoverMemberSession = async (): Promise<boolean> => {
-  if (await trySilentRestoreSession()) return true
-  if (getMemberSession()) {
-    // 本地有旧凭证但无法恢复：清掉，避免反复 401
-    clearMemberSession()
-    Taro.eventCenter.trigger(AUTH_LOGGED_OUT_EVENT)
+  const result = await trySilentRestoreSession()
+  if (result.ok) return true
+
+  if (result.reason === 'not_registered') {
+    if (getMemberSession()) {
+      clearMemberSession()
+      Taro.eventCenter.trigger(AUTH_LOGGED_OUT_EVENT)
+    }
+    return false
   }
-  return false
+
+  // network / no_openid / failed / skipped：保留现有本地会话
+  return isLoggedIn()
 }
 
 /**
- * 校验本地登录是否仍有效（账号被后台删除 / Token 真正失效时清理）。
- * 网络抖动或业务错误不得强制退出。
+ * 校验本地登录是否仍有效。
+ * 仅在「凭证失效且无法恢复」或「账号确认不存在」时清理。
  */
 export const validateMemberSession = async (): Promise<boolean> => {
-  let session = getMemberSession()
+  const session = getMemberSession()
   if (!session) {
-    // 本地无凭证但未主动退出：尝试静默恢复（兼容存储被系统清理）
-    return trySilentRestoreSession()
+    if (hasExplicitLogout()) return false
+    const restored = await trySilentRestoreSession()
+    return restored.ok
   }
 
   try {
@@ -176,16 +184,18 @@ export const validateMemberSession = async (): Promise<boolean> => {
     if (code === 401) {
       return recoverMemberSession()
     }
-    if (code === 404) {
+    // 业务信封明确说会员不存在，才退出；不要把任意 HTTP 404 当删号
+    if (code === 404 || isDefiniteMemberGoneMessage(String(res?.data?.msg || ''))) {
       logoutMember()
       return false
     }
     return true
   } catch (error: any) {
-    if (isAuthFailure(error)) {
+    if (isHttpUnauthorized(error)) {
       return recoverMemberSession()
     }
-    if (isMemberGone(error)) {
+    const msg = String(error?.message || error?.errMsg || '')
+    if (isDefiniteMemberGoneMessage(msg)) {
       logoutMember()
       return false
     }
@@ -194,61 +204,78 @@ export const validateMemberSession = async (): Promise<boolean> => {
   }
 }
 
-/** 活跃用户每天最多续期一次 Token */
-export const maybeRefreshMemberToken = () => {
-  const last = Number(Taro.getStorageSync(TOKEN_REFRESHED_AT_KEY) || 0)
-  if (Date.now() - last < TOKEN_REFRESH_INTERVAL_MS) return
-  void refreshMemberToken()
-    .then((ok) => {
-      if (ok) Taro.setStorageSync(TOKEN_REFRESHED_AT_KEY, Date.now())
-    })
-    .catch(() => undefined)
-}
-
-/** 用当前有效凭证换发新 Token；失败则尝试 openid 静默恢复 */
+/**
+ * 续期：后端支持「有效 JWT」或「openid 静默恢复」，不再要求 Token 仍有效。
+ * 每次 App 显示都可调用；失败不主动清登录。
+ */
 export const refreshMemberToken = async (): Promise<boolean> => {
-  const session = getMemberSession()
-  if (!session) return trySilentRestoreSession()
+  if (!isWeappEnv()) return false
+  if (hasExplicitLogout()) return false
+
   try {
     const { Network } = await import('@/network')
+    const loginRes = await Taro.login().catch(() => null as any)
+    const session = getMemberSession()
     const res = await Network.request({
       url: '/api/auth/refresh',
       method: 'POST',
+      data: { code: loginRes?.code || '' },
     })
-    const token = String(res?.data?.data?.token || '').trim()
-    if (res?.data?.code === 200 && token) {
+    const body = res?.data
+    const code = Number(body?.code)
+    const token = String(body?.data?.token || '').trim()
+
+    if (code === 200 && token) {
       saveMemberSession({
-        member_id: res?.data?.data?.member_id || session.memberId,
+        member_id: body?.data?.member_id || session?.memberId || '',
         token,
-        openid: session.openid,
+        openid: body?.data?.openid || session?.openid,
       })
-      Taro.setStorageSync(TOKEN_REFRESHED_AT_KEY, Date.now())
       return true
     }
-    if (Number(res?.data?.code) === 401) {
-      return recoverMemberSession()
+
+    if (code === 404 || isDefiniteMemberGoneMessage(String(body?.msg || ''))) {
+      if (getMemberSession()) {
+        clearMemberSession()
+        Taro.eventCenter.trigger(AUTH_LOGGED_OUT_EVENT)
+      }
+      return false
     }
+
+    // 401/其它：保留本地态，交由下次再试
     return false
   } catch (error: any) {
-    if (isAuthFailure(error)) {
+    // refresh 已改为 HTTP 200 信封；若仍抛错多为网络问题，不清登录
+    if (isHttpUnauthorized(error)) {
       return recoverMemberSession()
     }
+    console.warn('[auth] refresh failed', error)
     return false
   }
 }
 
+/** 兼容旧调用：活跃时尝试续期（现与 maintain 合并，保留导出） */
+export const maybeRefreshMemberToken = () => {
+  void refreshMemberToken().catch(() => undefined)
+}
+
 /**
- * App 每次显示时维护登录态：已登录则续期；未登录且非主动退出则静默恢复。
+ * App 每次显示时维护登录态：
+ * - 主动退出过：不自动登回
+ * - 其余情况：走 refresh（JWT 或 openid），失败也不误清本地态
  */
 export const ensurePersistedSession = () => {
   if (!isWeappEnv()) return
-  if (isLoggedIn()) {
-    maybeRefreshMemberToken()
-    return
-  }
-  if (!hasExplicitLogout()) {
-    void trySilentRestoreSession()
-  }
+  if (hasExplicitLogout()) return
+  if (sessionMaintainInFlight) return
+
+  sessionMaintainInFlight = (async () => {
+    try {
+      return await refreshMemberToken()
+    } finally {
+      sessionMaintainInFlight = null
+    }
+  })()
 }
 
 const LOGIN_PAGE_URL = '/pages/login/index'
@@ -266,10 +293,8 @@ export const openLoginSheet = () => {
     navigating: loginNavigating,
     env: Taro.getEnv(),
   })
-  // 已在登录页：保留 ensureLogin waiter，由登录页 success / unload 结算
   if (isLoginRoute(route)) return
 
-  // 登录页在栈中但非当前页：回到登录页，避免 waiter 永久挂起
   const loginStackIndex = pages.findIndex((page) =>
     isLoginRoute(String((page as any)?.route || '')),
   )
@@ -287,7 +312,6 @@ export const openLoginSheet = () => {
     }
   }
 
-  // 已有跳转进行中：保留 waiter，避免重复 navigate 与永久 pending
   if (loginNavigating) return
 
   loginNavigating = true
@@ -321,7 +345,6 @@ export const openLoginSheet = () => {
     })
   }
 
-  // 页面栈较深时 navigateTo 易失败/超时，直接替换当前页
   if (pages.length >= 8) {
     tryRedirect()
     return
@@ -371,7 +394,7 @@ export const ensureLogin = async (
   if (!force && isLoggedIn()) return true
   if (!force && !isLoggedIn() && !hasExplicitLogout()) {
     const restored = await trySilentRestoreSession()
-    if (restored) return true
+    if (restored.ok) return true
   }
   if (!isWeappEnv()) {
     Taro.showToast({ title: '请在微信小程序中登录', icon: 'none' })
@@ -379,7 +402,6 @@ export const ensureLogin = async (
   }
   return new Promise((resolve) => {
     if (loginWaiter) {
-      // 已有登录流程进行中：只挂接回调，避免重复 navigateTo 导致 timeout
       const prev = loginWaiter.resolve
       loginWaiter = {
         resolve: (ok) => {

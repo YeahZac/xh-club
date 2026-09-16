@@ -5,7 +5,7 @@ import Taro from '@tarojs/taro'
  * 封装 Taro.request、Taro.uploadFile、Taro.downloadFile
  *
  * 微信小程序：优先走 wx.cloud.callContainer / 云存储上传（免配服务器域名）
- * H5 / 其他端：使用 PROJECT_DOMAIN 拼接后走常规 HTTP
+ * H5 / 其他端：使用 PROJECT_DOMAIN（公网 HTTPS 自定义域名）拼接后走常规 HTTP
  *
  * 业务侧请继续使用 Network.*；页面无需再为云托管单独改请求方式。
  */
@@ -40,14 +40,6 @@ const toContainerPath = (url: string): string => {
     }
   }
   return url.startsWith('/') ? url : `/${url}`
-}
-
-/** 是否应走云托管私有通道（相对路径或本项目公网域名） */
-const shouldCallContainer = (url: string): boolean => {
-  if (!canUseCallContainer()) return false
-  if (!url.startsWith('http://') && !url.startsWith('https://')) return true
-  const domain = String(PROJECT_DOMAIN || '').replace(/\/+$/, '')
-  return !!domain && url.startsWith(domain)
 }
 
 const pickRawNetworkText = (error: unknown): string => {
@@ -134,7 +126,16 @@ export const getFriendlyNetworkMessage = (error: unknown, fallback = '网络异�
   ) {
     return '网络连接失败，请检查网络后重试'
   }
-  if (lower.includes('401') || lower.includes('unauthorized') || lower.includes('invalid token')) {
+  if (lower.includes('40163') || lower.includes('40125') || lower.includes('40029')) {
+    return '微信登录码异常，请重试'
+  }
+  // 仅明确 unauthorized / invalid token；避免微信 errcode 401xx 被误判成登录失效
+  if (
+    /\bunauthorized\b/.test(lower)
+    || lower.includes('invalid token')
+    || lower.includes('jwt expired')
+    || lower.includes('登录凭证无效')
+  ) {
     return '登录已失效，请重新登录'
   }
   if (lower.includes('403') || lower.includes('forbidden')) {
@@ -169,12 +170,26 @@ const notifyUserError = (error: unknown, fallback: string) => {
   return title
 }
 
-const toFriendlyError = (error: unknown, fallback: string) => {
-  const message = notifyUserError(error, fallback)
+const toFriendlyError = (error: unknown, fallback: string, silent = false) => {
+  const message = silent
+    ? getFriendlyNetworkMessage(error, fallback)
+    : notifyUserError(error, fallback)
   const err = new Error(message)
   ;(err as any).cause = error
   ;(err as any).statusCode = (error as any)?.statusCode
   return err
+}
+
+const SILENT_REQUEST_HEADER = 'X-Silent-Error'
+
+const isSilentRequest = (option: Taro.request.Option) =>
+  String((option.header as Record<string, string> | undefined)?.[SILENT_REQUEST_HEADER] || '') === '1'
+
+const withoutSilentHeader = (header?: Record<string, unknown>) => {
+  if (!header) return {}
+  const next = { ...header }
+  delete next[SILENT_REQUEST_HEADER]
+  return next
 }
 
 export const ensureCloudReady = async (): Promise<void> => {
@@ -198,9 +213,9 @@ export const ensureCloudReady = async (): Promise<void> => {
   await cloudInitPromise
 }
 
-const callContainerRequest = async <T = any>(
+const callContainerRequest = async (
   option: Taro.request.Option,
-): Promise<Taro.request.SuccessCallbackResult<T>> => {
+): Promise<Taro.request.SuccessCallbackResult<any>> => {
   const path = toContainerPath(option.url)
   const method = String(option.method || 'GET').toUpperCase()
   const env = String(WX_CLOUD_ENV || '')
@@ -208,14 +223,17 @@ const callContainerRequest = async <T = any>(
 
   try {
     await ensureCloudReady()
+    const silent = isSilentRequest(option)
     const header = {
       'content-type': 'application/json',
       'X-WX-SERVICE': service,
       ...createAuthHeader(),
-      ...(option.header || {}),
+      ...withoutSilentHeader(option.header as Record<string, unknown> | undefined),
     }
 
-    console.log('[Network] callContainer →', { env, service, path, method })
+    if (!silent) {
+      console.log('[Network] callContainer →', { env, service, path, method })
+    }
 
     const result = await Taro.cloud.callContainer({
       config: { env },
@@ -235,12 +253,14 @@ const callContainerRequest = async <T = any>(
         ? String(result.data).slice(0, 200)
         : result.data
 
-    console.log('[Network] callContainer ←', {
-      path,
-      statusCode,
-      errMsg: (result as any).errMsg,
-      dataPreview,
-    })
+    if (!silent) {
+      console.log('[Network] callContainer ←', {
+        path,
+        statusCode,
+        errMsg: (result as any).errMsg,
+        dataPreview,
+      })
+    }
 
     if (statusCode >= 400) {
       const payload = result.data as any
@@ -276,11 +296,12 @@ const callContainerRequest = async <T = any>(
             : statusCode === 502 || statusCode === 503
               ? (serverMsg || '云托管服务未就绪（可能正在启动），请稍后重试')
               : (serverMsg || `服务返回 ${statusCode}，请稍后重试`),
+        silent,
       )
     }
 
     return {
-      data: result.data as T,
+      data: result.data as any,
       statusCode,
       header: (result as any).header || {},
       cookies: (result as any).cookies || [],
@@ -298,7 +319,7 @@ const callContainerRequest = async <T = any>(
     if ((error as any)?.message && /[\u4e00-\u9fff]/.test((error as any).message)) {
       throw error
     }
-    throw toFriendlyError(error, '加载失败，请稍后重试')
+    throw toFriendlyError(error, '加载失败，请稍后重试', isSilentRequest(option))
   }
 }
 
@@ -381,14 +402,50 @@ const uploadViaCloudStorage = async (
   }
 }
 
-const httpRequest = (option: Taro.request.Option) =>
-  Taro.request({
-    ...option,
-    url: createUrl(option.url),
-    header: { ...createAuthHeader(), ...option.header },
-  }).catch((error) => {
-    throw toFriendlyError(error, '加载失败，请稍后重试')
-  })
+const httpRequest = async (option: Taro.request.Option) => {
+  const silent = isSilentRequest(option)
+  let result: Taro.request.SuccessCallbackResult<any>
+  try {
+    result = await Taro.request({
+      ...option,
+      url: createUrl(option.url),
+      header: {
+        ...createAuthHeader(),
+        ...withoutSilentHeader(option.header as Record<string, unknown> | undefined),
+      },
+    })
+  } catch (error) {
+    throw toFriendlyError(error, '加载失败，请稍后重试', silent)
+  }
+
+  const statusCode = Number(result.statusCode || 200)
+  if (statusCode >= 400) {
+    const payload = result.data as any
+    const serverMsg = String(
+      (typeof payload === 'string' && payload)
+      || payload?.msg
+      || payload?.message
+      || (Array.isArray(payload?.message) ? payload.message[0] : '')
+      || '',
+    )
+    throw toFriendlyError(
+      {
+        message: serverMsg || `HTTP ${statusCode}`,
+        statusCode,
+        data: payload,
+      },
+      statusCode === 401
+        ? '登录已失效，请重新登录'
+        : statusCode === 404
+          ? '接口不存在或服务未正确部署'
+          : statusCode === 502 || statusCode === 503
+            ? '服务未就绪，请稍后重试'
+            : (serverMsg || `服务返回 ${statusCode}，请稍后重试`),
+      silent,
+    )
+  }
+  return result
+}
 
 const httpUpload = (option: Taro.uploadFile.Option) =>
   Taro.uploadFile({
