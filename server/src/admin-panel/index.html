@@ -543,6 +543,12 @@
             <button type="button" class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition" onclick="openMediaLibrary({ targetId: 'pjEditCover', type: 'image' })">选择/上传图片</button>
           </div>
         </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">项目图片</label>
+          <p class="text-xs text-gray-400 mb-2">对应小程序详情页「项目图片」图集；可添加多张，支持删除与调整顺序。正文富文本里的插图仍在下方「项目描述」中编辑。</p>
+          <div id="pjEditGalleryList" class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3"></div>
+          <button type="button" onclick="addProjectGalleryImage()" class="px-4 py-2.5 bg-navy-100 text-navy-700 rounded-xl text-sm cursor-pointer hover:bg-navy-200 transition">添加项目图片</button>
+        </div>
         <div class="hidden">
           <label class="block text-sm font-medium text-gray-700 mb-1">项目视频（选填）</label>
           <div class="flex items-center gap-3">
@@ -3417,9 +3423,68 @@ let _pjOwnerMembers = []
 let _pjCompanyNames = []
 let _pjPreferredOwnerId = ''
 let _pjPreferredCompany = ''
+/** 项目图片图集（小程序详情 gallery_images），存 canonical / 已签名预览 URL */
+let _pjGalleryImages = []
 
 function normalizeCompanyName(value) {
   return String(value || '').trim()
+}
+
+function renderProjectGalleryList() {
+  const box = document.getElementById('pjEditGalleryList')
+  if (!box) return
+  if (!_pjGalleryImages.length) {
+    box.innerHTML = '<p class="col-span-full text-sm text-gray-400 py-4 text-center border border-dashed border-gray-200 rounded-xl">暂无项目图片，点击下方按钮添加</p>'
+    return
+  }
+  box.innerHTML = _pjGalleryImages.map((url, index) => `
+    <div class="relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50 group">
+      <img src="${escapeHtml(url)}" class="w-full h-32 object-cover" alt="" onerror="this.style.opacity='0.3'">
+      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/50 flex items-center justify-between gap-1">
+        <div class="flex gap-1">
+          <button type="button" onclick="moveProjectGalleryImage(${index}, -1)" class="px-2 py-1 text-xs rounded bg-white/90 text-navy-800 disabled:opacity-40" ${index === 0 ? 'disabled' : ''}>上移</button>
+          <button type="button" onclick="moveProjectGalleryImage(${index}, 1)" class="px-2 py-1 text-xs rounded bg-white/90 text-navy-800 disabled:opacity-40" ${index >= _pjGalleryImages.length - 1 ? 'disabled' : ''}>下移</button>
+        </div>
+        <button type="button" onclick="removeProjectGalleryImage(${index})" class="px-2 py-1 text-xs rounded bg-red-500 text-white">删除</button>
+      </div>
+      <span class="absolute top-2 left-2 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white">${index + 1}</span>
+    </div>
+  `).join('')
+}
+
+function addProjectGalleryImage() {
+  openMediaLibrary({
+    type: 'image',
+    onSelect: (item) => {
+      // 持久化用 canonical；展示可用 preview（签名 URL 保存时后端会 canonicalize）
+      const storeUrl = item.canonicalUrl || item.url
+      const displayUrl = item.previewUrl || storeUrl
+      if (!storeUrl) return toast('未获取到图片地址', 'error')
+      const base = String(storeUrl).split('?')[0]
+      if (_pjGalleryImages.some((u) => String(u).split('?')[0] === base)) {
+        return toast('该图片已在图集中', 'error')
+      }
+      _pjGalleryImages.push(displayUrl)
+      renderProjectGalleryList()
+      toast('已添加项目图片')
+    },
+  })
+}
+
+function removeProjectGalleryImage(index) {
+  if (index < 0 || index >= _pjGalleryImages.length) return
+  if (!confirm('确认从项目图片中移除这张图？')) return
+  _pjGalleryImages.splice(index, 1)
+  renderProjectGalleryList()
+}
+
+function moveProjectGalleryImage(index, delta) {
+  const next = index + delta
+  if (next < 0 || next >= _pjGalleryImages.length) return
+  const tmp = _pjGalleryImages[index]
+  _pjGalleryImages[index] = _pjGalleryImages[next]
+  _pjGalleryImages[next] = tmp
+  renderProjectGalleryList()
 }
 
 function companyKey(value) {
@@ -3643,6 +3708,8 @@ async function openProjectEditPage(id) {
   document.getElementById('pjEditStage').value = 'seed'
   document.getElementById('pjEditCover').value = ''
   document.getElementById('pjEditVideo').value = ''
+  _pjGalleryImages = []
+  renderProjectGalleryList()
   document.getElementById('pjEditIndustry').value = Object.keys(INDUSTRY_MAP)[0] || ''
   document.getElementById('pjOwnerSearch').value = ''
   document.getElementById('pjEditFeatured').checked = false
@@ -3677,6 +3744,10 @@ async function openProjectEditPage(id) {
     document.getElementById('pjEditStage').value = p.stage || 'seed'
     document.getElementById('pjEditCover').value = p.cover_image || ''
     document.getElementById('pjEditVideo').value = p.video_url || ''
+    _pjGalleryImages = Array.isArray(p.gallery_images)
+      ? p.gallery_images.map((u) => String(u || '').trim()).filter(Boolean)
+      : []
+    renderProjectGalleryList()
     document.getElementById('pjEditIndustry').value = p.industry || Object.keys(INDUSTRY_MAP)[0] || ''
     _pjPreferredCompany = normalizeCompanyName(p.company_name || p.owner_company_name || '')
     renderProjectCompanyOptions(_pjPreferredCompany)
@@ -3715,6 +3786,7 @@ async function saveProjectEdit() {
     title: document.getElementById('pjEditTitle').value,
     cover_image: document.getElementById('pjEditCover').value,
     video_url: document.getElementById('pjEditVideo').value || null,
+    gallery_images: _pjGalleryImages.slice(),
     industry: document.getElementById('pjEditIndustry').value,
     stage: document.getElementById('pjEditStage').value,
     description: getRichEditorHtml('pjEditDescEditor'),
