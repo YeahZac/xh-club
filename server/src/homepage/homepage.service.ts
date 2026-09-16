@@ -460,10 +460,11 @@ export class HomepageService {
     }
   }
 
-  async updateItem(id: string, dto: { sort_order?: number; is_active?: boolean }) {
+  async updateItem(id: string, dto: { sort_order?: number; is_active?: boolean | number | string }) {
     const sortOrder = Number(dto.sort_order)
     const orderValue = Number.isFinite(sortOrder) ? sortOrder : 0
-    const isActive = dto.is_active !== false && dto.is_active !== 0 && dto.is_active !== '0'
+    const rawActive = dto.is_active as unknown
+    const isActive = rawActive !== false && rawActive !== 0 && rawActive !== '0'
     const result = await queryExecute(
       `UPDATE homepage_items
        SET sort_order = ?, is_active = ?, updated_at = NOW()
@@ -474,21 +475,21 @@ export class HomepageService {
 
     // 改了排序数字却仍是时间/浏览排序时，数字不会生效；自动切到自定义
     if (dto.sort_order !== undefined) {
-      const modeRow = await queryOne<{ sort_mode?: string }>(
+      const modeRow = await queryOne(
         `SELECT sort_mode FROM homepage_sections
          WHERE section IN (${HOMEPAGE_SECTIONS.map(() => '?').join(',')})
          ORDER BY sort_order ASC LIMIT 1`,
         [...HOMEPAGE_SECTIONS],
-      )
+      ) as { sort_mode?: string } | null
       if (modeRow?.sort_mode && modeRow.sort_mode !== 'custom') {
         await this.updateSettings({ sort_mode: 'custom' })
       }
     }
 
-    const saved = await queryOne<{ id: number; sort_order: number; is_active: number }>(
+    const saved = await queryOne(
       'SELECT id, sort_order, is_active FROM homepage_items WHERE id = ? LIMIT 1',
       [id],
-    )
+    ) as { id: number; sort_order: number; is_active: number } | null
     return {
       success: true,
       sort_mode: 'custom',
