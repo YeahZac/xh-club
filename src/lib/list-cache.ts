@@ -33,8 +33,8 @@ export function invalidateListCache(prefix?: string) {
 /** 列表请求默认附带 fields=list，旧后端会忽略未知参数 */
 export const LIST_FIELDS_QUERY = 'fields=list'
 
-/** 列表默认条数：够首屏；过大易触发云托管 callContainer 响应体限制 */
-export const LIST_PAGE_SIZE = 40
+/** 列表默认条数：够首屏；后端未瘦身描述前不宜过大（部分项目富文本可达数 MB） */
+export const LIST_PAGE_SIZE = 30
 
 /**
  * 有缓存时先回填再后台刷新；无缓存时直接请求。
