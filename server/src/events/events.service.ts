@@ -93,12 +93,13 @@ export class EventsService {
     const listFields = wantsListFields(params as any)
     // fields=list：仅卡片字段，默认 * 保持旧客户端兼容
     const selectFields = listFields
-      ? 'id, title, cover_image, event_type, start_time, end_time, location, max_participants, current_participants, fee, status, is_featured, sort_order, updated_at, created_at, admin_operated_at, view_count'
+      ? 'id, title, cover_image, event_type, start_time, end_time, location, max_participants, current_participants, fee, status, is_featured, sort_order, show_in_discover, updated_at, created_at, admin_operated_at, view_count'
       : '*'
 
     let query = this.client()
       .from('events')
       .select(selectFields, { count: 'exact' })
+      .eq('show_in_discover', 1)
       .order('is_featured', { ascending: false })
       .order('sort_order', { ascending: true })
       .order('admin_operated_at', { ascending: false })
@@ -472,6 +473,9 @@ export class EventsService {
     const where = [`(p.audit_status = 'approved' OR p.audit_status IS NULL OR p.audit_status = '')`]
     const values: any[] = []
 
+    // 发现页关闭后不对外列表展示（详情直链仍可按需访问）
+    where.push('(p.show_in_discover IS NULL OR p.show_in_discover = 1)')
+
     if (params.industry) {
       where.push('p.industry = ?')
       values.push(params.industry)
@@ -495,9 +499,9 @@ export class EventsService {
     const whereSql = `WHERE ${where.join(' AND ')}`
     const countRow = await queryOne(`SELECT COUNT(*) AS total FROM projects p ${whereSql}`, values)
     const selectSql = listFields
-      ? `SELECT p.id, p.title, p.cover_image, p.industry, p.stage, p.status,
-                p.avg_score, p.score_count, p.is_featured, p.sort_order,
-                p.view_count, p.created_at, p.updated_at, p.admin_operated_at
+      ? `SELECT p.id, p.title, p.description, p.cover_image, p.industry, p.stage, p.status,
+                p.company_name, p.avg_score, p.score_count, p.is_featured, p.sort_order,
+                p.show_in_discover, p.view_count, p.created_at, p.updated_at, p.admin_operated_at
          FROM projects p`
       : `SELECT p.* FROM projects p`
     const rows = await queryRows(

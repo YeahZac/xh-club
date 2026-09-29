@@ -592,6 +592,11 @@
             </label>
             <div><label class="block text-sm font-medium text-gray-700 mb-1">展示排序</label><input id="pjEditSortOrder" type="number" min="0" value="0" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white"><p class="text-xs text-gray-400 mt-1">数值越小越靠前</p></div>
           </div>
+          <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <input id="pjEditShowDiscover" type="checkbox" checked>
+            在发现页展示
+          </label>
+          <p class="text-xs text-gray-400 -mt-2">关闭后小程序「发现」页不展示该项目，不影响项目状态与详情直链</p>
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">项目描述</label>
@@ -3079,6 +3084,10 @@ function renderEventForm(mode, event = null) {
             发现页精选置顶
           </label>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">展示排序</label><input id="evSortOrder" type="number" min="0" value="${escapeHtml(event?.sort_order ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white"><p class="text-xs text-gray-400 mt-1">数值越小越靠前</p></div>
+          <label class="flex items-center gap-2 text-sm font-medium text-gray-700 col-span-2">
+            <input id="evShowDiscover" type="checkbox" ${event?.show_in_discover === 0 || event?.show_in_discover === false ? '' : 'checked'}>
+            在发现页展示
+          </label>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div><label class="block text-sm font-medium text-gray-700 mb-1">活动分类</label><select id="evType" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none"><option value="other">其他活动</option><option value="roadshow">项目路演</option><option value="salon">专题沙龙</option><option value="annual">年度大会</option><option value="training">培训</option><option value="meeting">定期例会</option></select></div>
@@ -3381,6 +3390,7 @@ function buildEventPayload(statusFallback = 'auto') {
     fee: parseInt(document.getElementById('evFee').value) || 0,
     is_featured: !!document.getElementById('evFeatured')?.checked,
     sort_order: Math.max(0, Number(document.getElementById('evSortOrder')?.value || 0)),
+    show_in_discover: !!document.getElementById('evShowDiscover')?.checked,
     description: getRichEditorHtml('evDescEditor'),
     form_fields: formFields.length > 0 ? formFields : null,
   }
@@ -3714,6 +3724,7 @@ async function openProjectEditPage(id) {
   document.getElementById('pjOwnerSearch').value = ''
   document.getElementById('pjEditFeatured').checked = false
   document.getElementById('pjEditSortOrder').value = 0
+  document.getElementById('pjEditShowDiscover').checked = true
   document.getElementById('pjEditPromoMode').value = ''
   document.getElementById('pjEditPromoRate').value = ''
   document.getElementById('pjEditPromoShareCount').value = 0
@@ -3753,6 +3764,9 @@ async function openProjectEditPage(id) {
     renderProjectCompanyOptions(_pjPreferredCompany)
     document.getElementById('pjEditFeatured').checked = !!p.is_featured
     document.getElementById('pjEditSortOrder').value = p.sort_order ?? 0
+    document.getElementById('pjEditShowDiscover').checked = p.show_in_discover === undefined || p.show_in_discover === null
+      ? true
+      : Number(p.show_in_discover) !== 0
     _pjPreferredOwnerId = p.submitter_id ? String(p.submitter_id) : ''
     document.getElementById('pjEditPromoMode').value = p.promo_coop_mode || ''
     document.getElementById('pjEditPromoRate').value = p.promo_commission_rate ?? ''
@@ -3795,6 +3809,7 @@ async function saveProjectEdit() {
     submitter_id: ownerId || null,
     is_featured: !!document.getElementById('pjEditFeatured')?.checked,
     sort_order: Math.max(0, Number(document.getElementById('pjEditSortOrder')?.value || 0)),
+    show_in_discover: !!document.getElementById('pjEditShowDiscover')?.checked,
     score_dimensions: dimensions,
     promo_coop_mode: document.getElementById('pjEditPromoMode').value || null,
     promo_commission_rate: document.getElementById('pjEditPromoRate').value || null,
@@ -6948,6 +6963,10 @@ function buildTalentFormFields(item, options = {}) {
             发现页精选置顶
           </label>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">展示排序</label><input id="talSortOrder" type="number" min="0" value="${escapeHtml(item.sort_order ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white"><p class="text-xs text-gray-400 mt-1">数值越小越靠前</p></div>
+          <label class="flex items-center gap-2 text-sm font-medium text-gray-700 col-span-2">
+            <input id="talShowDiscover" type="checkbox" ${item.show_in_discover === 0 || item.show_in_discover === false ? '' : 'checked'}>
+            在发现页展示
+          </label>
         </div>
         <div class="rounded-xl border border-amber-100 bg-amber-50/60 p-4 space-y-3">
           <p class="text-sm font-semibold text-navy-800">缴费会员</p>
@@ -7071,6 +7090,7 @@ function collectTalentFormBody() {
     reject_reason: document.getElementById('talRejectReason').value,
     is_featured: !!document.getElementById('talFeatured')?.checked,
     sort_order: Math.max(0, Number(document.getElementById('talSortOrder')?.value || 0)),
+    show_in_discover: !!document.getElementById('talShowDiscover')?.checked,
     payment_status: document.getElementById('talPayStatus')?.value || 'unpaid',
     payment_amount: document.getElementById('talPayAmount')?.value || null,
     payment_start_at: document.getElementById('talPayStart')?.value || null,

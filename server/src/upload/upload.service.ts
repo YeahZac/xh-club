@@ -417,6 +417,10 @@ export class UploadService {
     return next;
   }
 
+  /**
+   * 为富文本 HTML 内的 COS / cloud:// 媒体地址生成预签名 URL
+   * （私有桶下未签名的 img/src 在小程序端 / 管理台会加载失败）
+   */
   async signHtmlMedia(html: unknown, maxAge?: number): Promise<string> {
     if (typeof html !== 'string' || !html.trim()) {
       return typeof html === 'string' ? html : '';

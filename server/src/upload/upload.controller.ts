@@ -25,7 +25,7 @@ export class UploadController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: IMAGE_UPLOAD_MAX_BYTES } }))
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new Error('No file uploaded');
+      throw new BadRequestException('请选择要上传的文件');
     }
 
     const result = await this.uploadService.uploadFile(file);
@@ -40,7 +40,7 @@ export class UploadController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: IMAGE_UPLOAD_MAX_BYTES } }))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new Error('No file uploaded');
+      throw new BadRequestException('请选择要上传的文件');
     }
 
     const result = await this.uploadService.uploadImage(file);
@@ -55,7 +55,7 @@ export class UploadController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 200 * 1024 * 1024 } }))
   async uploadVideo(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new Error('No file uploaded');
+      throw new BadRequestException('请选择要上传的文件');
     }
     const result = await this.uploadService.uploadVideo(file);
     return {
@@ -72,10 +72,10 @@ export class UploadController {
     @Body('userId') userId: string,
   ) {
     if (!file) {
-      throw new Error('No file uploaded');
+      throw new BadRequestException('请选择要上传的文件');
     }
     if (!userId) {
-      throw new Error('userId is required');
+      throw new BadRequestException('userId 不能为空');
     }
 
     const result = await this.uploadService.uploadAvatar(file, userId);
@@ -90,7 +90,7 @@ export class UploadController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadDocument(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new Error('No file uploaded');
+      throw new BadRequestException('请选择要上传的文件');
     }
 
     const result = await this.uploadService.uploadDocument(file);
@@ -106,7 +106,7 @@ export class UploadController {
   @HttpCode(200)
   async fromCloud(@Body() body: { fileID?: string; filename?: string }) {
     if (!body?.fileID?.trim()) {
-      throw new Error('fileID is required');
+      throw new BadRequestException('fileID 不能为空');
     }
     const result = await this.uploadService.registerCloudFile(body.fileID.trim(), body.filename);
     return {

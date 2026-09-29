@@ -81,11 +81,27 @@ export class ProjectsController {
     return { code: 200, msg: '已提交审核', data: result }
   }
 
-  @Get(':id')
-  async getProject(@Param('id') id: string, @Req() request: any) {
-    const memberId = tryReadMemberId(request)
-    const result = await this.eventsService.getProjectById(id, memberId)
+  // 静态子路径必须声明在 :id 之前，避免被详情路由吞掉
+  @Get(':id/share-talents')
+  @UseGuards(MemberAuthGuard)
+  async getShareTalents(@Param('id') id: string, @Req() request: any) {
+    const result = await this.eventsService.getShareableTalents(id, request.user.sub)
     return { code: 200, msg: 'success', data: result }
+  }
+
+  @Post(':id/share-talents')
+  @UseGuards(MemberAuthGuard)
+  async shareToTalents(
+    @Param('id') id: string,
+    @Req() request: any,
+    @Body() body: { member_ids?: Array<string | number> },
+  ) {
+    const result = await this.eventsService.shareProjectToTalents(
+      id,
+      request.user.sub,
+      body?.member_ids || [],
+    )
+    return { code: 200, msg: `已分享给 ${result.count} 位入驻人才`, data: result }
   }
 
   @Post(':id/scores')
@@ -118,26 +134,11 @@ export class ProjectsController {
     return { code: 200, msg: '已分享给好友', data: result }
   }
 
-  @Get(':id/share-talents')
-  @UseGuards(MemberAuthGuard)
-  async getShareTalents(@Param('id') id: string, @Req() request: any) {
-    const result = await this.eventsService.getShareableTalents(id, request.user.sub)
+  @Get(':id')
+  async getProject(@Param('id') id: string, @Req() request: any) {
+    const memberId = tryReadMemberId(request)
+    const result = await this.eventsService.getProjectById(id, memberId)
     return { code: 200, msg: 'success', data: result }
-  }
-
-  @Post(':id/share-talents')
-  @UseGuards(MemberAuthGuard)
-  async shareToTalents(
-    @Param('id') id: string,
-    @Req() request: any,
-    @Body() body: { member_ids?: Array<string | number> },
-  ) {
-    const result = await this.eventsService.shareProjectToTalents(
-      id,
-      request.user.sub,
-      body?.member_ids || [],
-    )
-    return { code: 200, msg: `已分享给 ${result.count} 位入驻人才`, data: result }
   }
 
   @Post()

@@ -8,6 +8,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['events', 'form_fields', 'JSON NULL'],
   ['events', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0'],
   ['events', 'sort_order', 'INT NOT NULL DEFAULT 0'],
+  ['events', 'show_in_discover', 'TINYINT(1) NOT NULL DEFAULT 1'],
   // 列表排序用：仅管理端创建/编辑时更新，不受小程序浏览/报名等操作影响
   ['events', 'admin_operated_at', 'TIMESTAMP NULL'],
   ['event_registrations', 'form_answers', 'JSON NULL'],
@@ -22,6 +23,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['projects', 'company_name', 'VARCHAR(200) NULL'],
   ['projects', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0'],
   ['projects', 'sort_order', 'INT NOT NULL DEFAULT 0'],
+  ['projects', 'show_in_discover', 'TINYINT(1) NOT NULL DEFAULT 1'],
   ['projects', 'admin_operated_at', 'TIMESTAMP NULL'],
   ['projects', 'avg_score', 'DECIMAL(4,2) NOT NULL DEFAULT 0'],
   ['projects', 'score_count', 'INT NOT NULL DEFAULT 0'],
@@ -111,6 +113,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   // 人才列表 / 发现页排序
   ['talent_applications', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0'],
   ['talent_applications', 'sort_order', 'INT NOT NULL DEFAULT 0'],
+  ['talent_applications', 'show_in_discover', 'TINYINT(1) NOT NULL DEFAULT 1'],
   ['talent_applications', 'admin_operated_at', 'TIMESTAMP NULL'],
   // 会员推荐码
   ['members', 'invite_code', 'VARCHAR(32) NULL'],

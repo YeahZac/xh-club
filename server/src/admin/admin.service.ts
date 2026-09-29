@@ -964,8 +964,8 @@ export class AdminService {
             : JSON.stringify(dto.form_fields)
       const status = this.resolvePersistedEventStatus(dto, 0)
       const result = await queryExecute(
-        `INSERT INTO events (title, description, cover_image, video_url, event_type, status, start_time, end_time, location, address, max_participants, fee, form_fields, is_featured, sort_order, admin_operated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        `INSERT INTO events (title, description, cover_image, video_url, event_type, status, start_time, end_time, location, address, max_participants, fee, form_fields, is_featured, sort_order, show_in_discover, admin_operated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [dto.title, dto.description || null, coverImage, videoUrl, dto.event_type || 'salon',
          status, toMysqlDateTime(dto.start_time), toMysqlDateTime(dto.end_time),
          dto.location || null, dto.address || null,
@@ -973,7 +973,8 @@ export class AdminService {
          dto.fee || 0,
          formFieldsJson,
          dto.is_featured ? 1 : 0,
-         Math.max(0, Number(dto.sort_order) || 0)]
+         Math.max(0, Number(dto.sort_order) || 0),
+         dto.show_in_discover === false || dto.show_in_discover === 0 || dto.show_in_discover === '0' ? 0 : 1]
       )
       const insertedId = result.insertId
       if (insertedId) {
@@ -1018,6 +1019,12 @@ export class AdminService {
       if (dto.fee !== undefined) assign('fee', dto.fee || 0)
       if (dto.is_featured !== undefined) assign('is_featured', dto.is_featured ? 1 : 0)
       if (dto.sort_order !== undefined) assign('sort_order', Math.max(0, Number(dto.sort_order) || 0))
+      if (dto.show_in_discover !== undefined) {
+        assign(
+          'show_in_discover',
+          dto.show_in_discover === false || dto.show_in_discover === 0 || dto.show_in_discover === '0' ? 0 : 1,
+        )
+      }
       if (dto.form_fields !== undefined) {
         const formFieldsJson =
           dto.form_fields == null
@@ -1425,9 +1432,9 @@ export class AdminService {
       const result = await queryExecute(
         `INSERT INTO projects
            (title, description, cover_image, video_url, gallery_images, file_urls, industry, stage, amount_max, status,
-            audit_status, submitter_id, company_name, is_featured, sort_order, avg_score, score_count,
+            audit_status, submitter_id, company_name, is_featured, sort_order, show_in_discover, avg_score, score_count,
             promo_coop_mode, promo_commission_rate, promo_amount_wan, promo_remark, promo_share_count, admin_operated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, NOW())`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, NOW())`,
         [
           dto.title,
           dto.description
@@ -1445,6 +1452,7 @@ export class AdminService {
           companyName,
           dto.is_featured ? 1 : 0,
           Math.max(0, Number(dto.sort_order) || 0),
+          dto.show_in_discover === false || dto.show_in_discover === 0 || dto.show_in_discover === '0' ? 0 : 1,
           normalizePromoCoopMode(dto.promo_coop_mode),
           dto.promo_commission_rate != null && dto.promo_commission_rate !== ''
             ? Number(dto.promo_commission_rate)
@@ -1548,6 +1556,12 @@ export class AdminService {
       }
       if (dto.sort_order !== undefined) {
         assign('sort_order', Math.max(0, Number(dto.sort_order) || 0))
+      }
+      if (dto.show_in_discover !== undefined) {
+        assign(
+          'show_in_discover',
+          dto.show_in_discover === false || dto.show_in_discover === 0 || dto.show_in_discover === '0' ? 0 : 1,
+        )
       }
       if (dto.audit_status !== undefined) {
         const audit = String(dto.audit_status)

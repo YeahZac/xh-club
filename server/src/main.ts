@@ -18,6 +18,23 @@ const COS_PUBLIC_PROXY_PREFIXES = ['carlife/'] as const;
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
+/**
+ * 云托管若未注入 JWT_SECRET（或控制台覆盖成空），登录签发会 500。
+ * 启动时兜底写入与 container.config.json 一致的默认值，避免整站不可登录。
+ */
+;(() => {
+  const raw = String(process.env.JWT_SECRET || '').trim()
+  const placeholder =
+    !raw
+    || /change-this|change_me|your-jwt-secret/i.test(raw)
+  if (placeholder) {
+    process.env.JWT_SECRET = 'xh-club-jwt-secret-change-in-production'
+    console.error(
+      '[启动] JWT_SECRET 未配置或为占位符，已使用默认密钥。请尽快在云托管控制台设置正式 JWT_SECRET',
+    )
+  }
+})()
+
 function parsePort(): number {
   // 优先使用环境变量 SERVER_PORT（开发环境）或 PORT（微信云托管等平台会注入）
   if (process.env.SERVER_PORT) {

@@ -253,6 +253,7 @@ export class TalentService {
     const listFields = wantsListFields(params as any)
     const where = [`t.status = 'approved'`]
     const values: any[] = []
+    where.push('(t.show_in_discover IS NULL OR t.show_in_discover = 1)')
 
     if (params.industry) {
       where.push('(t.industry_tags LIKE ? OR t.industry_tags LIKE ?)')
@@ -272,7 +273,7 @@ export class TalentService {
     const selectSql = listFields
       ? `SELECT t.id, t.member_id, t.real_name, t.contact, t.company_name, t.job_title, t.wechat_id,
                 t.experience, t.photo_url, t.avatar_url,
-                t.industry_tags, t.status, t.is_featured, t.sort_order, t.reviewed_at,
+                t.industry_tags, t.status, t.is_featured, t.sort_order, t.show_in_discover, t.reviewed_at,
                 t.updated_at, t.created_at, t.admin_operated_at, t.payment_expire_at,
                 t.payment_start_at, t.payment_status, m.avatar AS member_avatar, m.name AS member_name, m.user_category
          FROM talent_applications t
@@ -857,15 +858,17 @@ export class TalentService {
     const avatarUrl = payload.avatar_url || payload.photo_url || null
     const isFeatured = dto.is_featured ? 1 : 0
     const sortOrder = Math.max(0, Number(dto.sort_order) || 0)
+    const showInDiscover =
+      dto.show_in_discover === false || dto.show_in_discover === 0 || dto.show_in_discover === '0' ? 0 : 1
     const rejectReason = status === 'rejected' ? String(dto.reject_reason || '').trim() : null
     const reviewedBy = status === 'pending' ? null : dto.reviewed_by || null
 
     const result = await queryExecute(
       `INSERT INTO talent_applications
         (member_id, real_name, contact, company_name, job_title, wechat_id, photo_url, industry_tags, experience,
-         card_image_url, avatar_url, status, reject_reason, is_featured, sort_order,
+         card_image_url, avatar_url, status, reject_reason, is_featured, sort_order, show_in_discover,
          reviewed_at, reviewed_by, admin_operated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${status === 'pending' ? 'NULL' : 'NOW()'}, ?, NOW())`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${status === 'pending' ? 'NULL' : 'NOW()'}, ?, NOW())`,
       [
         memberId,
         payload.real_name,
@@ -882,6 +885,7 @@ export class TalentService {
         rejectReason,
         isFeatured,
         sortOrder,
+        showInDiscover,
         reviewedBy,
       ],
     )
@@ -1039,6 +1043,12 @@ export class TalentService {
     if (dto.is_featured !== undefined) assign('is_featured', dto.is_featured ? 1 : 0)
     if (dto.sort_order !== undefined) {
       assign('sort_order', Math.max(0, Number(dto.sort_order) || 0))
+    }
+    if (dto.show_in_discover !== undefined) {
+      assign(
+        'show_in_discover',
+        dto.show_in_discover === false || dto.show_in_discover === 0 || dto.show_in_discover === '0' ? 0 : 1,
+      )
     }
     if (dto.status !== undefined) {
       if (!TALENT_STATUSES.includes(dto.status)) {
