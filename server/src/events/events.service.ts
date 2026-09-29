@@ -39,6 +39,22 @@ function isFullHtmlProjectBody(html?: string | null): boolean {
   return false
 }
 
+/** 列表摘要：去掉 HTML，避免 fields=list 把整篇富文本塞进 callContainer 导致超大响应 500 */
+function toListExcerpt(html: unknown, maxLen = 80): string {
+  const raw = String(html || '').trim()
+  if (!raw) return ''
+  const plain = raw
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!plain) return ''
+  return plain.length > maxLen ? `${plain.slice(0, maxLen)}…` : plain
+}
+
 @Injectable()
 export class EventsService {
   constructor(
@@ -521,6 +537,10 @@ export class EventsService {
           ...item,
           avg_score: Number(item.avg_score || 0),
           score_count: Number(item.score_count || 0),
+        }
+        if (listFields) {
+          // 列表只要短摘要；完整图文进详情页再拉
+          next.description = toListExcerpt(item.description)
         }
         // 列表不对外暴露推广佣金字段（详情按身份返回）
         delete next.project_commission
