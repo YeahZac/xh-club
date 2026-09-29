@@ -7,6 +7,9 @@ export const stripHtml = (html?: string | null): string => {
   return html
     .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<\/p>/gi, ' ')
+    .replace(/<\/div>/gi, ' ')
+    .replace(/<\/h[1-6]>/gi, ' ')
+    .replace(/<\/li>/gi, ' ')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
@@ -14,8 +17,37 @@ export const stripHtml = (html?: string | null): string => {
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, n) => {
+      const code = Number(n)
+      return Number.isFinite(code) ? String.fromCharCode(code) : ''
+    })
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+/** 是否像 CSS/JS 残片，不宜作为列表摘要 */
+const looksLikeCodeSnippet = (text: string): boolean => {
+  const value = String(text || '').trim()
+  if (!value) return false
+  if (/<\/?[a-z][\w:-]*[\s>]/i.test(value)) return true
+  if (/[{};]\s*[.#@]?[\w-]+\s*[{:]/.test(value)) return true
+  if (/@(media|keyframes|font-face|import)\b/i.test(value)) return true
+  if (/\b(function|const|let|var|return)\s*[\(=]/.test(value)) return true
+  if (/[{};].*[{};]/.test(value) && /[:#]|rgba?\(|px\b|rem\b/.test(value)) return true
+  const codeMarks = (value.match(/[{};:#]|px\b|rgb\(|var\(/gi) || []).length
+  return codeMarks >= 4 && codeMarks / Math.max(value.length, 1) > 0.08
+}
+
+const extractMetaDescription = (html: string): string => {
+  const match =
+    html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i)
+  return stripHtml(match?.[1] || '')
+}
+
+const extractDocumentTitle = (html: string): string => {
+  const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
+  return stripHtml(match?.[1] || '')
 }
 
 /** 是否为完整 HTML 页面（含样式/文档壳），需走 web-view 才能完整还原 */
@@ -39,6 +71,50 @@ export const extractHtmlBody = (html?: string | null): string => {
     .replace(/<\/?html[^>]*>/gi, '')
     .replace(/<head[\s\S]*?<\/head>/gi, '')
     .trim()
+}
+
+/**
+ * 列表摘要：从富文本 / 完整 H5 中提取可读中文，避免把 style/script 代码露出来。
+ */
+export const excerptRichText = (
+  html?: string | null,
+  maxLen = 56,
+  emptyFallback = '',
+): string => {
+  const raw = String(html || '').trim()
+  if (!raw) return emptyFallback
+
+  const hasChrome = isFullHtmlDocument(raw) || /<style[\s>]|<script[\s>]/i.test(raw)
+  const metaText = hasChrome ? extractMetaDescription(raw) : ''
+  const titleText = hasChrome ? extractDocumentTitle(raw) : ''
+
+  let value = isFullHtmlDocument(raw) ? extractHtmlBody(raw) : raw
+  value = value
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<svg[\s\S]*?<\/svg>/gi, ' ')
+    .replace(/<head[\s\S]*?<\/head>/gi, ' ')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, ' ')
+
+  let bodyText = stripHtml(value)
+    .replace(/\{[^{}]*\}/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (looksLikeCodeSnippet(bodyText)) bodyText = ''
+
+  // H5：优先 meta 描述；普通富文本：优先正文
+  let plain = hasChrome
+    ? (metaText || bodyText || titleText)
+    : (bodyText || metaText || titleText)
+
+  if (!plain || looksLikeCodeSnippet(plain)) {
+    return emptyFallback
+  }
+
+  if (plain.length <= maxLen) return plain
+  return `${plain.slice(0, maxLen)}…`
 }
 
 export type HtmlRenderType =

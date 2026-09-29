@@ -3947,6 +3947,12 @@ async function loadProjects() {
     const showDiscover = p.show_in_discover === undefined || p.show_in_discover === null
       ? true
       : Number(p.show_in_discover) !== 0
+    const frontHiddenReasons = []
+    if (!showDiscover) frontHiddenReasons.push('发现页已关')
+    if (p.audit_status && p.audit_status !== 'approved') frontHiddenReasons.push(p.audit_status === 'pending' ? '待审核' : '未过审')
+    if (p.status && !['active', 'funded', 'published'].includes(String(p.status))) {
+      frontHiddenReasons.push(PROJECT_STATUS_MAP[p.status] || p.status)
+    }
     const auditBtns = p.audit_status === 'pending'
       ? `<button type="button" onclick="auditProjectQuick('${p.id}','approved')" class="admin-btn bg-green-100 text-green-700 hover:bg-green-200">通过</button>
          <button type="button" onclick="auditProjectQuick('${p.id}','rejected')" class="admin-btn bg-red-100 text-red-700 hover:bg-red-200">拒绝</button>`
@@ -3956,6 +3962,7 @@ async function loadProjects() {
       <td class="px-4 py-3">
         <p class="admin-cell-title" title="${escapeHtml(p.title || '-')}">${escapeHtml(p.title || '-')}</p>
         <p class="admin-cell-sub" title="${escapeHtml(metaLine)}">${escapeHtml(metaLine || '-')}</p>
+        ${frontHiddenReasons.length ? `<p class="text-xs text-amber-600 mt-1 whitespace-nowrap" title="小程序发现页不可见原因">前台不可见：${escapeHtml(frontHiddenReasons.join(' · '))}</p>` : ''}
       </td>
       <td class="px-4 py-3">
         <p class="admin-cell-title" title="${escapeHtml(company || '-')}">${escapeHtml(company || '-')}</p>

@@ -1,4 +1,31 @@
 import Taro from '@tarojs/taro'
+import { assertSafeExternalUrl } from '@/lib/safe-url'
+
+let navigating = false
+let lastNavigateAt = 0
+
+const guardedNavigateTo = (url: string, label: string) => {
+  const now = Date.now()
+  if (navigating || now - lastNavigateAt < 400) {
+    return
+  }
+  navigating = true
+  lastNavigateAt = now
+  Taro.navigateTo({
+    url,
+    fail: (err) => {
+      console.error(`[导航] ${label} 失败:`, url, err)
+      const msg = String(err?.errMsg || '')
+      Taro.showToast({
+        title: msg.includes('timeout') ? '页面加载较慢，请稍后再试' : '页面跳转失败',
+        icon: 'none',
+      })
+    },
+    complete: () => {
+      navigating = false
+    },
+  })
+}
 
 export type ContentDetailType = 'article' | 'project' | 'event' | 'business' | 'talent' | 'product'
 
@@ -13,7 +40,7 @@ export const pickId = (...candidates: Array<string | number | undefined | null>)
 export const normalizeDetailType = (type?: string): ContentDetailType | '' => {
   if (!type) return ''
   if (type === 'product') return 'product'
-  if (type === 'financing' || type === 'roadshow' || type === 'resource') return 'business'
+  if (type === 'financing' || type === 'roadshow' || type === 'resource' || type === 'life') return 'business'
   if (['article', 'project', 'event', 'business', 'talent'].includes(type)) {
     return type as ContentDetailType
   }
@@ -33,31 +60,21 @@ export const openContentDetail = (type: string | undefined, id: string | number 
     return
   }
 
-  const fail = (err?: { errMsg?: string }) => {
-    console.error('[导航] navigateTo 失败:', detailType, targetId, err)
-    Taro.showToast({ title: '页面跳转失败', icon: 'none' })
-  }
-
   if (detailType === 'product') {
-    Taro.navigateTo({
-      url: `/pages/mall/product-detail/index?id=${targetId}`,
-      success: () => console.log('[导航] navigateTo 成功:', detailType, targetId),
-      fail,
-    })
+    guardedNavigateTo(`/pages/mall/product-detail/index?id=${targetId}`, '商品详情')
     return
   }
 
-  Taro.navigateTo({
-    url: `/pages/content-detail/index?type=${detailType}&id=${targetId}`,
-    success: () => console.log('[导航] navigateTo 成功:', detailType, targetId),
-    fail,
-  })
+  guardedNavigateTo(
+    `/pages/content-detail/index?type=${detailType}&id=${targetId}`,
+    '内容详情',
+  )
 }
 
 export const openExternalUrl = (url: string) => {
-  const target = url.trim()
+  const target = assertSafeExternalUrl(url)
   if (!target) {
-    Taro.showToast({ title: '链接未配置', icon: 'none' })
+    Taro.showToast({ title: '链接无效或不安全', icon: 'none' })
     return
   }
 

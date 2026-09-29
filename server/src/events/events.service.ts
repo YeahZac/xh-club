@@ -99,7 +99,8 @@ export class EventsService {
     let query = this.client()
       .from('events')
       .select(selectFields, { count: 'exact' })
-      .eq('show_in_discover', 1)
+      // 兼容旧数据：NULL 视为展示；与 projects/talent 的 IS NULL OR =1 一致
+      .or('show_in_discover.eq.1,show_in_discover.is.null')
       .order('is_featured', { ascending: false })
       .order('sort_order', { ascending: true })
       .order('admin_operated_at', { ascending: false })
