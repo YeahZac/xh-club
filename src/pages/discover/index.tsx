@@ -14,7 +14,7 @@ import {
 } from "@/components/brand-ui"
 import { getResponseList } from "@/lib/api-response"
 import { isDisplayableImageUrl } from "@/lib/media-url"
-import { LIST_FIELDS_QUERY, loadWithListCache, getListCache } from "@/lib/list-cache"
+import { LIST_FIELDS_QUERY, LIST_PAGE_SIZE, loadWithListCache, getListCache } from "@/lib/list-cache"
 import { useMediaRefresh } from "@/lib/use-media-refresh"
 import { Network } from "@/network"
 import { useTabShareAppMessage } from "@/lib/mini-program-share"
