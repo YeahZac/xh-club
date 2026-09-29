@@ -1,17 +1,27 @@
-import { useMemo, useState, useEffect } from "react"
+import { useMemo, useState, useEffect, useCallback } from "react"
 import { Image, View, Text, ScrollView } from "@tarojs/components"
 import Taro, { useDidShow } from "@tarojs/taro"
-import {
-  Search, MapPin, ListFilter, Eye
-} from "lucide-react-taro"
-import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Button } from "@/components/ui/button"
-import { getResponseList } from "@/lib/api-response"
+import {
+  brandColors,
+  EmptyState,
+  HeroHeader,
+  layout,
+  PageShell,
+  SoftCard,
+  ui,
+} from "@/components/brand-ui"
+import {
+  BUSINESS_CATEGORY_LABELS,
+  businessCategoryLabel,
+} from "@/lib/business-category"
 import { isDisplayableImageUrl } from "@/lib/media-url"
+import { loadWithListCache, getListCache } from "@/lib/list-cache"
+import { fetchAllPagedList } from "@/lib/fetch-paged-list"
+import { useMediaRefresh } from "@/lib/use-media-refresh"
 import { stripHtml } from "@/lib/rich-html"
-import { Network } from "@/network"
+import { useTabShareAppMessage } from "@/lib/mini-program-share"
 
 interface BusinessItem {
   id: string
@@ -27,8 +37,15 @@ interface BusinessItem {
   stage?: string
   view_count?: number
   status: string
+  is_featured?: boolean | number
+  sort_order?: number
   start_time?: string | null
+  updated_at?: string
   created_at?: string
+  admin_operated_at?: string
+  is_registered?: boolean
+  can_register?: boolean
+  end_time?: string | null
 }
 
 const stageMap: Record<string, string> = {
@@ -42,66 +59,82 @@ const industryMap: Record<string, string> = {
   service: '综合服务',
 }
 
-const categoryMap: Record<string, string> = {
-  roadshow: '项目路演',
-  financing: '融资招募',
-  resource: '资源对接',
-}
-
-const getBusinessSortTime = (item: BusinessItem) => {
-  const raw = item.start_time || item.created_at || ''
-  const ts = new Date(raw).getTime()
-  return Number.isNaN(ts) ? 0 : ts
-}
-
-const sortBusinessByStartTimeDesc = (list: BusinessItem[]) =>
-  [...list].sort((a, b) => getBusinessSortTime(b) - getBusinessSortTime(a))
+const TAB_KEYS = ['all', 'roadshow', 'financing', 'resource', 'life'] as const
 
 const BusinessPage = () => {
   const [activeTab, setActiveTab] = useState("all")
-  const isMiniApp = ([Taro.ENV_TYPE.WEAPP, Taro.ENV_TYPE.TT] as string[]).includes(Taro.getEnv() as string)
-  const statusBarHeight = isMiniApp ? (Taro.getWindowInfo().statusBarHeight || 22) : 44
+
+  useTabShareAppMessage('business')
 
   const [roadshowList, setRoadshowList] = useState<BusinessItem[]>([])
   const [financingList, setFinancingList] = useState<BusinessItem[]>([])
   const [resourceList, setResourceList] = useState<BusinessItem[]>([])
+  const [lifeList, setLifeList] = useState<BusinessItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  useDidShow(() => {
-    const initialTab = String(Taro.getStorageSync('business_initial_tab') || '')
-    if (initialTab === 'all' || initialTab === 'roadshow' || initialTab === 'financing' || initialTab === 'resource') {
-      setActiveTab(initialTab)
-      Taro.removeStorageSync('business_initial_tab')
-    }
-  })
-
-  const loadData = async () => {
+  const loadData = useCallback(async (options?: { silent?: boolean; force?: boolean }) => {
     try {
-      setLoading(true)
-      const [roadshowRes, financingRes, resourceRes] = await Promise.all([
-        Network.request({ url: '/api/business?category=roadshow&pageSize=50' }),
-        Network.request({ url: '/api/business?category=financing&pageSize=50' }),
-        Network.request({ url: '/api/business?category=resource&pageSize=50' }),
-      ])
-
-      setRoadshowList(sortBusinessByStartTimeDesc(getResponseList<BusinessItem>(roadshowRes?.data?.data)))
-      setFinancingList(sortBusinessByStartTimeDesc(getResponseList<BusinessItem>(financingRes?.data?.data)))
-      setResourceList(sortBusinessByStartTimeDesc(getResponseList<BusinessItem>(resourceRes?.data?.data)))
+      const hasCache = !options?.force && !!getListCache('business:lists')
+      if (!options?.silent && !hasCache) setLoading(true)
+      await loadWithListCache(
+        'business:lists',
+        async () => {
+          const [roadshow, financing, resource, life] = await Promise.all([
+            fetchAllPagedList<BusinessItem>('/api/business?category=roadshow'),
+            fetchAllPagedList<BusinessItem>('/api/business?category=financing'),
+            fetchAllPagedList<BusinessItem>('/api/business?category=resource'),
+            fetchAllPagedList<BusinessItem>('/api/business?category=life'),
+          ])
+          return { roadshow, financing, resource, life }
+        },
+        {
+          force: options?.force,
+          ttlMs: 90_000,
+          onData: (bundle) => {
+            setRoadshowList(bundle.roadshow)
+            setFinancingList(bundle.financing)
+            setResourceList(bundle.resource)
+            setLifeList(bundle.life)
+          },
+        },
+      )
     } catch (err) {
       console.error('[商机页] 加载失败:', err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const allList = useMemo(
-    () => sortBusinessByStartTimeDesc([...roadshowList, ...financingList, ...resourceList]),
-    [roadshowList, financingList, resourceList],
+  useEffect(() => {
+    void loadData()
+  }, [loadData])
+
+  useDidShow(() => {
+    const initialTab = String(Taro.getStorageSync('business_initial_tab') || '')
+    if ((TAB_KEYS as readonly string[]).includes(initialTab)) {
+      setActiveTab(initialTab)
+      Taro.removeStorageSync('business_initial_tab')
+    }
+  })
+
+  const { onImageError } = useMediaRefresh(
+    () => loadData({ silent: true, force: true }),
   )
+
+  const allList = useMemo(() => {
+    const sortTime = (item: BusinessItem) => {
+      const value = item.admin_operated_at || item.created_at || ''
+      const time = new Date(value).getTime()
+      return Number.isNaN(time) ? 0 : time
+    }
+    return [...roadshowList, ...financingList, ...resourceList, ...lifeList].sort((a, b) => {
+      const featured = Number(Number(b.is_featured) > 0) - Number(Number(a.is_featured) > 0)
+      if (featured) return featured
+      const order = Number(a.sort_order || 0) - Number(b.sort_order || 0)
+      if (order) return order
+      return sortTime(b) - sortTime(a)
+    })
+  }, [roadshowList, financingList, resourceList, lifeList])
 
   const formatAmount = (min?: number, max?: number) => {
     if (!min && !max) return ''
@@ -110,8 +143,8 @@ const BusinessPage = () => {
   }
 
   const getSummary = (item: BusinessItem) => {
-    if (item.summary) return item.summary
-    return stripHtml(item.content).slice(0, 48)
+    const text = item.summary || stripHtml(item.content)
+    return text.slice(0, 30)
   }
 
   const openDetail = (id: string) => {
@@ -122,120 +155,92 @@ const BusinessPage = () => {
     const coverOk = isDisplayableImageUrl(item.cover_image)
     const amountText = formatAmount(item.amount_min, item.amount_max)
     const badgeText = showCategory
-      ? (categoryMap[item.category] || item.category)
-      : (stageMap[item.stage || ''] || categoryMap[item.category] || item.category)
+      ? businessCategoryLabel(item.category)
+      : (stageMap[item.stage || ''] || businessCategoryLabel(item.category))
     const summary = getSummary(item)
+    const meta =
+      amountText
+      || (item.industry ? industryMap[item.industry] || item.industry : '')
+      || item.region
+      || ''
+    const description = summary || meta
 
     return (
-      <Card
+      <SoftCard
         key={`${item.category}-${item.id}`}
-        className="shadow-sm border-0 overflow-hidden"
+        className="overflow-hidden p-3"
         onClick={() => openDetail(item.id)}
       >
-        <CardContent className="p-2.5">
-          <View className="flex flex-row gap-2.5 items-stretch">
-            <View className="w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
-              {coverOk ? (
-                <Image src={item.cover_image!} mode="aspectFill" className="w-full h-full" />
-              ) : (
-                <View className="w-full h-full bg-gradient-to-br from-[#1B2A4A] to-[#3B5998] flex items-center justify-center px-1.5">
-                  <Text className="block text-white text-xs font-semibold text-center">{item.title}</Text>
-                </View>
-              )}
-            </View>
-            <View className="flex-1 min-w-0 flex flex-col justify-between">
-              <View>
-                <View className="flex flex-row items-start justify-between gap-1.5">
-                  <Text className="block text-xs font-semibold text-[#1A1D2E] leading-snug flex-1 line-clamp-2">{item.title}</Text>
-                  <Badge className="bg-[#FAF6F1] text-[#C9A96E] text-xs px-1.5 py-0 flex-shrink-0">
-                    {badgeText}
-                  </Badge>
-                </View>
-                {summary ? (
-                  <Text className="block text-xs text-gray-500 leading-snug line-clamp-1 mt-0.5">{summary}</Text>
-                ) : null}
+        <View className="flex flex-row items-center gap-3">
+          <View className={ui.listRowThumb}>
+            {coverOk ? (
+              <Image
+                key={`biz-img-${item.id}-${item.cover_image || ''}`}
+                src={item.cover_image!}
+                mode="aspectFill"
+                className="h-full w-full"
+                lazyLoad
+                onError={onImageError}
+              />
+            ) : (
+              <View
+                className="flex h-full w-full items-center justify-center px-2"
+                style={{ background: `linear-gradient(135deg, ${brandColors.blue}, ${brandColors.mint})` }}
+              >
+                <Text className="block text-center text-xs font-semibold text-white line-clamp-2">{item.title}</Text>
               </View>
-              {/* 与融资招募一致：金额/标签、浏览、详情同一行，不额外占行 */}
-              <View className="flex flex-row items-center justify-between gap-1.5 mt-1">
-                <View className="flex flex-row items-center gap-1.5 flex-1 min-w-0">
-                  {amountText ? (
-                    <Text className="block text-xs font-bold text-[#C9A96E] flex-shrink-0">{amountText}</Text>
-                  ) : item.industry ? (
-                    <Badge className="bg-gray-100 text-gray-600 text-xs px-1 py-0 flex-shrink-0">
-                      {industryMap[item.industry] || item.industry}
-                    </Badge>
-                  ) : item.region ? (
-                    <View className="flex flex-row items-center gap-0.5 flex-shrink-0">
-                      <MapPin size={10} color="#9CA3AF" />
-                      <Text className="block text-xs text-gray-400">{item.region}</Text>
-                    </View>
-                  ) : null}
-                  <View className="flex flex-row items-center gap-0.5 flex-shrink-0">
-                    <Eye size={11} color="#9CA3AF" />
-                    <Text className="block text-xs text-gray-400">{item.view_count || 0}</Text>
-                  </View>
-                </View>
-                <Button
-                  size="sm"
-                  className="bg-[#1B2A4A] text-white text-xs h-6 px-2.5 rounded-md flex-shrink-0"
-                  onClick={(e) => {
-                    e?.stopPropagation?.()
-                    openDetail(item.id)
-                  }}
-                >
-                  详情
-                </Button>
-              </View>
-            </View>
+            )}
+            <Badge variant="gold" className="absolute left-1 top-1 px-1 py-0 text-xs">
+              {badgeText}
+            </Badge>
           </View>
-        </CardContent>
-      </Card>
+          <View className="min-w-0 flex-1">
+            <Text className="block text-sm font-semibold leading-snug text-foreground line-clamp-1">{item.title}</Text>
+            {description ? (
+              <Text className="mt-1 block text-xs leading-snug text-muted-foreground line-clamp-1">{description}</Text>
+            ) : null}
+          </View>
+        </View>
+      </SoftCard>
     )
   }
 
   const renderList = (list: BusinessItem[], emptyText: string, showCategory = false) => (
-    <ScrollView scrollY className="mt-3" style={{ height: 'calc(100vh - 200px)' }}>
-      <View className="flex flex-col gap-2 pb-6">
+    <ScrollView scrollY className="mt-3" style={{ height: 'calc(100vh - 148px)' }}>
+      <View className={`flex flex-col ${ui.listGap} ${layout.bottomBarPad}`}>
         {list.map((item) => renderBusinessCard(item, showCategory))}
         {list.length === 0 && !loading && (
-          <View className="flex items-center justify-center py-12">
-            <Text className="block text-xs text-gray-400">{emptyText}</Text>
-          </View>
+          <EmptyState title={emptyText} />
         )}
       </View>
     </ScrollView>
   )
 
   return (
-    <View className="flex flex-col h-full bg-[#F5F6FA]">
-      <View className="bg-gradient-to-br from-[#1B2A4A] to-[#2D4A7A] px-3.5 pb-3">
-        <View style={{ height: `${statusBarHeight}px` }} />
-        {isMiniApp && <Text className="block text-lg font-bold text-white mb-2.5">商机</Text>}
-        <View className="flex flex-row items-center gap-2">
-          <View className="flex-1 rounded-lg px-2.5 py-1.5 flex flex-row items-center gap-1.5" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
-            <Search size={14} color="rgba(255,255,255,0.6)" />
-            <Text className="block text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>搜索项目、融资、资源...</Text>
-          </View>
-          <View className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
-            <ListFilter size={16} color="#ffffff" />
-          </View>
-        </View>
-      </View>
+    <PageShell scroll={false}>
+      <HeroHeader
+        title="商机"
+        subtitle="路演、商业、资源与生活需求"
+        compact
+      />
 
-      <View className="px-3.5 -mt-2">
+      <View className="px-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="bg-white rounded-lg shadow-sm w-full flex flex-row justify-around p-0.5 h-auto">
-            <TabsTrigger value="all" className="flex-1 rounded-md data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-1.5 text-xs">
+          <TabsList variant="segmented" className="flex h-auto w-full flex-row justify-around">
+            <TabsTrigger value="all" className="flex-1 py-2">
               全部
             </TabsTrigger>
-            <TabsTrigger value="roadshow" className="flex-1 rounded-md data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-1.5 text-xs">
-              项目路演
+            <TabsTrigger value="roadshow" className="flex-1 py-2">
+              {BUSINESS_CATEGORY_LABELS.roadshow}
             </TabsTrigger>
-            <TabsTrigger value="financing" className="flex-1 rounded-md data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-1.5 text-xs">
-              融资招募
+            <TabsTrigger value="financing" className="flex-1 py-2">
+              {BUSINESS_CATEGORY_LABELS.financing}
             </TabsTrigger>
-            <TabsTrigger value="resource" className="flex-1 rounded-md data-[state=active]:bg-[#1B2A4A] data-[state=active]:text-white py-1.5 text-xs">
-              资源对接
+            <TabsTrigger value="resource" className="flex-1 py-2">
+              {BUSINESS_CATEGORY_LABELS.resource}
+            </TabsTrigger>
+            <TabsTrigger value="life" className="flex-1 py-2">
+              {BUSINESS_CATEGORY_LABELS.life}
             </TabsTrigger>
           </TabsList>
 
@@ -246,15 +251,17 @@ const BusinessPage = () => {
             {renderList(roadshowList, '暂无路演项目')}
           </TabsContent>
           <TabsContent value="financing">
-            {renderList(financingList, '暂无融资招募')}
+            {renderList(financingList, `暂无${BUSINESS_CATEGORY_LABELS.financing}`)}
           </TabsContent>
           <TabsContent value="resource">
-            {renderList(resourceList, '暂无资源对接')}
+            {renderList(resourceList, `暂无${BUSINESS_CATEGORY_LABELS.resource}`)}
+          </TabsContent>
+          <TabsContent value="life">
+            {renderList(lifeList, `暂无${BUSINESS_CATEGORY_LABELS.life}`)}
           </TabsContent>
         </Tabs>
       </View>
-      <View className="h-16" />
-    </View>
+    </PageShell>
   )
 }
 

@@ -14,7 +14,8 @@ import {
 } from "@/components/brand-ui"
 import { getResponseList } from "@/lib/api-response"
 import { isDisplayableImageUrl } from "@/lib/media-url"
-import { LIST_FIELDS_QUERY, LIST_PAGE_SIZE, loadWithListCache, getListCache } from "@/lib/list-cache"
+import { loadWithListCache, getListCache } from "@/lib/list-cache"
+import { fetchAllPagedList } from "@/lib/fetch-paged-list"
 import { useMediaRefresh } from "@/lib/use-media-refresh"
 import { Network } from "@/network"
 import { useTabShareAppMessage } from "@/lib/mini-program-share"
@@ -141,11 +142,10 @@ const DiscoverPage = () => {
       await loadWithListCache(
         'discover:lists',
         async () => {
-          const q = `pageSize=${LIST_PAGE_SIZE}&${LIST_FIELDS_QUERY}`
           const settled = await Promise.allSettled([
-            Network.request({ url: `/api/events?${q}` }),
-            Network.request({ url: `/api/talents?${q}` }),
-            Network.request({ url: `/api/projects?${q}` }),
+            fetchAllPagedList<EventItem>('/api/events'),
+            fetchAllPagedList<TalentItem>('/api/talents'),
+            fetchAllPagedList<ProjectItem>('/api/projects'),
             Network.request({ url: '/api/industries' }),
           ])
           const pick = <T,>(idx: number, label: string): T | undefined => {
@@ -154,14 +154,14 @@ const DiscoverPage = () => {
             console.error(`[发现页] ${label} 加载失败:`, item.reason)
             return undefined
           }
-          const eventsRes = pick<any>(0, '活动')
-          const talentsRes = pick<any>(1, '人才')
-          const projectsRes = pick<any>(2, '项目')
+          const events = pick<EventItem[]>(0, '活动') || []
+          const talents = pick<TalentItem[]>(1, '人才') || []
+          const projects = pick<ProjectItem[]>(2, '项目') || []
           const industriesRes = pick<any>(3, '行业')
           return {
-            events: getResponseList<EventItem>(eventsRes?.data?.data),
-            talents: getResponseList<TalentItem>(talentsRes?.data?.data),
-            projects: getResponseList<ProjectItem>(projectsRes?.data?.data),
+            events,
+            talents,
+            projects,
             industries: getResponseList<IndustryItem>(industriesRes?.data?.data),
           }
         },
