@@ -47,6 +47,70 @@
     }
     .ql-toolbar.ql-snow { border-radius: 12px 12px 0 0; border-color: #e5e7eb; }
     .ql-container.ql-snow { border-radius: 0 0 12px 12px; border-color: #e5e7eb; min-height: 220px; font-size: 14px; }
+    /* 管理列表：长文省略 + 操作按钮单行 */
+    .admin-cell-title {
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #1e3a5f;
+    }
+    .admin-cell-sub {
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.75rem;
+      color: #9ca3af;
+      margin-top: 2px;
+    }
+    .admin-actions {
+      display: inline-flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .admin-status-row {
+      display: inline-flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .admin-switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #4b5563;
+      cursor: pointer;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .admin-switch input {
+      -webkit-appearance: checkbox !important;
+      appearance: auto !important;
+      width: 16px !important;
+      height: 16px !important;
+      min-width: 16px !important;
+      min-height: 16px !important;
+      accent-color: #c9a96e;
+      cursor: pointer;
+    }
+    .admin-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      padding: 0.25rem 0.625rem;
+      font-size: 12px;
+      line-height: 1.25rem;
+      border-radius: 0.5rem;
+      white-space: nowrap;
+    }
     .ql-editor { min-height: 220px; }
     .ql-editor img { max-width: 100%; border-radius: 8px; }
     /* 模式切换独立工具条，避免塞进 Quill 图标按钮导致中文竖排挤压 */
@@ -495,20 +559,21 @@
           创建项目
         </button>
       </div>
-      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <table class="w-full">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
+        <table class="w-full min-w-[960px]">
           <thead class="bg-gray-50 text-xs text-gray-500">
             <tr>
-              <th class="px-6 py-3 text-left">项目名称</th>
-              <th class="px-6 py-3 text-left">公司/负责人</th>
-              <th class="px-6 py-3 text-left">添加日期</th>
-              <th class="px-6 py-3 text-left">综合评分</th>
-              <th class="px-6 py-3 text-left">状态/审核</th>
-              <th class="px-6 py-3 text-center">操作</th>
+              <th class="px-4 py-3 text-left">项目名称</th>
+              <th class="px-4 py-3 text-left">公司/负责人</th>
+              <th class="px-4 py-3 text-left whitespace-nowrap">添加日期</th>
+              <th class="px-4 py-3 text-left whitespace-nowrap">综合评分</th>
+              <th class="px-4 py-3 text-left whitespace-nowrap">状态/审核</th>
+              <th class="px-4 py-3 text-center whitespace-nowrap">发现页</th>
+              <th class="px-4 py-3 text-center whitespace-nowrap">操作</th>
             </tr>
           </thead>
           <tbody id="projectTableBody">
-            <tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
+            <tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -691,21 +756,22 @@
           新增商机
         </button>
       </div>
-      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <table class="w-full">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
+        <table class="w-full min-w-[980px]">
           <thead class="bg-gray-50 border-b border-gray-100">
             <tr>
-              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">标题</th>
-              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">分类</th>
-              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">需求方</th>
-              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">来源</th>
-              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">审核状态</th>
-              <th class="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase">浏览</th>
-              <th class="px-4 py-4 text-center text-xs font-semibold text-gray-500 uppercase">操作</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">标题</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">分类</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">需求方</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">来源</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">审核状态</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">浏览</th>
+              <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">前台展示</th>
+              <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">操作</th>
             </tr>
           </thead>
           <tbody id="businessTableBody" class="divide-y divide-gray-50">
-            <tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
+            <tr><td colspan="8" class="px-6 py-12 text-center text-gray-400">加载中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -3858,7 +3924,7 @@ async function loadProjects() {
   const tbody = document.getElementById('projectTableBody')
   if (!tbody) return
   if (!projects.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">暂无项目</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">暂无项目</td></tr>'
     return
   }
   const auditMeta = {
@@ -3873,29 +3939,68 @@ async function loadProjects() {
       : '暂无评分'
     const company = p.company_name || p.owner_company_name || ''
     const owner = p.owner_name || ''
+    const metaLine = [
+      INDUSTRY_MAP[p.industry] || p.industry || '',
+      p.stage ? (STAGE_MAP[p.stage] || p.stage) : '',
+      p.dimension_count ? `${p.dimension_count}个评分维度` : '',
+    ].filter(Boolean).join(' · ')
+    const showDiscover = p.show_in_discover === undefined || p.show_in_discover === null
+      ? true
+      : Number(p.show_in_discover) !== 0
+    const auditBtns = p.audit_status === 'pending'
+      ? `<button type="button" onclick="auditProjectQuick('${p.id}','approved')" class="admin-btn bg-green-100 text-green-700 hover:bg-green-200">通过</button>
+         <button type="button" onclick="auditProjectQuick('${p.id}','rejected')" class="admin-btn bg-red-100 text-red-700 hover:bg-red-200">拒绝</button>`
+      : ''
     return `
     <tr class="border-t border-gray-50 hover:bg-gray-50/50">
-      <td class="px-6 py-4">
-        <p class="text-sm font-medium text-navy-800">${escapeHtml(p.title || '-')}</p>
-        <p class="text-xs text-gray-400 mt-0.5">${escapeHtml(INDUSTRY_MAP[p.industry] || p.industry || '')}${p.stage ? ' · ' + escapeHtml(STAGE_MAP[p.stage] || p.stage) : ''}${p.dimension_count ? ' · ' + p.dimension_count + '个评分维度' : ''}</p>
+      <td class="px-4 py-3">
+        <p class="admin-cell-title" title="${escapeHtml(p.title || '-')}">${escapeHtml(p.title || '-')}</p>
+        <p class="admin-cell-sub" title="${escapeHtml(metaLine)}">${escapeHtml(metaLine || '-')}</p>
       </td>
-      <td class="px-6 py-4">
-        <p class="text-sm text-gray-700">${escapeHtml(company || '-')}</p>
-        <p class="text-xs text-gray-400 mt-0.5">${escapeHtml(owner || '未关联负责人')}</p>
+      <td class="px-4 py-3">
+        <p class="admin-cell-title" title="${escapeHtml(company || '-')}">${escapeHtml(company || '-')}</p>
+        <p class="admin-cell-sub" title="${escapeHtml(owner || '未关联负责人')}">${escapeHtml(owner || '未关联负责人')}</p>
       </td>
-      <td class="px-6 py-4 text-sm text-gray-600">${p.created_at ? new Date(p.created_at).toLocaleDateString('zh-CN') : '-'}</td>
-      <td class="px-6 py-4 text-sm text-gray-700">${escapeHtml(scoreText)}</td>
-      <td class="px-6 py-4">
-        <span class="text-xs px-2.5 py-1 rounded-full ${PROJECT_STATUS_COLORS[p.status] || 'bg-gray-100 text-gray-500'}">${PROJECT_STATUS_MAP[p.status] || p.status || '-'}</span>
-        <span class="ml-1 text-xs px-2.5 py-1 rounded-full ${audit[1]}">${audit[0]}</span>
+      <td class="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">${p.created_at ? new Date(p.created_at).toLocaleDateString('zh-CN') : '-'}</td>
+      <td class="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">${escapeHtml(scoreText)}</td>
+      <td class="px-4 py-3">
+        <div class="admin-status-row">
+          <span class="text-xs px-2.5 py-1 rounded-full whitespace-nowrap ${PROJECT_STATUS_COLORS[p.status] || 'bg-gray-100 text-gray-500'}">${PROJECT_STATUS_MAP[p.status] || p.status || '-'}</span>
+          <span class="text-xs px-2.5 py-1 rounded-full whitespace-nowrap ${audit[1]}">${audit[0]}</span>
+        </div>
       </td>
-      <td class="px-6 py-4 text-center">
-        <button onclick="openProjectEditPage('${p.id}')" class="px-3 py-1.5 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200">编辑</button>
-        ${p.audit_status === 'pending' ? `<button onclick="auditProjectQuick('${p.id}','approved')" class="ml-1 px-3 py-1.5 text-xs rounded-lg bg-green-100 text-green-700">通过</button><button onclick="auditProjectQuick('${p.id}','rejected')" class="ml-1 px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-700">拒绝</button>` : ''}
-        <button onclick="deleteProject('${p.id}')" class="ml-1 px-3 py-1.5 text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100">删除</button>
+      <td class="px-4 py-3 text-center">
+        <label class="admin-switch" title="关闭后小程序发现页不展示">
+          <input type="checkbox" ${showDiscover ? 'checked' : ''} onchange="toggleProjectShowDiscover('${p.id}', this)">
+          <span>${showDiscover ? '展示' : '隐藏'}</span>
+        </label>
+      </td>
+      <td class="px-4 py-3 text-center">
+        <div class="admin-actions justify-center">
+          <button type="button" onclick="openProjectEditPage('${p.id}')" class="admin-btn bg-blue-100 text-blue-700 hover:bg-blue-200">编辑</button>
+          ${auditBtns}
+          <button type="button" onclick="deleteProject('${p.id}')" class="admin-btn bg-red-50 text-red-600 hover:bg-red-100">删除</button>
+        </div>
       </td>
     </tr>`
   }).join('')
+}
+
+async function toggleProjectShowDiscover(id, checkbox) {
+  const next = !!checkbox?.checked
+  const label = checkbox?.parentElement?.querySelector('span')
+  if (label) label.textContent = next ? '展示' : '隐藏'
+  const res = await api(`/admin/projects/${id}`, {
+    method: 'PUT',
+    body: { show_in_discover: next },
+  })
+  if (res.code === 200) {
+    toast(next ? '已在发现页展示' : '已从发现页隐藏')
+  } else {
+    checkbox.checked = !next
+    if (label) label.textContent = !next ? '展示' : '隐藏'
+    toast(res.msg || '更新失败', 'error')
+  }
 }
 
 async function auditProjectQuick(id, status) {
@@ -4351,7 +4456,7 @@ async function loadBusiness() {
   if (res.code !== 200) return
   const list = Array.isArray(res.data) ? res.data : []
   if (!list.length) {
-    document.getElementById('businessTableBody').innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">暂无商机</td></tr>'
+    document.getElementById('businessTableBody').innerHTML = '<tr><td colspan="8" class="px-6 py-12 text-center text-gray-400">暂无商机</td></tr>'
     return
   }
   document.getElementById('businessTableBody').innerHTML = list.map((item) => {
@@ -4362,27 +4467,59 @@ async function loadBusiness() {
         ? 'bg-red-100 text-red-700'
         : 'bg-green-100 text-green-700'
     const auditBtn = audit === 'pending'
-      ? `<button onclick="auditBusiness('${item.id}','approved')" class="px-2.5 py-1 text-xs rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 mr-1">通过</button>
-         <button onclick="rejectBusiness('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 mr-1">拒绝</button>`
+      ? `<button type="button" onclick="auditBusiness('${item.id}','approved')" class="admin-btn bg-emerald-100 text-emerald-700 hover:bg-emerald-200">通过</button>
+         <button type="button" onclick="rejectBusiness('${item.id}')" class="admin-btn bg-orange-100 text-orange-700 hover:bg-orange-200">拒绝</button>`
       : audit === 'rejected'
-        ? `<button onclick="auditBusiness('${item.id}','approved')" class="px-2.5 py-1 text-xs rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 mr-1">通过</button>`
+        ? `<button type="button" onclick="auditBusiness('${item.id}','approved')" class="admin-btn bg-emerald-100 text-emerald-700 hover:bg-emerald-200">通过</button>`
         : ''
+    const showList = item.show_in_list === undefined || item.show_in_list === null
+      ? true
+      : Number(item.show_in_list) !== 0
     return `
     <tr class="hover:bg-gray-50">
-      <td class="px-4 py-4 font-medium text-navy-800">${escapeHtml(item.title)}</td>
-      <td class="px-4 py-4 text-sm">${escapeHtml(BUSINESS_CATEGORY_MAP[item.category] || item.category)}</td>
-      <td class="px-4 py-4 text-sm text-gray-600">${escapeHtml(item.demand_talent_name || '-')}</td>
-      <td class="px-4 py-4 text-sm">${escapeHtml(item.source_label || (item.source === 'user' ? '用户上传' : '管理员上传'))}</td>
-      <td class="px-4 py-4"><span class="text-xs px-2.5 py-1 rounded-full ${auditCls}">${escapeHtml(item.audit_status_label || audit)}</span></td>
-      <td class="px-4 py-4 text-sm text-gray-500">${item.view_count || 0}</td>
-      <td class="px-4 py-4 text-center whitespace-nowrap">
-        ${auditBtn}
-        ${item.category === 'roadshow' ? `<button onclick="showRoadshowRegistrations('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-navy-100 text-navy-700 hover:bg-navy-200 mr-1">报名名单</button>` : ''}
-        <button onclick="showBusinessModal('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 mr-1">编辑</button>
-        <button onclick="deleteBusiness('${item.id}')" class="px-2.5 py-1 text-xs rounded-lg bg-red-100 text-red-700 hover:bg-red-200">删除</button>
+      <td class="px-4 py-3">
+        <p class="admin-cell-title" title="${escapeHtml(item.title || '-')}">${escapeHtml(item.title || '-')}</p>
+      </td>
+      <td class="px-4 py-3 text-sm whitespace-nowrap">${escapeHtml(BUSINESS_CATEGORY_MAP[item.category] || item.category)}</td>
+      <td class="px-4 py-3">
+        <p class="admin-cell-title" title="${escapeHtml(item.demand_talent_name || '-')}">${escapeHtml(item.demand_talent_name || '-')}</p>
+      </td>
+      <td class="px-4 py-3 text-sm whitespace-nowrap">${escapeHtml(item.source_label || (item.source === 'user' ? '用户上传' : '管理员上传'))}</td>
+      <td class="px-4 py-3"><span class="text-xs px-2.5 py-1 rounded-full whitespace-nowrap ${auditCls}">${escapeHtml(item.audit_status_label || audit)}</span></td>
+      <td class="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">${item.view_count || 0}</td>
+      <td class="px-4 py-3 text-center">
+        <label class="admin-switch" title="关闭后小程序商机页不展示">
+          <input type="checkbox" ${showList ? 'checked' : ''} onchange="toggleBusinessShowList('${item.id}', this)">
+          <span>${showList ? '展示' : '隐藏'}</span>
+        </label>
+      </td>
+      <td class="px-4 py-3 text-center">
+        <div class="admin-actions justify-center">
+          ${auditBtn}
+          ${item.category === 'roadshow' ? `<button type="button" onclick="showRoadshowRegistrations('${item.id}')" class="admin-btn bg-navy-100 text-navy-700 hover:bg-navy-200">报名名单</button>` : ''}
+          <button type="button" onclick="showBusinessModal('${item.id}')" class="admin-btn bg-blue-100 text-blue-700 hover:bg-blue-200">编辑</button>
+          <button type="button" onclick="deleteBusiness('${item.id}')" class="admin-btn bg-red-100 text-red-700 hover:bg-red-200">删除</button>
+        </div>
       </td>
     </tr>`
   }).join('')
+}
+
+async function toggleBusinessShowList(id, checkbox) {
+  const next = !!checkbox?.checked
+  const label = checkbox?.parentElement?.querySelector('span')
+  if (label) label.textContent = next ? '展示' : '隐藏'
+  const res = await api(`/admin/business/${id}`, {
+    method: 'PUT',
+    body: { show_in_list: next },
+  })
+  if (res.code === 200) {
+    toast(next ? '已在商机页展示' : '已从商机页隐藏')
+  } else {
+    checkbox.checked = !next
+    if (label) label.textContent = !next ? '展示' : '隐藏'
+    toast(res.msg || '更新失败', 'error')
+  }
 }
 
 async function auditBusiness(id, auditStatus, rejectReason) {
@@ -4479,6 +4616,11 @@ async function showBusinessModal(editId) {
             商机列表精选置顶
           </label>
           <div><label class="block text-sm font-medium text-gray-700 mb-1">展示排序</label><input id="bizSortOrder" type="number" min="0" value="${escapeHtml(item?.sort_order ?? 0)}" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none bg-white"><p class="text-xs text-gray-400 mt-1">数值越小越靠前</p></div>
+          <label class="flex items-center gap-2 text-sm font-medium text-gray-700 col-span-2">
+            <input id="bizShowList" type="checkbox" ${item?.show_in_list === 0 || item?.show_in_list === false ? '' : 'checked'}>
+            在小程序商机页展示
+          </label>
+          <p class="text-xs text-gray-400 -mt-2 col-span-2">关闭后小程序「商机」列表不展示该条目，不影响详情直链与 Banner 跳转</p>
         </div>
         <div id="bizExtraFields" class="${(item?.category==='financing' || item?.category==='resource' || item?.category==='life') ? '' : 'hidden'} grid grid-cols-2 gap-4 border border-gray-100 rounded-2xl p-4 bg-gray-50/60">
           <div>
@@ -4566,6 +4708,7 @@ async function saveBusiness(editId) {
     content: getRichEditorHtml('bizContentEditor'),
     is_featured: !!document.getElementById('bizFeatured')?.checked,
     sort_order: Math.max(0, Number(document.getElementById('bizSortOrder')?.value || 0)),
+    show_in_list: !!document.getElementById('bizShowList')?.checked,
     contact_phone: document.getElementById('bizContactPhone')?.value || null,
     demand_talent_id: document.getElementById('bizDemandTalent')?.value || null,
   }

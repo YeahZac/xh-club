@@ -99,6 +99,7 @@ const COLUMNS_TO_ENSURE: Array<[table: string, column: string, definition: strin
   ['business_opportunities', 'contact_info', 'VARCHAR(255) NULL'],
   ['business_opportunities', 'sort_order', 'INT NOT NULL DEFAULT 0'],
   ['business_opportunities', 'is_featured', 'TINYINT(1) NOT NULL DEFAULT 0'],
+  ['business_opportunities', 'show_in_list', 'TINYINT(1) NOT NULL DEFAULT 1'],
   ['business_opportunities', 'admin_operated_at', 'TIMESTAMP NULL'],
   ['business_opportunities', 'view_count', 'INT NOT NULL DEFAULT 0'],
   ['business_opportunities', 'start_time', 'TIMESTAMP NULL'],

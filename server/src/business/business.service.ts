@@ -130,6 +130,8 @@ export class BusinessService {
     }
     // 仅展示已通过审核（兼容旧数据 audit_status 为空）
     where.push(`(b.audit_status = 'approved' OR b.audit_status IS NULL OR b.audit_status = '')`)
+    // 管理台关闭「前台展示」后不出现在小程序商机列表（详情直链仍可访问）
+    where.push('(b.show_in_list IS NULL OR b.show_in_list = 1)')
 
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
     const countRow = await queryOne(
@@ -139,7 +141,7 @@ export class BusinessService {
     const selectSql = listFields
       ? `SELECT b.id, b.title, b.summary, b.cover_image, b.category, b.industry, b.region,
                 b.amount_min, b.amount_max, b.stage, b.view_count, b.status, b.is_featured,
-                b.sort_order, b.start_time, b.end_time, b.updated_at, b.created_at,
+                b.sort_order, b.show_in_list, b.start_time, b.end_time, b.updated_at, b.created_at,
                 b.admin_operated_at, b.audit_status, b.source, b.user_id, b.demand_talent_id,
                 COALESCE(NULLIF(t.real_name, ''), NULLIF(m.name, '')) AS demand_talent_name
          FROM business_opportunities b
@@ -473,8 +475,8 @@ export class BusinessService {
       `INSERT INTO business_opportunities
         (title, category, summary, content, cover_image, industry, region, amount_min, amount_max, stage,
          contact_info, contact_phone, demand_talent_id, source, audit_status, reject_reason, user_id,
-         status, is_featured, sort_order, start_time, end_time, form_fields, admin_operated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${source === 'admin' ? 'NOW()' : 'NULL'})`,
+         status, is_featured, sort_order, show_in_list, start_time, end_time, form_fields, admin_operated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${source === 'admin' ? 'NOW()' : 'NULL'})`,
       [
         dto.title.trim(),
         dto.category,
@@ -496,6 +498,7 @@ export class BusinessService {
         status,
         dto.is_featured ? 1 : 0,
         dto.sort_order || 0,
+        dto.show_in_list === false || dto.show_in_list === 0 || dto.show_in_list === '0' ? 0 : 1,
         dto.start_time ? toMysqlDateTime(dto.start_time) : null,
         dto.end_time ? toMysqlDateTime(dto.end_time) : null,
         dto.form_fields == null ? null : JSON.stringify(dto.form_fields),
@@ -592,6 +595,12 @@ export class BusinessService {
     if (dto.status !== undefined) assign('status', dto.status || 'published')
     if (dto.is_featured !== undefined) assign('is_featured', dto.is_featured ? 1 : 0)
     if (dto.sort_order !== undefined) assign('sort_order', dto.sort_order || 0)
+    if (dto.show_in_list !== undefined) {
+      assign(
+        'show_in_list',
+        dto.show_in_list === false || dto.show_in_list === 0 || dto.show_in_list === '0' ? 0 : 1,
+      )
+    }
     if (dto.start_time !== undefined) assign('start_time', toMysqlDateTime(dto.start_time))
     if (dto.end_time !== undefined) assign('end_time', toMysqlDateTime(dto.end_time))
     if (dto.form_fields !== undefined) {
