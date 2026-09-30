@@ -2,6 +2,7 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
 import { queryExecute, queryOne, queryRows } from '@/storage/database/mysql-client'
 import { UploadService } from '@/upload/upload.service'
 import { assertCloudStorageImageUrl } from '@/utils/media-validators'
+import { WechatSecurityService } from '@/wechat/wechat-security.service'
 
 export const FEEDBACK_TYPES = [
   'trade_complaint',
@@ -34,7 +35,10 @@ const parseImages = (value: unknown): string[] => {
 
 @Injectable()
 export class FeedbackService {
-  constructor(private readonly uploadService: UploadService) {}
+  constructor(
+    private readonly uploadService: UploadService,
+    private readonly wechatSecurity: WechatSecurityService,
+  ) {}
 
   private requireType(value: unknown): FeedbackType {
     const type = String(value || '').trim() as FeedbackType
@@ -64,6 +68,7 @@ export class FeedbackService {
     const type = this.requireType(dto.feedback_type)
     const content = String(dto.content || '').trim()
     if (!content) throw new HttpException('请填写反馈内容', HttpStatus.BAD_REQUEST)
+    await this.wechatSecurity.assertMemberTextSafe(memberId, content, 2)
 
     const needsProject = type === 'trade_complaint' || type === 'project_suggestion'
     const projectId = dto.project_id != null && dto.project_id !== '' ? Number(dto.project_id) : null

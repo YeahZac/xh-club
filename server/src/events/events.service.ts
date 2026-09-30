@@ -21,6 +21,7 @@ import {
 } from '@/common/project-promo'
 import { userCategoryLabel, normalizeUserCategory } from '@/common/user-category'
 import { wantsListFields } from '@/common/list-fields'
+import { WechatSecurityService } from '@/wechat/wechat-security.service'
 
 function normalizeProjectUrlList(value: unknown): string[] {
   return parseJsonUrlList(value)
@@ -62,6 +63,7 @@ export class EventsService {
     private readonly pointsEngine: PointsEngineService,
     private readonly invitationEngine: InvitationEngineService,
     private readonly talentService: TalentService,
+    private readonly wechatSecurity: WechatSecurityService,
   ) {}
 
   private client() { return getSupabaseClient() }
@@ -884,6 +886,18 @@ export class EventsService {
     if (!isCloudStorageUrl(dto.cover_image)) {
       throw new HttpException('项目封面图片为必填项', HttpStatus.BAD_REQUEST)
     }
+    const publishText = [
+      dto.title,
+      dto.description,
+      dto.advantages,
+      dto.application_scenarios,
+      dto.project_commission,
+      dto.promo_remark,
+    ]
+      .map((v) => String(v || '').trim())
+      .filter(Boolean)
+      .join('\n')
+    await this.wechatSecurity.assertMemberTextSafe(memberId, publishText, 3)
     const galleryImages = normalizeProjectUrlList(dto.gallery_images)
     const result = await queryExecute(
       `INSERT INTO projects

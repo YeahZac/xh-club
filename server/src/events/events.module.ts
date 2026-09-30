@@ -6,9 +6,10 @@ import { UploadModule } from '@/upload/upload.module'
 import { PointsModule } from '@/points/points.module'
 import { InvitationModule } from '@/invitation/invitation.module'
 import { TalentModule } from '@/talent/talent.module'
+import { WechatModule } from '@/wechat/wechat.module'
 
 @Module({
-  imports: [UploadModule, PointsModule, InvitationModule, TalentModule],
+  imports: [UploadModule, PointsModule, InvitationModule, TalentModule, WechatModule],
   controllers: [EventsController, ProjectsController, ResourcesController],
   providers: [EventsService, AdminAuthGuard, MemberAuthGuard],
 })

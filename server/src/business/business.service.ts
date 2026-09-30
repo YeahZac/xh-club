@@ -14,6 +14,7 @@ import {
 } from '@/common/business-category'
 import { RoadshowService } from './roadshow.service'
 import { createNotification } from '@/common/notify'
+import { WechatSecurityService } from '@/wechat/wechat-security.service'
 
 export {
   BUSINESS_CATEGORIES,
@@ -52,6 +53,7 @@ export class BusinessService {
   constructor(
     private readonly uploadService: UploadService,
     private readonly roadshowService: RoadshowService,
+    private readonly wechatSecurity: WechatSecurityService,
   ) {}
 
   private formatBusinessRow(row: any) {
@@ -319,6 +321,7 @@ export class BusinessService {
   ) {
     const business = await this.assertCommentableBusiness(businessId)
     const content = this.normalizeCommentContent(dto?.content)
+    await this.wechatSecurity.assertMemberTextSafe(memberId, content, 2)
     let parentId: number | null = null
     let parentAuthorId: number | null = null
 
@@ -467,6 +470,14 @@ export class BusinessService {
       if (!isUserBusinessCategory(dto.category)) {
         throw new HttpException('用户仅可发布商业需求、资源需求或生活需求', HttpStatus.BAD_REQUEST)
       }
+      if (!options?.memberId) {
+        throw new HttpException('请重新登录后再发布', HttpStatus.UNAUTHORIZED)
+      }
+      const publishText = [dto.title, dto.summary, dto.content, dto.contact_info]
+        .map((v) => String(v || '').trim())
+        .filter(Boolean)
+        .join('\n')
+      await this.wechatSecurity.assertMemberTextSafe(options.memberId, publishText, 3)
       status = 'draft'
       auditStatus = 'pending'
     }
@@ -723,6 +734,17 @@ export class BusinessService {
     if (!isUserBusinessCategory(dto.category || existing.category)) {
       throw new HttpException('仅可发布商业需求、资源需求或生活需求', HttpStatus.BAD_REQUEST)
     }
+
+    const publishText = [
+      dto.title ?? existing.title,
+      dto.summary ?? existing.summary,
+      dto.content ?? existing.content,
+      dto.contact_info ?? existing.contact_info,
+    ]
+      .map((v) => String(v || '').trim())
+      .filter(Boolean)
+      .join('\n')
+    await this.wechatSecurity.assertMemberTextSafe(memberId, publishText, 3)
 
     const { demandTalentId } = await this.resolveMemberDemandParty(memberId)
     const payload = {

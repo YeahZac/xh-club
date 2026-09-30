@@ -4,10 +4,11 @@ import { BusinessService } from './business.service'
 import { RoadshowService } from './roadshow.service'
 import { UploadModule } from '@/upload/upload.module'
 import { PointsModule } from '@/points/points.module'
+import { WechatModule } from '@/wechat/wechat.module'
 import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard'
 
 @Module({
-  imports: [UploadModule, PointsModule],
+  imports: [UploadModule, PointsModule, WechatModule],
   controllers: [BusinessController, BusinessAdminController],
   providers: [BusinessService, RoadshowService, AdminAuthGuard, MemberAuthGuard],
   exports: [BusinessService, RoadshowService],

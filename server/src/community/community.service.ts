@@ -1,10 +1,14 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 import { getPool, initMySQL } from '../storage/database/mysql-client'
 import { PointsEngineService } from '@/points/points-engine.service'
+import { WechatSecurityService } from '@/wechat/wechat-security.service'
 
 @Injectable()
 export class CommunityService {
-  constructor(private readonly pointsEngine: PointsEngineService) {}
+  constructor(
+    private readonly pointsEngine: PointsEngineService,
+    private readonly wechatSecurity: WechatSecurityService,
+  ) {}
 
   private async getDb() {
     await initMySQL()
@@ -62,6 +66,13 @@ export class CommunityService {
 
   /** 发布动态 */
   async createPost(dto: any) {
+    const publishText = [dto.title, dto.content]
+      .map((v) => String(v || '').trim())
+      .filter(Boolean)
+      .join('\n')
+    if (dto.member_id && publishText) {
+      await this.wechatSecurity.assertMemberTextSafe(dto.member_id, publishText, 3)
+    }
     const pool = await this.getDb()
     const [result]: any = await pool.query(
       `INSERT INTO posts (member_id, type, title, content, images_json, status, is_featured, view_count, like_count, comment_count)
@@ -134,10 +145,13 @@ export class CommunityService {
 
   /** 发表评论 */
   async commentPost(dto: { post_id: string; member_id: string; content: string; parent_id?: string }) {
+    const content = String(dto.content || '').trim()
+    if (!content) throw new HttpException('请输入评论内容', HttpStatus.BAD_REQUEST)
+    await this.wechatSecurity.assertMemberTextSafe(dto.member_id, content, 2)
     const pool = await this.getDb()
     const [result]: any = await pool.query(
       `INSERT INTO comments (post_id, member_id, content, parent_id) VALUES (?, ?, ?, ?)`,
-      [dto.post_id, dto.member_id, dto.content, dto.parent_id || null]
+      [dto.post_id, dto.member_id, content, dto.parent_id || null]
     )
     await pool.query('UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?', [dto.post_id])
 

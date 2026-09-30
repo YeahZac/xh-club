@@ -5,6 +5,7 @@ import { assertCloudStorageImageUrl } from '@/utils/media-validators'
 import { PointsEngineService } from '@/points/points-engine.service'
 import { InvitationEngineService } from '@/invitation/invitation-engine.service'
 import { createNotification } from '@/common/notify'
+import { WechatSecurityService } from '@/wechat/wechat-security.service'
 
 const DEAL_STATUSES = ['connecting', 'completed', 'failed'] as const
 const CONFIRM_STATUSES = ['pending', 'approved', 'rejected'] as const
@@ -64,6 +65,7 @@ export class DealApplicationsService {
     private readonly uploadService: UploadService,
     private readonly pointsEngine: PointsEngineService,
     private readonly invitationEngine: InvitationEngineService,
+    private readonly wechatSecurity: WechatSecurityService,
   ) {}
 
   private async formatRow(row: any) {
@@ -226,6 +228,13 @@ export class DealApplicationsService {
     if (String(payload.ownerMemberId) === String(memberId)) {
       throw new HttpException('项目负责人不能是自己', HttpStatus.BAD_REQUEST)
     }
+    const dealText = [payload.contactName, payload.cooperationDescription]
+      .map((v) => String(v || '').trim())
+      .filter(Boolean)
+      .join('\n')
+    if (dealText) {
+      await this.wechatSecurity.assertMemberTextSafe(memberId, dealText, 4)
+    }
     const project = await queryOne(
       `SELECT id, title, submitter_id FROM projects WHERE id = ?`,
       [payload.businessId],
@@ -305,6 +314,13 @@ export class DealApplicationsService {
       { ...existing, ...dto, owner_member_id: dto.owner_member_id ?? existing.owner_member_id },
       { requireOwner: canResubmit, requireFinancial: canResubmit },
     )
+    const dealText = [payload.contactName, payload.cooperationDescription]
+      .map((v) => String(v || '').trim())
+      .filter(Boolean)
+      .join('\n')
+    if (dealText) {
+      await this.wechatSecurity.assertMemberTextSafe(memberId, dealText, 4)
+    }
     const project = await queryOne('SELECT id, title FROM projects WHERE id = ?', [payload.businessId])
     if (!project) throw new HttpException('所选项目不存在', HttpStatus.BAD_REQUEST)
 

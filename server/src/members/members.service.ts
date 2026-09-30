@@ -10,12 +10,14 @@ import { normalizeUserCategory, userCategoryLabel } from '@/common/user-category
 import { getMemberDashboardStats } from '@/common/member-stats'
 import * as QRCode from 'qrcode'
 import { buildInviteQrText } from '@/common/invite-code'
+import { WechatSecurityService } from '@/wechat/wechat-security.service'
 
 @Injectable()
 export class MembersService {
   constructor(
     private readonly uploadService: UploadService,
     private readonly authService: AuthService,
+    private readonly wechatSecurity: WechatSecurityService,
   ) {}
 
   private client() { return getSupabaseClient() }
@@ -241,6 +243,24 @@ export class MembersService {
     if (Object.keys(updates).length === 0) {
       throw new HttpException('没有可更新的会员字段', HttpStatus.BAD_REQUEST)
     }
+
+    const profileText = [
+      updates.name,
+      updates.company_name,
+      updates.company_position,
+      updates.business_description,
+      updates.core_advantage,
+      updates.resources_supply,
+      updates.resources_demand,
+      updates.bio,
+    ]
+      .map((v) => String(v || '').trim())
+      .filter(Boolean)
+      .join('\n')
+    if (profileText) {
+      await this.wechatSecurity.assertMemberTextSafe(id, profileText, 1)
+    }
+
     const { data, error } = await this.client()
       .from('members')
       .update({ ...updates, updated_at: new Date() })

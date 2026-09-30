@@ -10,9 +10,10 @@ import { UploadModule } from '@/upload/upload.module'
 import { AdminAuthGuard, MemberAuthGuard } from '@/auth/auth.guard'
 import { PointsModule } from '@/points/points.module'
 import { InvitationModule } from '@/invitation/invitation.module'
+import { WechatModule } from '@/wechat/wechat.module'
 
 @Module({
-  imports: [UploadModule, PointsModule, InvitationModule],
+  imports: [UploadModule, PointsModule, InvitationModule, WechatModule],
   controllers: [
     IndustryPublicController,
     TalentController,

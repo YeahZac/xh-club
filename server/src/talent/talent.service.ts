@@ -7,6 +7,7 @@ import { InvitationEngineService } from '@/invitation/invitation-engine.service'
 import { createNotification } from '@/common/notify'
 import { normalizeUserCategory, userCategoryLabel } from '@/common/user-category'
 import { wantsListFields } from '@/common/list-fields'
+import { WechatSecurityService } from '@/wechat/wechat-security.service'
 
 export const TALENT_STATUSES = ['pending', 'approved', 'rejected'] as const
 export type TalentStatus = (typeof TALENT_STATUSES)[number]
@@ -74,6 +75,7 @@ export class TalentService {
     private readonly uploadService: UploadService,
     private readonly pointsEngine: PointsEngineService,
     private readonly invitationEngine: InvitationEngineService,
+    private readonly wechatSecurity: WechatSecurityService,
   ) {}
 
   async ensureDefaultIndustries() {
@@ -514,6 +516,20 @@ export class TalentService {
     }
   }
 
+  private async assertTalentTextSafe(memberId: string | number, payload: {
+    real_name?: string | null
+    company_name?: string | null
+    job_title?: string | null
+    experience?: string | null
+  }) {
+    const text = [payload.real_name, payload.company_name, payload.job_title, payload.experience]
+      .map((v) => String(v || '').trim())
+      .filter(Boolean)
+      .join('\n')
+    if (!text) return
+    await this.wechatSecurity.assertMemberTextSafe(memberId, text, 1)
+  }
+
   async apply(memberId: string, dto: any) {
     const existing = await queryOne('SELECT id, status FROM talent_applications WHERE member_id = ?', [memberId])
     if (existing) {
@@ -521,6 +537,7 @@ export class TalentService {
     }
 
     const payload = this.validateApplicationPayload(dto, false)
+    await this.assertTalentTextSafe(memberId, payload)
     const avatarUrl = payload.avatar_url || payload.photo_url || null
     await queryExecute(
       `INSERT INTO talent_applications
@@ -595,6 +612,7 @@ export class TalentService {
     const paymentStatus = String(dto.payment_status || 'unpaid').trim() === 'paid' ? 'paid' : 'unpaid'
 
     const payload = this.validateApplicationPayload(dto, false)
+    await this.assertTalentTextSafe(memberId, payload)
     const avatarUrl = payload.avatar_url || payload.photo_url || null
     const existing = await queryOne('SELECT id, status FROM talent_applications WHERE member_id = ?', [memberId])
 
@@ -686,6 +704,7 @@ export class TalentService {
       avatar_url: dto.avatar_url !== undefined ? dto.avatar_url : existing.avatar_url,
     }
     const payload = this.validateApplicationPayload(merged, false)
+    await this.assertTalentTextSafe(memberId, payload)
     const avatarUrl = payload.avatar_url || payload.photo_url || null
     const nextData = {
       real_name: payload.real_name,
